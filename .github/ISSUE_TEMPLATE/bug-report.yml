@@ -1,0 +1,29 @@
+name: Bug report
+description: Something doesn't work as expected.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Launcher version
+      description: Shown in Settings, or the release you downloaded.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots / error messages

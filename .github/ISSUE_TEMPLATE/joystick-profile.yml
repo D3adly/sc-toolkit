@@ -1,0 +1,50 @@
+name: Joystick profile request
+description: Ask for a drawing template so your stick shows up in the Joystick Bindings view.
+title: "[Joystick] <manufacturer> <model>"
+labels: ["joystick-profile"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Each supported stick needs a picture with every button's position marked,
+        so please give as much detail as you can.
+  - type: input
+    id: model
+    attributes:
+      label: Manufacturer and model
+      placeholder: e.g. VKB Gladiator NXT EVO, Thrustmaster T.16000M, Virpil Constellation Alpha
+    validations:
+      required: true
+  - type: input
+    id: grip
+    attributes:
+      label: Grip / variant
+      description: Grip name, left or right hand, any add-on modules.
+      placeholder: e.g. SCE Premium grip, right hand
+  - type: input
+    id: device-name
+    attributes:
+      label: Device name shown by the launcher
+      description: Open Joystick Bindings — the name shown for your stick (or the one Windows / Linux shows for the device).
+      placeholder: e.g. VKBsim Gladiator EVO  R
+    validations:
+      required: true
+  - type: input
+    id: product-page
+    attributes:
+      label: Link to the product page or a clear photo
+      description: A picture where the buttons are visible helps a lot.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Custom firmware profile, unusual button layout, etc.

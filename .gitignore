@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Build output (release artifacts are published via GitHub Releases, never committed)
+build/
+dist/
+*.spec.bak
+*.AppImage
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Background art: a community screenshot by RedSolstice (RSI Community Hub,
+# "RSI Polaris Wallpaper", 2024-11-14). Not redistributable without the author's
+# permission — kept local only until replaced or permission is granted.
+# The app falls back to a plain dark background when it's missing.
+assets/polaris_bg.png

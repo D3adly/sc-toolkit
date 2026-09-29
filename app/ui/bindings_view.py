@@ -276,6 +276,7 @@ class BindingsView(QWidget):
         self.profile: BindingProfile | None = None
         self.source: BackupInfo | None = None  # None = the game's live profile
         self.dirty = False
+        self.pending_unassign: int | None = None  # stick awaiting "Unassign all" confirmation
         self.eff = bindings.Bindings()
         self.instance: int | None = None
         self.product = ""
@@ -557,6 +558,79 @@ class BindingsView(QWidget):
         self._mark_dirty()
         self._render()
 
+    def _bound_on_stick(self, context: str | None) -> list[ActionDef]:
+        """User-facing actions currently bound on this stick, optionally
+        limited to one context (category)."""
+        out = []
+        for key, devices in self.eff.by_action.items():
+            if not devices.get(self.instance):
+                continue
+            action = self.game.action(key)
+            if action.listed and (context is None or action.category == context):
+                out.append(action)
+        return out
+
+    def _unassign_all(self) -> None:
+        """Asks for confirmation in the inspector (not a system dialog); the
+        actual clearing happens in _confirm_unassign."""
+        if self.game is None or self.profile is None or self.instance is None:
+            return
+        if not self._bound_on_stick(None):
+            self.last_note = "Nothing is bound on this stick."
+            self._render()
+            return
+        self.pending_unassign = self.instance
+        self._render()
+
+    def _cancel_unassign(self) -> None:
+        self.pending_unassign = None
+        self._render()
+
+    def _confirm_unassign(self, context: str | None) -> None:
+        """Clears the stick's bindings (one context, or all). Saving writes
+        each one as an explicit unbind (`jsN_ `) where the game has a
+        default, so it doesn't fall back to its defaults. Nothing is written
+        to disk here — only Save profile does that."""
+        targets = self._bound_on_stick(context)
+        for action in targets:
+            self.profile.set_input(self.game, action.key, self.instance, "")
+        self.pending_unassign = None
+        self.selected = None
+        self.last_note = (f"Unassigned {len(targets)} actions on js{self.instance} "
+                          f"({context or 'all contexts'}). Assign new ones, then Save profile to keep it.")
+        self._mark_dirty()
+        self._render()
+
+    def _render_unassign_confirm(self) -> None:
+        everything = self._bound_on_stick(None)
+        in_context = self._bound_on_stick(self.context) if self.context else []
+        panel = QFrame(objectName="ConfirmPanel")
+        v = QVBoxLayout(panel)
+        v.setContentsMargins(12, 10, 12, 12)
+        v.setSpacing(6)
+        v.addWidget(QLabel("UNASSIGN ALL", objectName="ConfirmTitle"))
+        text = QLabel(
+            f"Remove the bindings from <b>js{self.instance} · {self.product}</b>?<br><br>"
+            "The actions become unbound. When you save the profile they're stored as "
+            "explicitly unassigned, so the game won't put its default bindings back.<br><br>"
+            "Nothing changes on disk until you press <b>Save profile</b>.",
+            objectName="InspectorText",
+        )
+        text.setWordWrap(True)
+        v.addWidget(text)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(6)
+        if in_context and len(in_context) != len(everything):
+            buttons.addWidget(self._small_button(
+                f"Only {self.context} ({len(in_context)})",
+                lambda: self._confirm_unassign(self.context), "MiniDanger"))
+        buttons.addWidget(self._small_button(
+            f"All contexts ({len(everything)})", lambda: self._confirm_unassign(None), "MiniDanger"))
+        buttons.addStretch(1)
+        buttons.addWidget(self._small_button("Cancel", self._cancel_unassign))
+        v.addLayout(buttons)
+        self.inspector_layout.addWidget(panel)
+
     def _mark_dirty(self) -> None:
         self.dirty = True
         self._recompute()
@@ -770,6 +844,15 @@ class BindingsView(QWidget):
             tools.addStretch(1)
             lay.addLayout(tools)
 
+        if self.profile is not None and self.instance is not None:
+            clear_row = QHBoxLayout()
+            clear = self._small_button("Unassign all…", self._unassign_all, "MiniDanger")
+            clear.setToolTip("Remove every binding from this stick (asks first); "
+                             "saved as explicitly unbound, not back to defaults")
+            clear_row.addWidget(clear)
+            clear_row.addStretch(1)
+            lay.addLayout(clear_row)
+
         connected = self.live_device is not None
         live = "connected" if connected else ("not detected" if self.joy.supported() else "unsupported on this OS")
         self._live_label = self._text(
@@ -782,7 +865,9 @@ class BindingsView(QWidget):
 
         lay.addSpacing(8)
         target = self._identify_target()
-        if target is not None:
+        if self.pending_unassign is not None and self.pending_unassign == self.instance:
+            self._render_unassign_confirm()
+        elif target is not None:
             self._render_identify(target)
         elif self.selected and self.setup.template and self.setup.template.control(self.selected):
             self._render_control(self.setup.template.control(self.selected))

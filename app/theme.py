@@ -439,6 +439,18 @@ QFrame#Divider {{
     border-radius: 6px;
     padding: 4px 8px;
 }}
+#ConfirmPanel {{
+    background: rgba(224, 90, 79, 0.10);
+    border: 1px solid {danger};
+    border-radius: 8px;
+}}
+#ConfirmTitle {{
+    color: {danger};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    background: transparent;
+}}
 #SettingsOk {{
     color: {accent_cyan};
     font-size: 11px;
@@ -515,6 +527,20 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
 
 QInputDialog, QMessageBox {{
     background: {bg_panel_solid};
+}}
+QMessageBox QPushButton, QInputDialog QPushButton, QDialogButtonBox QPushButton {{
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid {border};
+    border-radius: 6px;
+    color: {text_primary};
+    padding: 6px 14px;
+    min-width: 72px;
+}}
+QMessageBox QPushButton:hover, QInputDialog QPushButton:hover, QDialogButtonBox QPushButton:hover {{
+    border: 1px solid {accent_amber};
+}}
+QMessageBox QPushButton:default, QInputDialog QPushButton:default, QDialogButtonBox QPushButton:default {{
+    border: 1px solid {accent_cyan};
 }}
 QInputDialog QLineEdit {{
     background: rgba(255, 255, 255, 0.04);

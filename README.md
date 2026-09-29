@@ -32,7 +32,7 @@ data and tools goes to them:
 | What | Used for | By |
 |---|---|---|
 | [StarStrings](https://github.com/MrKraken/StarStrings) | The community translation the launcher installs and updates | [MrKraken](https://github.com/MrKraken) |
-| [One-page guides & maps](https://mrkraken.space/one-page-guides/) | The **SC Maps** menu (event, location and mission guides) | [Mr Kraken](https://mrkraken.space/) |
+| [One-page guides & maps](https://mrkraken.space/one-page-guides/) | The **SC Maps** viewer (location and mission maps, shown in the launcher) | [Mr Kraken](https://mrkraken.space/) |
 | [Salvaged components spreadsheet](https://docs.google.com/spreadsheets/d/1UyZsa8HPKdwbofoFD3Ve1RhRAtGiG_CZaOUXtM-vEbU) | Salvage Claims: which parts come off each ship, sell/dismantle prices, cargo and fees | [u/PiibaManetta](https://www.reddit.com/user/PiibaManetta/) ([*Salvaged components guide*](https://www.reddit.com/r/starcitizen/comments/1u94sre/salvaged_components_guide/) on r/starcitizen) |
 | [UEX Corp](https://uexcorp.space/) | Commodity prices for salvage cargo (via the public UEX API) | The UEX Corp team |
 | [LUG Helper](https://github.com/starcitizen-lug/lug-helper) | Its `sc-launch.sh` starts the game on Linux | [Star Citizen Linux Users Group](https://github.com/starcitizen-lug) |
@@ -60,8 +60,9 @@ it adds a few tools that read their data straight from your own game files.
 ## Features
 
 - **One-click START** with keybind safety. Before launching it can restore a
-  backup or a saved binding profile. When the RSI Launcher closes it backs up your
-  keybinds and control mappings, but only when something changed. Old backups are
+  backup or a saved binding profile. Every time **the game** closes, it backs up
+  your keybinds and control mappings right away (the RSI Launcher can stay open),
+  but only when something changed. Old backups are
   pruned automatically.
 - **Joystick bindings viewer and editor.** A manual-style picture of your stick
   with every Star Citizen action bound to each button. Rebind by pressing the
@@ -76,8 +77,10 @@ it adds a few tools that read their data straight from your own game files.
   and cargo aboard priced at UEX averages.
 - **StarStrings updater.** Installs the StarStrings community translation, only
   when it matches your game build.
-- **Quick links** to RSI, server status, SCMDB, Erkul and UEX, plus Mr Kraken's
-  SC Maps guides. There's also a GameGlass shortcut.
+- **SC Maps** viewer: Mr Kraken's community one-page guides and maps, opened inside
+  the launcher with zoom and pan (downloaded once, then cached for offline use).
+- **Quick links** to RSI, server status, SCMDB, Erkul and UEX, plus a GameGlass
+  shortcut.
 
 Game data (mining, salvage, bindings) is extracted from your installation once
 per game patch and cached, so it's always current and works offline.

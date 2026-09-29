@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from app import __version__, channel as channel_mod, settings
 from app.settings import Settings
+from app.theme import PALETTE
 
 WINDOWS = sys.platform.startswith("win")
 
@@ -161,9 +162,9 @@ class SettingsView(QWidget):
 
         about = QLabel(
             f"SC-Toolkit v{__version__} · GPL-3.0 · "
-            "<a style='color:#5fd4e8' href='https://github.com/D3adly/sc-toolkit'>"
+            f"<a style='color:{PALETTE['info']}' href='https://github.com/D3adly/sc-toolkit'>"
             "github.com/D3adly/sc-toolkit</a>",
-            objectName="InspectorHint",
+            objectName="AboutLabel",
         )
         about.setOpenExternalLinks(True)
         outer.addWidget(about, alignment=Qt.AlignRight)

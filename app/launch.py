@@ -1,37 +1,46 @@
-"""Launches the game via the launch script chosen in settings — normally the
-LUG Helper's sc-launch.sh (which owns the
-Wine/DXVK/shader-cache environment setup — not something we reimplement)
-and, once that process exits — i.e. once the RSI Launcher has been closed —
-runs a backup in the background.
+"""Launches the game via the launch script chosen in settings (normally the
+LUG Helper's sc-launch.sh, or RSI Launcher.exe on Windows), then follows
+the session:
 
-sc-launch.sh execs `wine "RSI Launcher.exe"` as its own last, foregrounded
-step, so waiting for the sc-launch.sh child process to exit is exactly
-waiting for the RSI Launcher to exit — and killing that same process group
-is exactly "close the RSI Launcher".
+- START restores the chosen profile/backup, then opens the RSI Launcher.
+- Every time the game itself (StarCitizen.exe) exits, keybinds are backed
+  up right away. The RSI Launcher may stay open, and a new game start is
+  tracked again.
+- The session ends once both the launcher and the game are gone.
+
+CLOSE ends the launcher's process tree, so it's refused while the game runs
+(the game is the launcher's child and would be killed with it).
 """
 
 from __future__ import annotations
 
 import subprocess
 import threading
+import time
 
 from PySide6.QtCore import QObject, Signal
 
 from app import backup, channel, osutil, process, settings
 from app.backup import BackupInfo
 
+POLL_SECONDS = 2.0
+
 
 class LaunchController(QObject):
     status_changed = Signal(str)
-    session_started = Signal()
-    session_ended = Signal()
+    session_started = Signal()     # RSI Launcher is up
+    game_started = Signal()        # StarCitizen.exe appeared
+    game_exited = Signal()         # StarCitizen.exe went away (backup follows)
     backup_created = Signal(str)   # display name of the new backup
     backup_skipped = Signal()      # no changes since last backup
+    backup_failed = Signal(str)    # error message; the session keeps going
+    session_finished = Signal()    # launcher and game both gone
     launch_failed = Signal(str)    # error message
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._busy = False
+        self._in_game = False
         self._proc: subprocess.Popen | None = None
 
     @property
@@ -64,12 +73,12 @@ class LaunchController(QObject):
         thread.start()
 
     def close_session(self) -> None:
-        """Terminates the running RSI Launcher (and the sc-launch.sh shell
-        wrapping it), which lets _run_session's proc.wait() return and
-        continue on into the usual post-session backup flow.
+        """Closes the RSI Launcher (and the sc-launch.sh shell wrapping it).
+        Refused while the game runs: it's a child of the launcher, so this
+        would kill it too. The main window disables the button then.
         """
         proc = self._proc
-        if proc is None or proc.poll() is not None:
+        if proc is None or proc.poll() is not None or self._in_game:
             return
         osutil.terminate_tree(proc.pid)
 
@@ -95,26 +104,47 @@ class LaunchController(QObject):
             return
 
         self._proc = proc
+        self._in_game = False
         self.session_started.emit()
-        self.status_changed.emit("Playing — press Close to end the session")
-        proc.wait()
-        self._proc = None
-        self.session_ended.emit()
+        self.status_changed.emit("RSI Launcher open. Start the game from there")
 
-        self.status_changed.emit("Saving backup…")
+        # Follow the game itself, not just the launcher: keybinds only change
+        # in game, so back up each time StarCitizen.exe exits. The launcher
+        # counts as running while our process or any RSI Launcher process is
+        # alive (it may restart/detach itself, especially on Windows).
+        while True:
+            time.sleep(POLL_SECONDS)
+            running = osutil.running_game_processes()
+            in_game = osutil.GAME_EXE in running
+            if in_game and not self._in_game:
+                self._in_game = True
+                self.game_started.emit()
+                self.status_changed.emit("In game. Keybinds are backed up when the game closes")
+            elif self._in_game and not in_game:
+                self._in_game = False
+                self.game_exited.emit()
+                self._backup(ch, paths)
+            launcher_up = proc.poll() is None or osutil.LAUNCHER_EXE in running
+            if not launcher_up and not in_game:
+                break
+
+        self._proc = None
+        self._busy = False
+        self.session_finished.emit()
+
+    def _backup(self, ch: str, paths) -> None:
+        self.status_changed.emit("Game closed. Saving backup…")
         try:
             info = backup.create_backup(
                 settings.current().backup_root, ch, paths.mappings_dir, paths.profile_dir
             )
         except Exception as exc:
-            self._busy = False
-            self.launch_failed.emit(f"Backup failed:\n{exc}")
+            self.backup_failed.emit(f"Backup failed:\n{exc}")
+            self.status_changed.emit("Backup failed")
             return
-
-        self._busy = False
         if info is None:
             self.backup_skipped.emit()
-            self.status_changed.emit("No config changes since last backup")
+            self.status_changed.emit("Game closed. No keybind changes since the last backup")
         else:
             self.backup_created.emit(info.display_name)
-            self.status_changed.emit(f"Backup saved: {info.display_name}")
+            self.status_changed.emit(f"Game closed. Backup saved: {info.display_name}")

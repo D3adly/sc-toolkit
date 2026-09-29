@@ -15,28 +15,40 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 
 WINDOWS = sys.platform.startswith("win")
-_GAME_PROCESSES = ("starcitizen.exe", "rsi launcher.exe")
+_GAME_PROCESSES = ("starcitizen.exe", "rsi launcher.exe")  # see GAME_EXE / LAUNCHER_EXE
 
 
 def open_url(url: str) -> None:
     QDesktopServices.openUrl(QUrl(url))
 
 
-def is_game_running() -> bool:
-    """True if Star Citizen or the RSI Launcher is running. Under Wine the
-    Windows executable names show up in the command line rather than as
-    the process name, so both are checked.
-    """
+GAME_EXE = "starcitizen.exe"
+LAUNCHER_EXE = "rsi launcher.exe"
+
+
+def running_game_processes() -> set[str]:
+    """Which of StarCitizen.exe / RSI Launcher.exe are running right now
+    (lower-case names), in a single process scan."""
+    found: set[str] = set()
     for proc in psutil.process_iter(["name", "cmdline"]):
         try:
             name = (proc.info["name"] or "").lower()
             argv0 = ((proc.info["cmdline"] or [""])[0] or "").lower().replace("\\", "/")
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
-        # Match the program itself, not any command line that merely mentions it.
-        if any(name == p or argv0.endswith("/" + p) or argv0 == p for p in _GAME_PROCESSES):
-            return True
-    return False
+        for p in _GAME_PROCESSES:
+            if name == p or argv0.endswith("/" + p) or argv0 == p:
+                found.add(p)
+    return found
+
+
+def is_game_running() -> bool:
+    """True if Star Citizen or the RSI Launcher is running. Under Wine the
+    Windows executable names show up in the command line rather than as
+    the process name, so both are checked (the program itself only, not
+    any command line that merely mentions it).
+    """
+    return bool(running_game_processes())
 
 
 def spawn(path: Path) -> subprocess.Popen:

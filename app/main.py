@@ -30,7 +30,7 @@ def main():
 
         from PySide6.QtCore import QTimer
 
-        for view in ("bindings_view", "mining_view", "salvage_view", "settings_view"):
+        for view in ("bindings_view", "maps_view", "mining_view", "salvage_view", "settings_view"):
             importlib.import_module(f"app.ui.{view}")
         for module in ("mining", "salvage", "datacore", "socpak", "joyinput"):
             importlib.import_module(f"app.{module}")

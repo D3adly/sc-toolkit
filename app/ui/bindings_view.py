@@ -64,8 +64,14 @@ AXIS_IDENTIFY_THRESHOLD = AXIS_MAX // 2
 C_TEXT = QColor(PALETTE["text_primary"])
 C_TEXT_2 = QColor(PALETTE["text_secondary"])
 C_MUTED = QColor(PALETTE["text_muted"])
-C_CYAN = QColor(PALETTE["accent_cyan"])
-C_AMBER = QColor(PALETTE["accent_amber"])
+C_CYAN = QColor(PALETTE["info"])
+C_AMBER = QColor(PALETTE["accent"])
+
+
+def _alpha(color: QColor, alpha: int) -> QColor:
+    c = QColor(color)
+    c.setAlpha(alpha)
+    return c
 
 
 def input_code(inp: str) -> str:
@@ -146,7 +152,7 @@ class CalloutItem(QGraphicsObject):
             row_rect = QRectF(4, y, COL_W - 8, self.ROW_H)
             if row.inp and row.inp in self.flash_inputs:
                 painter.setPen(Qt.NoPen)
-                painter.setBrush(QColor(95, 212, 232, 60))
+                painter.setBrush(_alpha(C_CYAN, 60))
                 painter.drawRoundedRect(row_rect, 3, 3)
             text_x = x0
             if row.tag:
@@ -762,7 +768,7 @@ class BindingsView(QWidget):
                 edge_x = x + COL_W if side == "left" else x
                 anchor = QPointF(edge_x, min(max(hotspot.pos().y(), top + 14), top + callout.height - 14))
                 leader = QGraphicsPathItem(_leader_path(hotspot.pos(), anchor))
-                leader.setPen(QPen(QColor(95, 212, 232, 110), 1.3))
+                leader.setPen(QPen(_alpha(C_CYAN, 110), 1.3))
                 leader.setZValue(1)
                 self.scene.addItem(leader)
                 hotspot.leader = leader
@@ -1188,7 +1194,7 @@ class BindingsView(QWidget):
         self.dirty = False
         self._update_save_btn()
         self._refresh_sources()
-        self.last_note = f"Saved “{name}”. Pick it under CONFIG on the main screen to launch with it."
+        self.last_note = f"Saved “{name}”. Pick it under LAUNCH WITH on the main screen to use it."
         self._render_inspector()
         self.profiles_changed.emit()
 

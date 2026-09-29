@@ -1,6 +1,6 @@
 import subprocess
 
-from PySide6.QtCore import Qt, QRectF, QSize, QTimer
+from PySide6.QtCore import Qt, QRectF, QSize, QTimer, Signal
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor, QIcon
 from PySide6.QtWidgets import (
     QWidget,
@@ -11,17 +11,18 @@ from PySide6.QtWidgets import (
     QPushButton,
     QComboBox,
     QFrame,
+    QGridLayout,
     QSizePolicy,
     QMessageBox,
     QProgressBar,
-    QMenu,
     QStackedWidget,
 )
 
-from app import backup, channel as channel_mod, config, links, maps, osutil, settings
+from app import backup, channel as channel_mod, config, links, osutil, settings
 from app.backup import BackupInfo
 from app.launch import LaunchController
 from app.starstrings_controller import StarStringsController
+from app.theme import PALETTE
 from app.ui.title_bar import TitleBar
 
 ICON_SIZE = QSize(20, 20)
@@ -46,6 +47,45 @@ def _section_label(text: str) -> QLabel:
     return lbl
 
 
+class _ToolTile(QFrame):
+    """A large clickable card for one of SC-Toolkit's own tools: icon, title,
+    a line of explanation and an optional credit (with links)."""
+
+    clicked = Signal()
+
+    def __init__(self, icon_name: str, title: str, text: str, credit: str = "", parent=None):
+        super().__init__(parent)
+        self.setObjectName("ToolTile")
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setCursor(Qt.PointingHandCursor)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(18, 18, 18, 18)
+        row.setSpacing(16)
+        icon = QLabel()
+        icon.setPixmap(_icon(icon_name).pixmap(48, 48))
+        icon.setAlignment(Qt.AlignTop)
+        row.addWidget(icon)
+        col = QVBoxLayout()
+        col.setSpacing(4)
+        col.addWidget(QLabel(title, objectName="TileTitle"))
+        body = QLabel(text, objectName="TileText")
+        body.setWordWrap(True)
+        col.addWidget(body)
+        if credit:
+            note = QLabel(credit, objectName="TileCredit")
+            note.setWordWrap(True)
+            note.setOpenExternalLinks(True)
+            col.addWidget(note)
+        col.addStretch(1)
+        row.addLayout(col, stretch=1)
+
+    def mouseReleaseEvent(self, event):
+        if (event.button() == Qt.LeftButton and self.isEnabled()
+                and self.rect().contains(event.position().toPoint())):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
 class RootFrame(QWidget):
     """Paints the Polaris background art (cropped to fill, darkened with a
     gradient for legibility) behind everything else, clipped to rounded
@@ -65,7 +105,7 @@ class RootFrame(QWidget):
         path.addRoundedRect(QRectF(self.rect()), CORNER_RADIUS, CORNER_RADIUS)
         painter.setClipPath(path)
 
-        painter.fillPath(path, QColor("#0d0f12"))
+        painter.fillPath(path, QColor(PALETTE["bg_panel_solid"]))
         scaled = None
         bottom = self.height()
         if not self._bg.isNull():
@@ -82,15 +122,15 @@ class RootFrame(QWidget):
 
 
 class MainWindow(QMainWindow):
-    WIDTH = 1080
-    HEIGHT = 840
+    WIDTH = 1240
+    HEIGHT = 760
 
     def __init__(self):
         super().__init__()
         self.setWindowFlag(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.resize(self.WIDTH, self.HEIGHT)
-        self.setMinimumSize(900, 820)
+        self.setMinimumSize(1100, 720)
 
         self.channel = channel_mod.pick_default_channel(settings.current().game_root)
         self._mode = "start"  # "start" | "close"
@@ -99,9 +139,12 @@ class MainWindow(QMainWindow):
         self.controller = LaunchController(self)
         self.controller.status_changed.connect(self._set_status)
         self.controller.session_started.connect(self._on_session_started)
-        self.controller.session_ended.connect(self._on_session_ended)
+        self.controller.game_started.connect(self._on_game_started)
+        self.controller.game_exited.connect(self._on_game_exited)
         self.controller.backup_created.connect(self._on_backup_created)
-        self.controller.backup_skipped.connect(self._on_session_finished)
+        self.controller.backup_skipped.connect(self._on_backup_done)
+        self.controller.backup_failed.connect(self._on_backup_failed)
+        self.controller.session_finished.connect(self._on_session_finished)
         self.controller.launch_failed.connect(self._on_launch_failed)
 
         self.starstrings_controller = StarStringsController(self)
@@ -143,6 +186,7 @@ class MainWindow(QMainWindow):
         self.salvage_view = None
         self.mining_view = None
         self.settings_view = None
+        self.maps_view = None
         self._main_size = None
 
         body = QWidget()
@@ -152,7 +196,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(body)
 
         body_layout.addWidget(self._build_launch_panel(), stretch=0)
-        body_layout.addStretch(1)
+        body_layout.addWidget(self._build_tools_panel(), stretch=1)
         body_layout.addWidget(self._build_link_panel(), stretch=0)
         self._apply_channel_state()
 
@@ -197,12 +241,18 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.busy_bar)
 
         layout.addSpacing(8)
-        self.config_label = QLabel("CONFIG", objectName="ConfigLabel")
+        self.config_label = QLabel("LAUNCH WITH", objectName="ConfigLabel")
         layout.addWidget(self.config_label)
 
         self.config_combo = QComboBox()
         self.config_combo.setObjectName("ConfigCombo")
         layout.addWidget(self.config_combo)
+
+        # Plain-language explanation of the current choice (updates with it).
+        self.config_help = QLabel("", objectName="ConfigHelp")
+        self.config_help.setWordWrap(True)
+        layout.addWidget(self.config_help)
+        self.config_combo.currentIndexChanged.connect(self._update_config_help)
         self._refresh_config_combo()
 
         layout.addSpacing(10)
@@ -218,7 +268,7 @@ class MainWindow(QMainWindow):
         """Enables/labels everything that depends on the configured install."""
         s = settings.current()
         has_game = self.channel is not None
-        self.config_label.setText("CONFIG" + (f" ({self.channel})" if has_game else ""))
+        self.config_label.setText("LAUNCH WITH" + (f" ({self.channel})" if has_game else ""))
         self.start_btn.setEnabled(has_game and self._mode == "start")
         if not has_game:
             self.start_btn.setToolTip("Set your Star Citizen LIVE folder in Settings (gear icon)")
@@ -238,8 +288,7 @@ class MainWindow(QMainWindow):
     def _refresh_config_combo(self) -> None:
         combo = self.config_combo
         combo.clear()
-        combo.addItem("Unchanged")
-        combo.setItemData(0, "Loads whatever is already in the game", Qt.ToolTipRole)
+        combo.addItem("Current game setup")
 
         self._combo_backups = []
         if self.channel is None:
@@ -259,6 +308,26 @@ class MainWindow(QMainWindow):
                 combo.count() - 1, "Restore this backup, then launch", Qt.ToolTipRole
             )
         self._combo_backups = profiles + backups
+        self._update_config_help()
+
+    def _update_config_help(self, _index: int = 0) -> None:
+        info = self._selected_backup()
+        if info is None:
+            self.config_help.setProperty("warn", False)
+            self.config_help.setText(
+                "Starts the game with your keybinds and settings exactly as they are now. "
+                "Nothing is changed."
+            )
+        else:
+            kind = "profile" if info.is_profile else "backup"
+            self.config_help.setProperty("warn", True)
+            self.config_help.setText(
+                f"⚠ Overwrites your current in-game keybinds and game settings with this "
+                f"{kind} before launching. Changes made while the game was started without "
+                f"SC-Toolkit (not yet backed up) will be lost."
+            )
+        self.config_help.style().unpolish(self.config_help)
+        self.config_help.style().polish(self.config_help)
 
     def _selected_backup(self) -> BackupInfo | None:
         data = self.config_combo.currentData()
@@ -271,8 +340,14 @@ class MainWindow(QMainWindow):
         self.start_btn.setEnabled(enabled and self.channel is not None)
 
     def _set_button_mode(self, mode: str) -> None:
+        """'start' | 'close' (closes the RSI Launcher) | 'ingame' (disabled:
+        closing the launcher would also kill the game)."""
         self._mode = mode
-        self.start_btn.setText("CLOSE" if mode == "close" else "START")
+        self.start_btn.setText({"close": "CLOSE", "ingame": "IN GAME"}.get(mode, "START"))
+        self.start_btn.setToolTip(
+            "Quit Star Citizen first. Closing the RSI Launcher now would close the game too."
+            if mode == "ingame" else ""
+        )
         self.start_btn.setProperty("mode", mode)
         self.start_btn.style().unpolish(self.start_btn)
         self.start_btn.style().polish(self.start_btn)
@@ -295,13 +370,30 @@ class MainWindow(QMainWindow):
         self._set_button_mode("close")
         self.start_btn.setEnabled(True)
 
-    def _on_session_ended(self) -> None:
-        self.busy_bar.setVisible(True)
+    def _on_game_started(self) -> None:
+        self._set_button_mode("ingame")
         self.start_btn.setEnabled(False)
 
+    def _on_game_exited(self) -> None:
+        self.busy_bar.setVisible(True)   # backup in progress
+
     def _on_backup_created(self, _display_name: str) -> None:
+        self.config_combo.blockSignals(True)
         self._refresh_config_combo()
-        self._on_session_finished()
+        self.config_combo.blockSignals(False)
+        self._update_config_help()
+        self._on_backup_done()
+
+    def _on_backup_done(self) -> None:
+        # Back to "launcher open": CLOSE works again, the game can be restarted.
+        self.busy_bar.setVisible(False)
+        if self.controller.busy:
+            self._set_button_mode("close")
+            self.start_btn.setEnabled(True)
+
+    def _on_backup_failed(self, message: str) -> None:
+        self._on_backup_done()
+        QMessageBox.warning(self, config.DISPLAY_NAME, message)
 
     def _on_session_finished(self) -> None:
         self.busy_bar.setVisible(False)
@@ -317,88 +409,95 @@ class MainWindow(QMainWindow):
         self._set_status("Error — see dialog")
         QMessageBox.warning(self, config.DISPLAY_NAME, message)
 
-    # -- right panel: link library -------------------------------------------
+    # -- middle: SC-Toolkit's own tools ---------------------------------------
+    def _build_tools_panel(self) -> QWidget:
+        # No panel behind this column: each tile carries its own glass, so the
+        # wallpaper shows through around and below them.
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        heading = QLabel("SC-TOOLKIT TOOLS", objectName="ToolsHeading")
+        layout.addWidget(heading, alignment=Qt.AlignLeft)
+
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        self.bindings_btn = _ToolTile(
+            "joystick", "Joystick Bindings",
+            "See what every button on your stick does, rebind by pressing it, "
+            "and save the result as a launch profile.",
+        )
+        self.bindings_btn.clicked.connect(self._show_bindings)
+        self.salvage_btn = _ToolTile(
+            "salvage", "Salvage Claims",
+            "Ships in Adagio salvage claims by difficulty: their components, sell vs "
+            "dismantle prices, and cargo aboard.",
+        )
+        self.salvage_btn.clicked.connect(self._show_salvage)
+        self.mining_btn = _ToolTile(
+            "mining", "Mining Finder",
+            "Where each ore spawns, how likely each rock is, radar signatures and "
+            "quality odds, straight from the game files.",
+        )
+        self.mining_btn.clicked.connect(self._show_mining)
+        maps_tile = _ToolTile(
+            "scmaps", "SC Maps",
+            "One-page guides and maps for events, locations and missions.",
+            credit=(
+                "Community made by <a style='color:" + PALETTE["info"] + "' "
+                "href='https://mrkraken.space/one-page-guides/'>Mr Kraken</a>, "
+                "all credit to the author."
+            ),
+        )
+        maps_tile.clicked.connect(self._show_maps)
+        for i, tile in enumerate((self.bindings_btn, self.salvage_btn, self.mining_btn, maps_tile)):
+            grid.addWidget(tile, i // 2, i % 2)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        layout.addLayout(grid)
+        layout.addStretch(1)
+        return panel
+
+    # -- right panel: external tools + link library ---------------------------------
     def _build_link_panel(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("SidePanel")
-        panel.setFixedWidth(300)
+        panel.setFixedWidth(260)
 
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(18, 20, 18, 20)
+        layout.setContentsMargins(16, 18, 16, 18)
         layout.setSpacing(6)
 
-        layout.addWidget(_section_label("OFFICIAL"))
-        for label, url, icon_name in links.OFFICIAL_LINKS:
-            layout.addWidget(self._link_button(label, icon_name, url))
+        layout.addWidget(_section_label("TOOLS"))
+        self.gameglass_btn = self._tool_button("GameGlass", "gameglass", self._launch_gameglass)
+        layout.addWidget(self.gameglass_btn)
+        self.starstrings_btn = self._tool_button(
+            "Update Star Strings", "starstrings", self._on_update_starstrings_clicked)
+        layout.addWidget(self.starstrings_btn)
 
         layout.addSpacing(6)
         layout.addWidget(_divider())
         layout.addSpacing(6)
 
-        layout.addWidget(_section_label("COMMUNITY TOOLS"))
+        layout.addWidget(_section_label("LINKS · OFFICIAL"))
+        for label, url, icon_name in links.OFFICIAL_LINKS:
+            layout.addWidget(self._link_button(label, icon_name, url))
+        layout.addSpacing(8)
+        layout.addWidget(_section_label("LINKS · COMMUNITY"))
         for label, url, icon_name in links.COMMUNITY_LINKS:
             layout.addWidget(self._link_button(label, icon_name, url))
 
-        layout.addSpacing(6)
-        layout.addWidget(_divider())
-        layout.addSpacing(6)
-
-        layout.addWidget(_section_label("TOOLS"))
-
-        self.bindings_btn = bindings_btn = QPushButton("Joystick Bindings")
-        bindings_btn.setObjectName("ToolButton")
-        bindings_btn.setIcon(_icon("joystick"))
-        bindings_btn.setIconSize(ICON_SIZE)
-        bindings_btn.setCursor(Qt.PointingHandCursor)
-        bindings_btn.setEnabled(self.channel is not None)
-        bindings_btn.clicked.connect(self._show_bindings)
-        layout.addWidget(bindings_btn)
-
-        self.salvage_btn = salvage_btn = QPushButton("Salvage Claims")
-        salvage_btn.setObjectName("ToolButton")
-        salvage_btn.setIcon(_icon("salvage"))
-        salvage_btn.setIconSize(ICON_SIZE)
-        salvage_btn.setCursor(Qt.PointingHandCursor)
-        salvage_btn.setEnabled(self.channel is not None)
-        salvage_btn.clicked.connect(self._show_salvage)
-        layout.addWidget(salvage_btn)
-
-        self.mining_btn = mining_btn = QPushButton("Mining Finder")
-        mining_btn.setObjectName("ToolButton")
-        mining_btn.setIcon(_icon("mining"))
-        mining_btn.setIconSize(ICON_SIZE)
-        mining_btn.setCursor(Qt.PointingHandCursor)
-        mining_btn.setEnabled(self.channel is not None)
-        mining_btn.clicked.connect(self._show_mining)
-        layout.addWidget(mining_btn)
-
-        self.gameglass_btn = gameglass_btn = QPushButton("GameGlass")
-        gameglass_btn.setObjectName("ToolButton")
-        gameglass_btn.setIcon(_icon("gameglass"))
-        gameglass_btn.setIconSize(ICON_SIZE)
-        gameglass_btn.setCursor(Qt.PointingHandCursor)
-        gameglass_btn.clicked.connect(self._launch_gameglass)
-        layout.addWidget(gameglass_btn)
-
-        scmaps_btn = QPushButton("SC Maps")
-        scmaps_btn.setObjectName("ToolButton")
-        scmaps_btn.setIcon(_icon("scmaps"))
-        scmaps_btn.setIconSize(ICON_SIZE)
-        scmaps_btn.setCursor(Qt.PointingHandCursor)
-        scmaps_btn.clicked.connect(lambda: self._show_maps_menu(scmaps_btn))
-        layout.addWidget(scmaps_btn)
-
-        self.starstrings_btn = QPushButton("Update Star Strings")
-        self.starstrings_btn.setObjectName("ToolButton")
-        self.starstrings_btn.setIcon(_icon("starstrings"))
-        self.starstrings_btn.setIconSize(ICON_SIZE)
-        self.starstrings_btn.setCursor(Qt.PointingHandCursor)
-        self.starstrings_btn.setEnabled(self.channel is not None)
-        self.starstrings_btn.clicked.connect(self._on_update_starstrings_clicked)
-        layout.addWidget(self.starstrings_btn)
-
         layout.addStretch(1)
         return panel
+
+    @staticmethod
+    def _tool_button(label: str, icon_name: str, slot) -> QPushButton:
+        btn = QPushButton(label, objectName="ToolButton")
+        btn.setIcon(_icon(icon_name))
+        btn.setIconSize(ICON_SIZE)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.clicked.connect(slot)
+        return btn
 
     @staticmethod
     def _link_button(label: str, icon_name: str, url: str) -> QPushButton:
@@ -413,23 +512,6 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _open_url(url: str) -> None:
         osutil.open_url(url)
-
-    def _show_maps_menu(self, anchor: QPushButton) -> None:
-        menu = QMenu(self)
-        menu.addSection("Mr Kraken's Guides")
-        for title, pages, _source_url in maps.GUIDES:
-            if len(pages) == 1:
-                action = menu.addAction(title)
-                action.triggered.connect(lambda checked=False, u=pages[0][1]: self._open_url(u))
-            else:
-                submenu = menu.addMenu(title)
-                for label, url in pages:
-                    action = submenu.addAction(label)
-                    action.triggered.connect(lambda checked=False, u=url: self._open_url(u))
-        menu.addSeparator()
-        more_action = menu.addAction("More guides (mrkraken.space)")
-        more_action.triggered.connect(lambda: self._open_url(maps.GUIDES_INDEX_URL))
-        menu.exec(anchor.mapToGlobal(anchor.rect().bottomLeft()))
 
     def _launch_gameglass(self) -> None:
         path = settings.current().gameglass
@@ -479,6 +561,20 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.salvage_view)
         self.salvage_view.activate()
 
+    # -- SC Maps viewer ---------------------------------------------------------
+    def _show_maps(self) -> None:
+        if self.maps_view is None:
+            from app.ui.maps_view import MapsView
+
+            self.maps_view = MapsView()
+            self.maps_view.back_requested.connect(self._show_main)
+            self.stack.addWidget(self.maps_view)
+        self._main_size = self.size()
+        screen = self.screen().availableGeometry()
+        self.resize(min(1400, int(screen.width() * 0.92)), min(960, int(screen.height() * 0.92)))
+        self.stack.setCurrentWidget(self.maps_view)
+        self.maps_view.activate()
+
     # -- mining finder view ------------------------------------------------------
     def _show_mining(self) -> None:
         if self.mining_view is None:
@@ -505,7 +601,7 @@ class MainWindow(QMainWindow):
             self.settings_view.saved.connect(self._on_settings_saved)
             self.stack.addWidget(self.settings_view)
         current = self.stack.currentWidget()
-        if current in (self.bindings_view, self.salvage_view, self.mining_view):
+        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view):
             current.deactivate()
             if self._main_size is not None:
                 self.resize(self._main_size)
@@ -527,7 +623,7 @@ class MainWindow(QMainWindow):
 
     def _show_main(self) -> None:
         current = self.stack.currentWidget()
-        if current in (self.bindings_view, self.salvage_view, self.mining_view):
+        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view):
             current.deactivate()
         self.stack.setCurrentIndex(0)
         if self._main_size is not None:

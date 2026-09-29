@@ -316,6 +316,8 @@ class SalvageView(QWidget):
 
         bar.addStretch(1)
         self.sources_label = QLabel("", objectName="InspectorHint")
+        # On narrow windows this line gives way first, not the controls.
+        self.sources_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.sources_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         bar.addWidget(self.sources_label)
 

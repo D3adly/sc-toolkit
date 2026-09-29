@@ -66,7 +66,7 @@ class _Bar(QWidget):
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(255, 255, 255, 18))
         p.drawRoundedRect(QRectF(self.rect()), 3, 3)
-        fill = QColor(PALETTE["accent_cyan"] if self.lit else PALETTE["text_muted"])
+        fill = QColor(PALETTE["info"] if self.lit else PALETTE["text_muted"])
         p.setBrush(fill)
         p.drawRoundedRect(QRectF(0, 0, self.width() * self.value / 100, self.height()), 3, 3)
 
@@ -86,7 +86,7 @@ def _quality_tip(name: str, q: dict) -> str:
     peak = max(p for _, p in dist) or 1
     rows = "".join(
         f"<tr><td align='right'>Q {v}</td><td align='right'>&nbsp;{html.escape(_chance(p))}&nbsp;</td>"
-        f"<td><span style='color:{PALETTE['accent_amber']}'>"
+        f"<td><span style='color:{PALETTE['accent']}'>"
         f"{'▇' * max(1, round(12 * p / peak)) if p >= 0.05 else '·'}</span></td></tr>"
         for v, p in dist
     )
@@ -117,7 +117,7 @@ class _QualityHist(QWidget):
         p = QPainter(self)
         p.setPen(Qt.NoPen)
         peak = max(x for _, x in self.dist) or 1
-        low, high = QColor(PALETTE["text_muted"]), QColor(PALETTE["accent_amber"])
+        low, high = QColor(PALETTE["text_muted"]), QColor(PALETTE["accent"])
         for i, (value, chance) in enumerate(self.dist):
             h = max(1.5, (chance / peak) ** 0.5 * self.height()) if chance > 0 else 0
             t = max(0.0, min(1.0, (value - 300) / 700))
@@ -330,6 +330,9 @@ class MiningView(QWidget):
             bar.addWidget(btn)
         bar.addStretch(1)
         self.result_label = QLabel("", objectName="InspectorHint")
+        # On narrow windows this summary gives way first, not the buttons.
+        self.result_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.result_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         bar.addWidget(self.result_label)
         outer.addWidget(bar_frame)
 

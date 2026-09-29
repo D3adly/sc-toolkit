@@ -40,7 +40,7 @@ a = Analysis(
     excludes=excludes,
     # Tool views are imported lazily (and by name in --smoke-test).
     hiddenimports=[
-        "app.ui.bindings_view", "app.ui.mining_view", "app.ui.salvage_view",
+        "app.ui.bindings_view", "app.ui.maps_view", "app.ui.mining_view", "app.ui.salvage_view",
         "app.ui.settings_view", "sdl2", "sdl2dll",
     ],
     noarchive=False,

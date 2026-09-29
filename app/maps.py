@@ -19,41 +19,10 @@ GUIDES_INDEX_URL = "https://mrkraken.space/one-page-guides/"
 
 # (display title, [(page label, direct image URL), ...], source post URL)
 # Most guides are a single page; a few post genuinely separate companion
-# images (extra facility maps, multiple corp variants) — those get one
-# menu entry per page, opened as a submenu in the UI.
+# images (extra facility maps, route maps) — those appear as pages in the
+# Maps view's PAGE selector. Only actual maps/location guides are listed
+# (event summaries and finished events were dropped).
 GUIDES = [
-    (
-        "2955 – Year of the RAFT",
-        [(
-            "Guide",
-            "https://robertsspaceindustries.com/i/3743d57fa4f60aa925da213707fb85f43d0f3926/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ3115m6XaqAfVYRvutWxDjHmc9qADngeXxHsveGtP9AADToYYmib3uyZbHiT9nTpC2ktJrA6AUvAoeFZDLxK9C1AEMr2QYwYX8ftsXLbGkVdgJ/34895a7c-0575-488b-b5b3-52e9a0a18982.png",
-        )],
-        "https://robertsspaceindustries.com/community-hub/post/2955-the-year-of-the-raft-q2wxHsjFHIAUM",
-    ),
-    (
-        "Alliance Aid Guide [4.6 RC1]",
-        [(
-            "Guide",
-            "https://robertsspaceindustries.com/i/72d7b9917f0377c554e2d7d69c2535091c8f07a8/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ31169BMUxm7H9QEsr1bZEqUPurQUrsGY9R697GFefbuxYbXcCwX2vy5st9f5ZGC2b3tKLm5rLkWatGLNa7kMon8VE5RWBUtwUqyDaMEwWP5Gr/c8d4857c-981d-44a8-817a-c4770cb2e790.png",
-        )],
-        "https://robertsspaceindustries.com/community-hub/post/alliance-aid-one-page-guide-4-6-rc-1-9R2AJWDraonnT",
-    ),
-    (
-        "CitizenCon 2025 Summary",
-        [(
-            "Guide",
-            "https://robertsspaceindustries.com/i/b97489315cd3a0064d9c9d4f300082ba4f88f5ab/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ3115oaFGtDvaWjMYSCxdB41Q4DzNajYmNQtTaGcTcope5A6U4G9dyjBz5bzRKzrm6dSgeQhAVR5kyjTm2BTMvSgYKh6oN6Td3vjryaQjELVrN/46af0ca6-c758-49dc-a059-53d28810ce24.png",
-        )],
-        "https://robertsspaceindustries.com/community-hub/post/citizen-con-2025-one-page-summary-YObiyF4nqdGrV",
-    ),
-    (
-        "Frontier Fighters Finale [4.3.2]",
-        [(
-            "Guide",
-            "https://robertsspaceindustries.com/i/c59f2cc5e2e152365c88d41ab7341f277cca804d/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ3115oDnp7dYpTXoaKWKPWHgPwerwVMLnTaysReTqnr32bpFgFwoGyYY4xo7NQ4pV2ffoRUHASe33uJiPs27WRTYLNSadz7aCPtx36vxYF66G6/6866657c-7326-466f-899e-f3433e301f99.png",
-        )],
-        "https://robertsspaceindustries.com/community-hub/post/frontier-fighters-finale-one-page-guide-4-3-2-rmLM5IFwtZXDO",
-    ),
     (
         "Hathor Laser Guide [4.1.0]",
         [(
@@ -101,28 +70,6 @@ GUIDES = [
         "https://robertsspaceindustries.com/community-hub/post/onyx-companion-guide-4-3-1-hyperion-update-U79TAqypFlx6n",
     ),
     (
-        "Resource Drive Reward Previews [4.2.1]",
-        [
-            (
-                "Hurston Dynamics",
-                "https://robertsspaceindustries.com/i/9e7b1f7874264261261c56514ea684f3bc611dab/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ31168kMd6UPP42HUwqTQRaZGhW5EmdPyxUTtPjK7TY4TuqrK4XT1zJUfh5U3B869k4CRea9UKbgJ5swo2H3hCg5m9HqCfRdz8NAjA1P86GHf4/4c8abab3-eeb1-4004-b1d3-bf8643f46bb2.png",
-            ),
-            (
-                "ArcCorp",
-                "https://robertsspaceindustries.com/i/9f5245afb8a002f2be9661c3abbedf391cae3915/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ31168kMd6UPP42HUwqTQRaZGhW5EmdPyxUTtPjK7TY4TuqrK4XT1zJUU9wHgAFRGBnmazWxQvFYEtbRHu1TB8d4kAL2Std89YjAnomuvahVcS/0bb56658-a470-4d5e-b449-54e9c96fb29f.png",
-            ),
-            (
-                "Crusader Industries",
-                "https://robertsspaceindustries.com/i/5861807b0baadf563068d4e89beffbe1747d89d1/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ31168kMd6UPP42HUwqTQRaZGhW5EmdPyxUTtPjK7TY4TuqrK4XT1zJUrkFQwtkhvzVSN2eSWjZ25q3sRkPJWuhb26m6A7HfwPq1iCVfDMBaTG/89858d75-89f0-4641-a946-7a2b4410ff8b.png",
-            ),
-            (
-                "microTech",
-                "https://robertsspaceindustries.com/i/18e9baff20fde07976807f8d0e1de33b789e2c7c/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ31168kMd6UPP42HUwqTQRaZGhW5EmdPyxUTtPjK7TY4TuqrK4XT1zJUpKDaFBfbi1hZSRAgkrja2mQ5shdWRDQFWJDSdHJXvh1cHr5Axjm1Ui/7a846318-701d-4a2b-a55b-7b81726583e9.png",
-            ),
-        ],
-        "https://robertsspaceindustries.com/community-hub/post/resource-drive-reward-previews-W7pweneUF7kIs",
-    ),
-    (
         "Rock Breaker Companion Guide [4.7 RC]",
         [
             (
@@ -149,14 +96,6 @@ GUIDES = [
         "https://robertsspaceindustries.com/community-hub/post/rock-breaker-companion-guide-4-7-rc-YmVz8SnzJ7rOe",
     ),
     (
-        "Second Life Resource Drive [4.2.1]",
-        [(
-            "Guide",
-            "https://robertsspaceindustries.com/i/ca3d550f1d593687662a9a54544359d4823efb07/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ31167UjzNmTF8fCyokPN6gUeZrg851TBnrjfSQkTUjaha9Wb1ro4P3QRG2oYRWBFQXvHztNNXCYRMTdM1c5WZVGQiLFYorTCpsMubcyf3UVNW/7ec59ff1-fe94-4f54-becb-edcdda8980b9.png",
-        )],
-        "https://robertsspaceindustries.com/community-hub/post/second-life-resource-drive-one-page-guide-q8OWje1UsOVCg",
-    ),
-    (
         "Storm Breaker Guide",
         [
             (
@@ -173,14 +112,6 @@ GUIDES = [
             ),
         ],
         "https://robertsspaceindustries.com/community-hub/post/storm-breaker-one-page-guide-XTU7HaiJkZyFs",
-    ),
-    (
-        "Supply or Die Guide [4.0.2]",
-        [(
-            "Guide",
-            "https://robertsspaceindustries.com/i/aa7378dede3a6cc055d0fc962a6c533ca2650da8/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ3115m21JCrNtFkrBJ86mtgzAKniB3QFX1N7k9pE5vvKZssjpT5RPv8f5WPM8PiiFQYU5oG1jxoTg4jxgmuLu5fDJZB4uwSacsZ1iZxLYEYKxa/621d493e-99fc-4a2c-906c-7a05d64922b5.png",
-        )],
-        "https://robertsspaceindustries.com/community-hub/post/supply-or-die-one-page-guide-wQFyeQ03XmuZm",
     ),
     (
         "Tactical Strike Groups [4.8]",
@@ -205,13 +136,5 @@ GUIDES = [
             "https://robertsspaceindustries.com/i/bd9f2634a682741d3a7b4fd1d3359b415a2a9436/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ31168KuKAii49FKLbe1eSi1LSLaTzW7zjrqMswGNtxJGTRtwm7WWN7xGKCABhqv16qgZdsESj9i1k8zA6twuyiZE22UPJxykDeaJdR58VzfJn/9d9520e0-0e7d-444e-8cf8-88747189bcd9.png",
         )],
         "https://robertsspaceindustries.com/community-hub/post/vanduul-tech-smugglers-one-page-guide-4-4-0-wegEjvpy1Bcl7",
-    ),
-    (
-        "XenoThreat Guide [3.23.1]",
-        [(
-            "Guide",
-            "https://robertsspaceindustries.com/i/05baf9f8a39961473294bb009b5c49b8591766b2/JLypLpqVPBaNxs8FRN3D3vuTrjntZTaECi8ToQLLZiEgiUjcwEzuY511JgyJBk2nwU4KBWPC3t64FJzEsV4pZ31168kYum19UfB45aD91LUZ1sxZH1kKzxC8rw3ED1fE2BTLkJ7QEPSgFt7cLh1oBtdMvresamUkuYfHTWrWGuHcQVNNqrhUYET8h3WJKuXrMC/af0020b8-67b2-48c6-a0d2-cbabdc50777b.png",
-        )],
-        "https://robertsspaceindustries.com/community-hub/post/xeno-threat-one-page-guide-ZELy7jpnsNQUe",
     ),
 ]

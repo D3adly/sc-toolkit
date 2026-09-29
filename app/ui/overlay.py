@@ -20,8 +20,8 @@ import json
 import sys
 
 import psutil
-from PySide6.QtCore import QPoint, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QPainter
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QIcon, QPainter, QRegion
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -157,6 +157,46 @@ class _ResizeGrip(QSizeGrip):
         event.accept()
 
 
+def _copy_shape_to_input(win_id: int) -> None:
+    """X11: Qt's setMask() only shapes what is drawn; make the input shape
+    match, so clicks inside the hole go to the window underneath."""
+    import ctypes
+    import ctypes.util
+
+    try:
+        x = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        xe = ctypes.CDLL(ctypes.util.find_library("Xext") or "libXext.so.6")
+    except OSError:
+        return
+
+    class XRectangle(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_short), ("y", ctypes.c_short),
+                    ("width", ctypes.c_ushort), ("height", ctypes.c_ushort)]
+
+    x.XOpenDisplay.restype = ctypes.c_void_p
+    x.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x.XFree.argtypes = [ctypes.c_void_p]
+    x.XFlush.argtypes = x.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    xe.XShapeGetRectangles.restype = ctypes.POINTER(XRectangle)
+    xe.XShapeGetRectangles.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int,
+                                       ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+    xe.XShapeCombineRectangles.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int,
+                                           ctypes.c_int, ctypes.POINTER(XRectangle), ctypes.c_int,
+                                           ctypes.c_int, ctypes.c_int]
+    dpy = x.XOpenDisplay(None)
+    if not dpy:
+        return
+    SHAPE_BOUNDING, SHAPE_INPUT, SHAPE_SET = 0, 2, 0
+    count, ordering = ctypes.c_int(), ctypes.c_int()
+    rects = xe.XShapeGetRectangles(dpy, win_id, SHAPE_BOUNDING, ctypes.byref(count), ctypes.byref(ordering))
+    if rects:
+        xe.XShapeCombineRectangles(dpy, win_id, SHAPE_INPUT, 0, 0, rects, count.value,
+                                   SHAPE_SET, ordering.value)
+        x.XFree(rects)
+    x.XFlush(dpy)
+    x.XCloseDisplay(dpy)
+
+
 def _load_state() -> dict:
     try:
         return json.loads(STATE_FILE.read_text())
@@ -184,7 +224,17 @@ class _InputShield(QWidget):
     def cover(self, screen) -> None:
         self._target = screen.geometry()
         self.setGeometry(self._target)
-        self.show()
+        self.show()   # before set_hole(): the input shape needs the native window
+
+    def set_hole(self, rect: QRect) -> None:
+        """Leaves out the overlay's own area (screen coordinates), so the
+        shield never covers it: XWayland routes clicks by its own stacking
+        order, which can differ from KWin's."""
+        local = QRect(rect.topLeft() - self.geometry().topLeft(), rect.size())
+        self.setMask(QRegion(self.rect()).subtracted(QRegion(local)))
+        if QApplication.platformName() == "xcb" and self.isVisible():
+            QApplication.sync()   # Qt's shape request must reach the X server first
+            _copy_shape_to_input(int(self.winId()))
 
     def moveEvent(self, event):
         # KWin re-places OSD windows (like the overlay itself); stay on the screen.
@@ -234,6 +284,7 @@ class OverlayWindow(QWidget):
         self.click_through = False
         self._anchor: QPoint | None = None   # where the overlay belongs (see moveEvent)
         self._shield: _InputShield | None = None
+        self._bar_width = 440   # the collapsed bar's width (set by _collapse)
         self._resizing = False
         self._panels: dict[str, QWidget] = {}
         self._save_timer = QTimer(self, singleShot=True, interval=400, timeout=self._save_state)
@@ -298,6 +349,7 @@ class OverlayWindow(QWidget):
             f"CLICK-THROUGH: clicks go to the game · {hotkey_label('toggle-clickthrough')} to use the overlay again",
             objectName="OverlayBanner",
         )
+        self.ct_banner.setWordWrap(True)   # wraps to the bar's width instead of widening it
         self.ct_banner.setVisible(False)
         v.addWidget(self.ct_banner)
 
@@ -326,9 +378,12 @@ class OverlayWindow(QWidget):
         self.stack.setCurrentWidget(self._panels[tool])
         self.stack.setVisible(True)
         self.size_grip.setVisible(True)
-        self.setMinimumSize(360, 300)
+        # Never narrower than the bar, or its buttons get cut off.
+        min_width = max(360, self._bar_width)
+        self.setMinimumSize(min_width, 300)
         self.setMaximumSize(16777215, 16777215)
-        self.resize(QSize(*size) if size else TOOLS[tool][1])
+        size = QSize(*size) if size else TOOLS[tool][1]
+        self.resize(max(size.width(), min_width), size.height())
         self._resizing = False
         self._sync_buttons()
         activate = getattr(self._panels[tool], "activate", None)
@@ -351,11 +406,28 @@ class OverlayWindow(QWidget):
         self.stack.setVisible(False)
         self.size_grip.setVisible(False)
         self._sync_buttons()
+        self._fit_bar()
+
+    def _fit_bar(self) -> None:
+        """Collapsed size: as wide as the header needs, as tall as the header
+        plus the click-through banner (wrapped to that width) when it shows."""
+        banner = self.ct_banner.isVisibleTo(self)
+        self.ct_banner.setVisible(False)
         self.setMinimumSize(0, 0)
+        self.setMaximumSize(16777215, 16777215)
         self.adjustSize()
-        self.setFixedHeight(self.sizeHint().height())
+        self._bar_width = max(self.sizeHint().width(), 440)
+        self.ct_banner.setVisible(banner)
+        self.setFixedWidth(self._bar_width)
+        self.layout().activate()
+        height = self.heightForWidth(self._bar_width) if self.hasHeightForWidth() else -1
+        if height <= 0:
+            self.adjustSize()
+            height = self.sizeHint().height()
+        self.setFixedHeight(height)
+        self.setMinimumWidth(0)
         self.setMaximumWidth(16777215)
-        self.resize(max(self.sizeHint().width(), 440), self.sizeHint().height())
+        self.resize(self._bar_width, height)
 
     def _sync_buttons(self) -> None:
         for btn in self.tool_group.buttons():
@@ -403,6 +475,7 @@ class OverlayWindow(QWidget):
                     f"SC-Toolkit overlay has the mouse  ·  {hotkey_label('toggle-clickthrough')} "
                     f"gives it back to the game  ·  {hotkey_label('toggle-overlay')} hides the overlay", self)
             self._shield.cover(self.screen())
+            self._shield.set_hole(self.frameGeometry())
             self.raise_()   # the overlay stays above its shield
         elif self._shield is not None:
             self._shield.hide()
@@ -423,6 +496,10 @@ class OverlayWindow(QWidget):
         self.ct_banner.setVisible(self.click_through)
         if visible or self.click_through:
             self.show_overlay()
+        if self.tool is None:
+            # After the re-created window is shown: measured while hidden,
+            # the layout isn't up to date and the banner got squeezed in.
+            self._fit_bar()
 
     # -- persistence ------------------------------------------------------------------------
     def _on_opacity(self, value: int) -> None:
@@ -442,11 +519,17 @@ class OverlayWindow(QWidget):
         if self._anchor is not None and self.pos() != self._anchor:
             self.move(self._anchor)
             return
+        self._sync_hole()
         self.state["pos"] = [self.x(), self.y()]
         self._save_timer.start()
 
+    def _sync_hole(self) -> None:
+        if self._shield is not None and self._shield.isVisible():
+            self._shield.set_hole(self.frameGeometry())
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._sync_hole()
         if self.tool and not self._resizing:
             self._remember_size()
 

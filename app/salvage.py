@@ -48,7 +48,7 @@ UEX_URL = "https://api.uexcorp.space/2.0/commodities"
 TIMEOUT = 20
 
 CACHE = config.CACHE_DIR / "salvage"
-GAME_FORMAT = 1  # bump when the extracted game-data shape changes
+GAME_FORMAT = 3  # bump when the extracted game-data shape changes
 
 TIER_ORDER = ["Intro", "VeryEasy", "Easy", "Medium", "Hard"]
 TIER_LABELS = {"VeryEasy": "Very Easy"}
@@ -76,6 +76,13 @@ TYPE_ORDER = list(ITEM_TYPES.values())
 GRADED_TYPES = {"PowerPlant", "Cooler", "Shield", "QuantumDrive", "JumpDrive", "Radar",
                 "LifeSupportGenerator"}
 _GRADES = {1: "A", 2: "B", 3: "C", 4: "D"}
+# A missile's lock-on signal (bombs are unguided and have none).
+_TRACKING = {"Electromagnetic": "EM", "Infrared": "IR", "CrossSection": "CS"}
+# Short labels for the compact component spec (ComponentRow.spec).
+_SHORT_TYPES = {"Power Plant": "PwrPlant", "Quantum Drive": "QDrive", "Life Support": "LifeSup",
+                "Jump Drive": "JDrive"}
+_SHORT_CLASSES = {"Military": "Mil", "Civilian": "Civ", "Industrial": "Ind", "Stealth": "Stl",
+                  "Competition": "Comp"}
 
 # Spreadsheet ship nicknames → salvage-variant class stem.
 SHIP_ALIASES = {
@@ -239,12 +246,17 @@ def _item_info(dc: DataCore, loc: dict[str, str], cls: str, memo: dict) -> dict 
         name_key = (a.get("Localization") or {}).get("Name")
         desc = _loc(loc, (a.get("Localization") or {}).get("Description"), "")
         family = re.search(r"Class:\s*([^\\\n]+)", desc)
+        item_type = re.search(r"Item Type:\s*([^\\\n]+)", desc)
+        missile = _find(rec, "SCItemMissileParams") or {}
+        signal = (missile.get("targetingParams") or {}).get("trackingSignalType")
         info = {
             "type": a.get("Type"),
             "name": _loc(loc, name_key, cls),
             "size": a.get("Size"),
             "grade": _GRADES.get(a.get("Grade"), ""),
             "family": family.group(1).strip() if family else "",
+            "tracking": _TRACKING.get(signal, ""),
+            "item_type": item_type.group(1).strip() if item_type else "",   # e.g. "Laser Repeater"
         }
     memo[cls] = info
     return info
@@ -571,6 +583,23 @@ class ComponentRow:
     sell: float | None
     dismantle: float | None
     materials: list[tuple[str, float]]
+    tracking: str = ""      # missiles: EM / IR / CS
+    item_type: str = ""     # the game's "Item Type", e.g. "Laser Repeater"
+
+    @property
+    def spec(self) -> str:
+        """PwrPlant/Mil/C/2 for systems, Laser/Repeater/S3 for weapons,
+        EM/S2 for missiles, S5 for the rest."""
+        size = f"S{self.size}" if self.size else ""
+        if self.grade:
+            family = _SHORT_CLASSES.get(self.family, self.family[:4])
+            return "/".join(filter(None, [_SHORT_TYPES.get(self.type, self.type), family,
+                                          self.grade, str(self.size or "")]))
+        if self.tracking:
+            return "/".join(filter(None, [self.tracking, size]))
+        if self.type == "Weapon" and self.item_type:
+            return "/".join(self.item_type.split() + ([size] if size else []))
+        return size
 
     @property
     def best(self) -> float:
@@ -660,7 +689,8 @@ def build_rows(game: dict, tier_id: str, sheet: Sheet | None, prices: dict[str, 
                 grade=(c["grade"] or (match.grade if match else "")) if c["game_type"] in GRADED_TYPES else "",
                 family=c["family"] or (match.family if match else ""), qty=c["qty"], salvageable=state,
                 sell=match.sell if match else None, dismantle=match.dismantle if match else None,
-                materials=match.materials if match else [],
+                materials=match.materials if match else [], tracking=c.get("tracking", ""),
+                item_type=c.get("item_type", ""),
             ))
         cargo = []
         if sheet_ship:

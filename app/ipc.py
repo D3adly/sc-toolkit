@@ -75,6 +75,12 @@ class CommandServer(QObject):
             sock.disconnected.connect(sock.deleteLater)
 
     def _read(self, sock: QLocalSocket) -> None:
+        try:
+            self._read_lines(sock)
+        except RuntimeError:
+            pass   # the sender disconnected and the socket is already gone
+
+    def _read_lines(self, sock: QLocalSocket) -> None:
         while sock.canReadLine():
             line = bytes(sock.readLine()).decode(errors="replace").strip()
             if line:

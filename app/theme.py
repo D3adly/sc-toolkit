@@ -367,6 +367,11 @@ QFrame#Divider {{
     border-top-right-radius: 6px;
     border-bottom-right-radius: 6px;
 }}
+#Segment[compact="true"] {{
+    padding: 3px 9px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+}}
 #Segment:checked {{
     background: {accent_soft};
     color: {text_primary};

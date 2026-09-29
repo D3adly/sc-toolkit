@@ -48,20 +48,21 @@ Build: `SC-Toolkit-windows.exe` from the release (or workflow artifact) you were
 ## In-game overlay
 Set Star Citizen to **Borderless** (Graphics → Window Mode) first: nothing can draw over
 exclusive fullscreen.
-- [ ] With the **IN-GAME OVERLAY** switch (next to SC-TOOLKIT TOOLS) off, Ctrl+Shift+O
+- [ ] With the **IN-GAME OVERLAY** switch (next to SC-TOOLKIT TOOLS) off, F7
       does nothing.
-- [ ] Switch it on. In game, **Ctrl+Shift+O** shows and hides a small bar (Maps, Mining,
+- [ ] Switch it on. In game, **F7** shows and hides a small bar (Maps, Mining,
       Salvage) on top of the game.
-- [ ] In **Settings**, change the overlay hotkey (click the field, press e.g. Ctrl+Alt+M),
+- [ ] In **Settings**, change the overlay hotkey (click the field, press e.g. F9),
       **Save**: the new key works in game and the old one doesn't.
+- [ ] The **In-game Overlay** tile (under the other tools) switches the overlay on and shows it.
 - [ ] Each tool opens its compact panel under the bar; clicking the same tool again
       collapses it back to the bar.
 - [ ] **Maps:** a guide loads and zooms/pans. **Mining:** pick a resource, locations
       appear. **Salvage:** pick a difficulty and a ship, its values appear.
 - [ ] The bar can be dragged by the ⠿ grip / title; the panel resizes from its corner.
 - [ ] The opacity slider fades the overlay.
-- [ ] **Ctrl+Shift+P** (or ⇲) turns on click-through: the banner shows, and clicks go to
-      the game. Ctrl+Shift+P again makes the overlay clickable.
+- [ ] **F8** (or ⇲) turns on click-through: the banner shows, and clicks go to
+      the game. F8 again makes the overlay clickable.
 - [ ] Close and reopen SC-Toolkit: the overlay comes back at the same place, size and
       opacity.
 - [ ] Tell us if the game loses focus, stutters, or minimises when the overlay shows.

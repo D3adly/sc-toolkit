@@ -42,6 +42,7 @@ a = Analysis(
     hiddenimports=[
         "app.ui.bindings_view", "app.ui.maps_view", "app.ui.mining_view", "app.ui.salvage_view",
         "app.ui.settings_view", "app.ui.overlay", "app.ui.overlay_panels", "app.hotkeys",
+        "jeepney", "jeepney.io.blocking", "jeepney.bus_messages",
         "sdl2", "sdl2dll",
     ],
     noarchive=False,

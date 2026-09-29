@@ -110,7 +110,7 @@ class _ToolTile(QFrame):
         col = QVBoxLayout()
         col.setSpacing(4)
         col.addWidget(QLabel(title, objectName="TileTitle"))
-        body = QLabel(text, objectName="TileText")
+        self.body = body = QLabel(text, objectName="TileText")
         body.setWordWrap(True)
         col.addWidget(body)
         if credit:
@@ -338,8 +338,19 @@ class MainWindow(QMainWindow):
 
     def _update_overlay_hint(self) -> None:
         on = settings.current().overlay_enabled
-        self.overlay_hint.setText(
-            f"{hotkeys.label('toggle-overlay')} to show" if on else "off")
+        show, click = hotkeys.label("toggle-overlay"), hotkeys.label("toggle-clickthrough")
+        self.overlay_hint.setText(f"{show} to show" if on else "off")
+        if hasattr(self, "overlay_tile"):
+            self.overlay_tile.body.setText(
+                f"Maps, Mining and Salvage in a small window on top of the game (Borderless mode). "
+                f"{show} shows or hides it, {click} lets clicks through to the game.")
+
+    def _open_overlay(self) -> None:
+        """The tile: switches the overlay on if needed and shows it."""
+        if not settings.current().overlay_enabled:
+            self.overlay_switch.setChecked(True)
+        if self._start_overlay:
+            self.overlay.send("show")
 
     def closeEvent(self, event):
         # While a game session runs, closing would skip the backup on game
@@ -624,8 +635,12 @@ class MainWindow(QMainWindow):
             ),
         )
         maps_tile.clicked.connect(self._show_maps)
+        self.overlay_tile = _ToolTile("overlay", "In-game Overlay", "")
+        self.overlay_tile.clicked.connect(self._open_overlay)
         for i, tile in enumerate((self.bindings_btn, self.salvage_btn, self.mining_btn, maps_tile)):
             grid.addWidget(tile, i // 2, i % 2)
+        grid.addWidget(self.overlay_tile, 2, 0, 1, 2)
+        self._update_overlay_hint()
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         layout.addLayout(grid)

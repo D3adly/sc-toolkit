@@ -21,7 +21,7 @@ import sys
 
 import psutil
 from PySide6.QtCore import QPoint, QSize, Qt, QTimer
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QColor, QIcon, QPainter
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -99,6 +99,64 @@ def _skip_taskbar(win_id: int) -> None:
     x.XCloseDisplay(dpy)
 
 
+def _set_osd_type(win_id: int) -> None:
+    """X11: mark the overlay as an on-screen display. KWin stacks active
+    fullscreen windows (the game) above ordinary keep-above windows, but
+    OSDs above those. Must be set before the window is mapped. KWin then
+    won't move or resize it itself, so the overlay does that on its own
+    (see _drag and _ResizeGrip)."""
+    import ctypes
+    import ctypes.util
+
+    try:
+        x = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+    except OSError:
+        return
+    x.XOpenDisplay.restype = ctypes.c_void_p
+    x.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x.XInternAtom.restype = ctypes.c_ulong
+    x.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+    x.XChangeProperty.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong,
+                                  ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+    x.XFlush.argtypes = x.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    dpy = x.XOpenDisplay(None)
+    if not dpy:
+        return
+    XA_ATOM, PROP_MODE_REPLACE = 4, 0
+    # KDE's OSD type, with the standard notification type for other WMs.
+    names = (b"_KDE_NET_WM_WINDOW_TYPE_ON_SCREEN_DISPLAY", b"_NET_WM_WINDOW_TYPE_NOTIFICATION")
+    atoms = (ctypes.c_ulong * len(names))(*[x.XInternAtom(dpy, n, False) for n in names])
+    x.XChangeProperty(dpy, win_id, x.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE", False), XA_ATOM, 32,
+                      PROP_MODE_REPLACE, atoms, len(names))
+    x.XFlush(dpy)
+    x.XCloseDisplay(dpy)
+
+
+class _ResizeGrip(QSizeGrip):
+    """Resizes the window itself: KWin doesn't resize OSD windows."""
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            win = self.window()
+            self._start = (event.globalPosition().toPoint(), win.size())
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        start = getattr(self, "_start", None)
+        if start is None:
+            return
+        win = self.window()
+        delta = event.globalPosition().toPoint() - start[0]
+        minimum = win.minimumSizeHint()
+        win.resize(max(minimum.width(), start[1].width() + delta.x()),
+                   max(minimum.height(), start[1].height() + delta.y()))
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self._start = None
+        event.accept()
+
+
 def _load_state() -> dict:
     try:
         return json.loads(STATE_FILE.read_text())
@@ -106,16 +164,76 @@ def _load_state() -> dict:
         return {}
 
 
+class _InputShield(QWidget):
+    """A dimmed, full-screen layer under the overlay while it's interactive:
+    every click and mouse movement lands here instead of in the game (which
+    would otherwise shoot or turn). Click-through mode or hiding the overlay
+    removes it."""
+
+    def __init__(self, hint: str, overlay: QWidget):
+        super().__init__()
+        self.hint = hint
+        self.overlay = overlay
+        kind = Qt.Window if sys.platform.startswith("linux") else Qt.Tool
+        self.setWindowFlags(kind | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+                            | Qt.WindowDoesNotAcceptFocus)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setWindowTitle("SC-Toolkit overlay shield")
+
+    def cover(self, screen) -> None:
+        self._target = screen.geometry()
+        self.setGeometry(self._target)
+        self.show()
+
+    def moveEvent(self, event):
+        # KWin re-places OSD windows (like the overlay itself); stay on the screen.
+        super().moveEvent(event)
+        target = getattr(self, "_target", None)
+        if target is not None and self.pos() != target.topLeft():
+            self.move(target.topLeft())
+
+    def showEvent(self, event):
+        if QApplication.platformName() == "xcb":
+            _set_osd_type(int(self.winId()))
+        super().showEvent(event)
+        if QApplication.platformName() == "xcb":
+            QTimer.singleShot(0, lambda: _skip_taskbar(int(self.winId())))
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(0, 0, 0, 70))
+        font = p.font()
+        font.setPixelSize(13)
+        p.setFont(font)
+        p.setPen(QColor(255, 255, 255, 150))
+        p.drawText(self.rect().adjusted(0, 0, 0, -28), Qt.AlignHCenter | Qt.AlignBottom, self.hint)
+
+    def mousePressEvent(self, event):
+        # Swallowed, so it never reaches the game; keep the overlay on top and focused.
+        event.accept()
+        self.overlay.raise_()
+        self.overlay.activateWindow()
+
+
 class OverlayWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("SC-Toolkit overlay")
         self.setWindowIcon(QIcon(str(config.APP_ICON)))
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        # Not Qt.Tool on X11: that makes a "utility" window, which KWin hides
+        # whenever its app isn't active, i.e. as soon as the game has focus.
+        # The taskbar entry is dropped by _skip_taskbar() instead.
+        kind = Qt.Window if sys.platform.startswith("linux") else Qt.Tool
+        self.setWindowFlags(kind | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
+        # Showing it must not take focus from the game; click it to type.
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.state = _load_state()
         self.tool: str | None = None
         self.click_through = False
+        self._anchor: QPoint | None = None   # where the overlay belongs (see moveEvent)
+        self._shield: _InputShield | None = None
         self._resizing = False
         self._panels: dict[str, QWidget] = {}
         self._save_timer = QTimer(self, singleShot=True, interval=400, timeout=self._save_state)
@@ -123,7 +241,8 @@ class OverlayWindow(QWidget):
         self.setWindowOpacity(self.state.get("opacity", 92) / 100)
         pos = self.state.get("pos")
         if pos:
-            self.move(QPoint(*pos))
+            self._anchor = QPoint(*pos)
+            self.move(self._anchor)
         self._collapse()
 
     # -- layout -------------------------------------------------------------------
@@ -184,7 +303,7 @@ class OverlayWindow(QWidget):
 
         self.stack = QStackedWidget()
         v.addWidget(self.stack, stretch=1)
-        self.size_grip = QSizeGrip(self)
+        self.size_grip = _ResizeGrip(self)
         grip_row = QHBoxLayout()
         grip_row.addStretch(1)
         grip_row.addWidget(self.size_grip)
@@ -250,15 +369,48 @@ class OverlayWindow(QWidget):
             self.show_overlay()
 
     def show_overlay(self) -> None:
+        """Shows it with the mouse and keyboard (the game lets go of the
+        pointer once it loses focus); in click-through mode it's shown
+        without taking focus, so the game keeps it."""
+        pos = self.state.get("pos")
+        if pos:
+            self._anchor = QPoint(*pos)
         self.show()
         self.raise_()
+        if self._anchor is not None:
+            self.move(self._anchor)
+        self._update_shield()
         if not self.click_through:
             self.activateWindow()
+            # Once mapped: an activation request for an unmapped window can get lost.
+            QTimer.singleShot(150, lambda: self.isVisible() and not self.click_through
+                              and self.activateWindow())
 
     def showEvent(self, event):
+        if QApplication.platformName() == "xcb":
+            # Before the native window is mapped (and again whenever changing
+            # the click-through flag re-created it).
+            _set_osd_type(int(self.winId()))
         super().showEvent(event)
         if QApplication.platformName() == "xcb":
             QTimer.singleShot(0, lambda: _skip_taskbar(int(self.winId())))
+
+    def _update_shield(self) -> None:
+        """Shield under the overlay while it takes the mouse; none in click-through."""
+        if self.isVisible() and not self.click_through:
+            if self._shield is None:
+                self._shield = _InputShield(
+                    f"SC-Toolkit overlay has the mouse  ·  {hotkey_label('toggle-clickthrough')} "
+                    f"gives it back to the game  ·  {hotkey_label('toggle-overlay')} hides the overlay", self)
+            self._shield.cover(self.screen())
+            self.raise_()   # the overlay stays above its shield
+        elif self._shield is not None:
+            self._shield.hide()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        if self._shield is not None:
+            self._shield.hide()
 
     def toggle_click_through(self) -> None:
         self.click_through = not self.click_through
@@ -284,7 +436,12 @@ class OverlayWindow(QWidget):
             self._save_timer.start()
 
     def moveEvent(self, event):
+        # KWin places an OSD itself (bottom centre) when it's mapped and
+        # whenever its size changes; any move the overlay didn't make is undone.
         super().moveEvent(event)
+        if self._anchor is not None and self.pos() != self._anchor:
+            self.move(self._anchor)
+            return
         self.state["pos"] = [self.x(), self.y()]
         self._save_timer.start()
 
@@ -301,15 +458,29 @@ class OverlayWindow(QWidget):
             pass
 
     # -- dragging -------------------------------------------------------------------------------
+    # Moved by the app itself, not the window manager: KWin doesn't move OSDs.
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.header.geometry().contains(
                 self.frame.mapFrom(self, event.position().toPoint())):
-            handle = self.windowHandle()
-            if handle is not None:
-                handle.startSystemMove()
+            self._drag = event.globalPosition().toPoint() - self.pos()
             event.accept()
             return
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if getattr(self, "_drag", None) is not None:
+            self._anchor = event.globalPosition().toPoint() - self._drag
+            self.move(self._anchor)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if getattr(self, "_drag", None) is not None:
+            self._drag = None
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
 
 def run(parent_pid: int | None) -> int:

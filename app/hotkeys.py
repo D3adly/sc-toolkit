@@ -1,16 +1,17 @@
-"""System-wide hotkeys for the overlay: show/hide (default Ctrl+Shift+O)
-and click-through (default Ctrl+Shift+P), configurable in Settings. They
-must work while the game has focus, so they're registered with the OS, not
-Qt:
+"""System-wide hotkeys for the overlay: show/hide (default F7) and
+click-through (default F8), configurable in Settings. They must work while
+the game has focus, so they're registered with the OS, not Qt:
 
 - **Windows:** `RegisterHotKey` on the GUI thread; WM_HOTKEY arrives through
   a Qt native event filter.
-- **Linux:** an X11 key grab on the root window (own Xlib connection, own
-  thread). The overlay process runs on XWayland, and so does the game under
-  Wine/Proton, so the grab fires while the game is focused. On a pure
-  Wayland session without XWayland there is no global grab; the
-  `sc-toolkit --toggle-overlay` command (bind it to a desktop shortcut) is
-  the fallback.
+- **KDE Plasma (Wayland or X11):** a global shortcut registered with
+  KGlobalAccel over D-Bus. KWin catches the key whatever window is focused
+  (Star Citizen under Wine's Wayland driver is a native Wayland window) and
+  keeps it from the game. Released (set inactive) when the overlay stops.
+- **Other Linux desktops:** an X11 key grab on the root window (own Xlib
+  connection, own thread). It only sees keys while an X11/XWayland window
+  has focus; the `sc-toolkit --toggle-overlay` command (bind it to a desktop
+  shortcut) is the fallback.
 
 `GlobalHotkeys.pressed(action)` is emitted on the GUI thread.
 """
@@ -30,8 +31,19 @@ ACTIONS = {
     "toggle-clickthrough": ("hotkey_clickthrough", "Overlay click-through"),
 }
 MODIFIERS = ("Ctrl", "Shift", "Alt", "Meta")   # Meta = the Windows / Super key
+FKEYS = [f"F{n}" for n in range(1, 13)]
+# Keys nobody types with: allowed on their own, like the F-keys.
+# Names as QKeySequence.PortableText writes them.
+NAV_KEYS = ["Ins", "Home", "End", "PgUp", "PgDown", "Pause", "ScrollLock"]
 KEYS = ([chr(c) for c in range(ord("A"), ord("Z") + 1)] + [str(d) for d in range(10)]
-        + [f"F{n}" for n in range(1, 13)])
+        + FKEYS + NAV_KEYS)
+_KEY_ALIASES = {
+    "insert": "Ins", "pageup": "PgUp", "pgup": "PgUp", "pagedown": "PgDown", "pgdown": "PgDown",
+    "pgdn": "PgDown", "scrolllock": "ScrollLock", "scroll": "ScrollLock", "break": "Pause",
+    **{k.lower(): k for k in NAV_KEYS + FKEYS},
+}
+_MOD_ALIASES = {"control": "Ctrl", "ctrl": "Ctrl", "win": "Meta", "super": "Meta", "meta": "Meta",
+                "shift": "Shift", "alt": "Alt"}
 
 
 def parse(text: str) -> tuple[frozenset[str], str]:
@@ -40,21 +52,21 @@ def parse(text: str) -> tuple[frozenset[str], str]:
     if not parts:
         raise ValueError("Not set")
     *mods, key = parts
-    aliases = {"control": "Ctrl", "win": "Meta", "super": "Meta"}
-    mods = {aliases.get(m.lower(), m.capitalize()) for m in mods}
-    if key.capitalize() in MODIFIERS or key.lower() in aliases:
-        raise ValueError("Finish with a letter, digit or F-key")
-    key = key.upper()
-    unknown = mods - set(MODIFIERS)
+    if key.lower() in _MOD_ALIASES:
+        raise ValueError("Finish with a key, not a modifier")
+    unknown = [m for m in mods if m.lower() not in _MOD_ALIASES]
     if unknown:
         raise ValueError(f"Unknown modifier: {', '.join(sorted(unknown))}")
+    mods = {_MOD_ALIASES[m.lower()] for m in mods}
+    key = _KEY_ALIASES.get(key.lower(), key.upper())
     if key not in KEYS:
-        raise ValueError("Use a letter, digit or F1–F12 as the key")
-    if not mods & {"Ctrl", "Alt", "Meta"}:
-        # A bare or Shift-only key would be taken away from the game.
-        raise ValueError("Add Ctrl, Alt or Meta, so the game keeps its own keys")
-    if {"Ctrl", "Alt"} <= mods and key.startswith("F") and len(key) > 1:
-        # Linux keeps these for switching to a text console; they never arrive.
+        raise ValueError("Use an F-key, a letter or digit, or Insert/Home/End/Page Up/Page Down/"
+                         "Pause/Scroll Lock")
+    if len(key) == 1 and not mods & {"Ctrl", "Alt", "Meta"}:
+        # A bare or Shift-only letter/digit would be taken away from typing.
+        raise ValueError("Letters and digits need Ctrl, Alt or Meta")
+    if {"Ctrl", "Alt"} <= mods and key in FKEYS:
+        # Linux keeps these for switching to a text console.
         raise ValueError("Ctrl+Alt+F-keys are reserved by the system")
     return frozenset(mods), key
 
@@ -84,6 +96,16 @@ def label(action: str) -> str:
     return configured()[action]
 
 
+def release() -> None:
+    """Frees the keys held for the overlay, e.g. after the overlay process
+    died without doing so itself. Only KDE keeps them registered."""
+    if sys.platform.startswith("linux") and _KDEHotkeys.available():
+        try:
+            _KDEHotkeys.deactivate_all()
+        except Exception:
+            pass
+
+
 class GlobalHotkeys(QObject):
     pressed = Signal(str)
 
@@ -97,6 +119,8 @@ class GlobalHotkeys(QObject):
         try:
             if sys.platform.startswith("win"):
                 self._backend = _WindowsHotkeys(self.pressed.emit, combos)
+            elif _KDEHotkeys.available():
+                self._backend = _KDEHotkeys(self.pressed.emit, combos)
             else:
                 self._backend = _X11Hotkeys(self.pressed.emit, combos)
             self._backend.start()
@@ -129,9 +153,14 @@ class _WindowsHotkeys(QAbstractNativeEventFilter):
         self._combos = combos
         self._ids: dict[int, str] = {}
 
-    @staticmethod
-    def _vk(key: str) -> int:
-        return 0x6F + int(key[1:]) if key.startswith("F") and len(key) > 1 else ord(key)
+    NAV_VK = {"Ins": 0x2D, "Home": 0x24, "End": 0x23, "PgUp": 0x21, "PgDown": 0x22,
+              "Pause": 0x13, "ScrollLock": 0x91}
+
+    @classmethod
+    def _vk(cls, key: str) -> int:
+        if key in FKEYS:
+            return 0x6F + int(key[1:])
+        return cls.NAV_VK.get(key) or ord(key)
 
     def start(self) -> None:
         for i, (action, (mods, key)) in enumerate(self._combos.items(), start=1):
@@ -210,6 +239,14 @@ class _X11Hotkeys:
         handler_type = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
         self._handler = handler_type(lambda _d, _e: self._errors.append(1) or 0)
 
+    NAV_KEYSYMS = {"Ins": "Insert", "PgUp": "Prior", "PgDown": "Next", "ScrollLock": "Scroll_Lock"}
+
+    @classmethod
+    def _keysym(cls, key: str) -> str:
+        if key in FKEYS or key in NAV_KEYS:
+            return cls.NAV_KEYSYMS.get(key, key)
+        return key.lower()
+
     def start(self) -> None:
         x = self._x
         self._dpy = x.XOpenDisplay(None)
@@ -218,8 +255,7 @@ class _X11Hotkeys:
         x.XSetErrorHandler(self._handler)
         root = x.XDefaultRootWindow(self._dpy)
         for action, (mods, key) in self._combos.items():
-            code = x.XKeysymToKeycode(self._dpy, x.XStringToKeysym(
-                (key if key.startswith("F") and len(key) > 1 else key.lower()).encode()))
+            code = x.XKeysymToKeycode(self._dpy, x.XStringToKeysym(self._keysym(key).encode()))
             mask = 0
             for m in mods:
                 mask |= self.MODS[m]
@@ -259,3 +295,121 @@ class _X11Hotkeys:
                                        self._x.XDefaultRootWindow(self._dpy))
             self._x.XCloseDisplay(self._dpy)
             self._dpy = None
+
+
+# -- KDE Plasma: KGlobalAccel ------------------------------------------------------------
+
+class _KDEHotkeys:
+    """Global shortcuts through KDE's kglobalaccel D-Bus service. jeepney
+    does the calls (QtDBus can't send the `ai` key lists it expects); a
+    thread waits for `globalShortcutPressed`."""
+
+    SERVICE = "org.kde.kglobalaccel"
+    COMPONENT = "sc-toolkit"
+    FRIENDLY = "SC-Toolkit"
+    SET_PRESENT, NO_AUTOLOADING = 2, 4
+
+    def __init__(self, emit, combos):
+        self._emit = emit
+        self._combos = combos
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._conn = None
+
+    @classmethod
+    def available(cls) -> bool:
+        if not sys.platform.startswith("linux"):
+            return False
+        try:
+            from jeepney import DBusAddress, new_method_call
+            from jeepney.io.blocking import open_dbus_connection
+
+            with open_dbus_connection(bus="SESSION") as conn:
+                bus = DBusAddress("/org/freedesktop/DBus", bus_name="org.freedesktop.DBus",
+                                  interface="org.freedesktop.DBus")
+                reply = conn.send_and_get_reply(
+                    new_method_call(bus, "NameHasOwner", "s", (cls.SERVICE,)), timeout=2)
+                return bool(reply.body[0])
+        except Exception:
+            return False
+
+    @classmethod
+    def _action_id(cls, action: str) -> list[str]:
+        return [cls.COMPONENT, action, cls.FRIENDLY, ACTIONS[action][1]]
+
+    @classmethod
+    def _call(cls, conn, method: str, signature: str, *args):
+        from jeepney import DBusAddress, MessageType, new_method_call
+
+        address = DBusAddress("/kglobalaccel", bus_name=cls.SERVICE, interface="org.kde.KGlobalAccel")
+        reply = conn.send_and_get_reply(new_method_call(address, method, signature, args), timeout=3)
+        if reply.header.message_type == MessageType.error:
+            raise OSError(f"kglobalaccel {method}: {reply.body[0] if reply.body else 'error'}")
+        return reply.body
+
+    @classmethod
+    def deactivate_all(cls) -> None:
+        from jeepney.io.blocking import open_dbus_connection
+
+        with open_dbus_connection(bus="SESSION") as conn:
+            for action in ACTIONS:
+                cls._call(conn, "setInactive", "as", cls._action_id(action))
+
+    @staticmethod
+    def _qt_key(mods, key: str) -> int:
+        from PySide6.QtGui import QKeySequence
+
+        return QKeySequence.fromString(format_combo(mods, key), QKeySequence.PortableText)[0].toCombined()
+
+    def start(self) -> None:
+        from jeepney.bus_messages import MatchRule, message_bus
+        from jeepney.io.blocking import open_dbus_connection
+
+        self._conn = conn = open_dbus_connection(bus="SESSION")
+        taken = []
+        for action, (mods, key) in self._combos.items():
+            action_id = self._action_id(action)
+            self._call(conn, "doRegister", "as", action_id)
+            wanted = self._qt_key(mods, key)
+            (assigned,) = self._call(conn, "setShortcut", "asaiu", action_id, [wanted],
+                                     self.SET_PRESENT | self.NO_AUTOLOADING)
+            if wanted not in assigned:
+                taken.append(format_combo(mods, key))
+        if taken:
+            self.stop()
+            raise OSError(f"{', '.join(taken)}: already used by another shortcut "
+                          "(System Settings → Keyboard → Shortcuts)")
+        (path,) = self._call(conn, "getComponent", "s", self.COMPONENT)
+        self._rule = MatchRule(type="signal", interface="org.kde.kglobalaccel.Component",
+                               member="globalShortcutPressed", path=path)
+        conn.send_and_get_reply(message_bus.AddMatch(self._rule), timeout=3)
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def _loop(self) -> None:
+        with self._conn.filter(self._rule) as queue:
+            while not self._stop.is_set():
+                try:
+                    msg = self._conn.recv_until_filtered(queue, timeout=0.25)
+                except TimeoutError:
+                    continue
+                except Exception:
+                    return
+                component, action = msg.body[0], msg.body[1]
+                if component == self.COMPONENT and action in ACTIONS:
+                    self._emit(action)
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1)
+            self._thread = None
+        if self._conn is not None:
+            try:
+                # Inactive: KWin stops catching the keys, so they reach the game again.
+                for action in self._combos:
+                    self._call(self._conn, "setInactive", "as", self._action_id(action))
+            except Exception:
+                pass
+            self._conn.close()
+            self._conn = None

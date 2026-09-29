@@ -144,6 +144,24 @@ GLYPHS = {
 <path d="M88 60 C82 51 79 46 79 40 A9 9 0 0 1 97 40 C97 46 94 51 88 60 Z" fill="url(#steel)"/>
 <circle cx="88" cy="40" r="3.5" fill="{INK}"/>
 """,
+    # A HUD panel floating over the game's reticle.
+    "overlay": f"""
+<g fill="none" stroke="url(#steel)" stroke-width="3.2" stroke-linecap="round">
+  <circle cx="78" cy="74" r="28" stroke-opacity="0.85"/>
+  <path d="M78 38 V50 M78 98 V110 M42 74 H54 M102 74 H114"/>
+</g>
+<circle cx="78" cy="74" r="3.5" fill="url(#steel)"/>
+<rect x="14" y="22" width="62" height="52" rx="7" fill="url(#gold)"/>
+<rect x="14" y="22" width="62" height="10" rx="5" fill="url(#goldDark)" fill-opacity="0.6"/>
+<rect x="19" y="34" width="52" height="35" rx="3.5" fill="{INK}" fill-opacity="0.88"/>
+<circle cx="21" cy="27" r="1.8" fill="{INK}" fill-opacity="0.7"/>
+<circle cx="27" cy="27" r="1.8" fill="{INK}" fill-opacity="0.7"/>
+<g stroke-width="3.2" stroke-linecap="round">
+  <path d="M25 43 H61" stroke="url(#gold)"/>
+  <path d="M25 52 H52" stroke="url(#steel)"/>
+  <path d="M25 61 H57" stroke="url(#gold)" stroke-opacity="0.7"/>
+</g>
+""",
     # Globe with an update arrow (Star Strings localisation).
     "starstrings": f"""
 <circle cx="56" cy="58" r="38" fill="url(#gold)"/>

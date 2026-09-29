@@ -227,8 +227,10 @@ class SettingsView(QWidget):
         ogrid.addWidget(QLabel("IN-GAME OVERLAY HOTKEYS", objectName="SectionLabel"), 0, 0, 1, 2)
         note = QLabel(
             "They work while Star Citizen has focus, as long as the overlay is switched on "
-            "(the switch next to SC-TOOLKIT TOOLS). Click a field and press the new keys: "
-            "Ctrl, Alt or Meta plus a letter, digit or F1–F12.",
+            "(the switch next to SC-TOOLKIT TOOLS). Click a field and press the new key: an "
+            "F-key, Insert, Home, End, Page Up/Down, Pause or Scroll Lock on its own, or a letter "
+            "or digit with Ctrl, Alt or Meta. Modifier keys still reach the game when pressed, so "
+            "a single key the game doesn't use (like F7) works best.",
             objectName="InspectorHint",
         )
         note.setWordWrap(True)

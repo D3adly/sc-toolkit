@@ -99,11 +99,12 @@ it's off, nothing runs and the hotkeys do nothing. Then:
 
 | Default key | Action |
 |---|---|
-| **Ctrl+Shift+O** | Show / hide the overlay |
-| **Ctrl+Shift+P** | Click-through: the overlay stays visible, but clicks go to the game |
+| **F7** | Show / hide the overlay |
+| **F8** | Click-through: the overlay stays visible, but clicks go to the game |
 
-Change the keys in **Settings → In-game overlay hotkeys** (Ctrl, Alt or Meta plus a
-letter, digit or F1–F12). The tray menu has the same actions. Drag the overlay by its
+Change the keys in **Settings → In-game overlay hotkeys**: an F-key, Insert, Home, End,
+Page Up/Down, Pause or Scroll Lock on its own, or a letter/digit with Ctrl, Alt or Meta.
+The **In-game Overlay** tile opens it too. The tray menu has the same actions. Drag the overlay by its
 bar, resize it from its bottom-right corner, and set its opacity with the slider; its
 position, size and opacity are remembered.
 
@@ -111,9 +112,12 @@ position, size and opacity are remembered.
   overlays can draw over exclusive fullscreen.
 - **Anti-cheat safe:** the overlay is an ordinary separate window. It never touches the
   game process (no injection, no hooks), so Easy Anti-Cheat has nothing to object to.
-- **Linux:** works on X11 and on Wayland desktops with XWayland (KDE Plasma, GNOME, …):
-  the overlay runs through XWayland like the game does, so it can stay on top and see
-  the hotkeys. **Steam Deck Game Mode / gamescope is not supported**: gamescope only
+- **Linux, KDE Plasma:** the hotkeys are KDE global shortcuts (listed under *SC-Toolkit*
+  in System Settings → Shortcuts), so they work whether the game runs through Wine's
+  Wayland driver or XWayland. The overlay window itself runs through XWayland so it can
+  stay on top.
+- **Other Linux desktops:** the hotkeys use an X11 key grab, which only sees keys while
+  an X11/XWayland window has focus. **Steam Deck Game Mode / gamescope is not supported**: gamescope only
   shows the game itself. If the hotkeys don't react, bind a desktop shortcut to
   `SC-Toolkit-linux.AppImage --toggle-overlay` (or `--toggle-clickthrough`).
 

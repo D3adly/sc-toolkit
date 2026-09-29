@@ -11,7 +11,7 @@ from __future__ import annotations
 import html
 import threading
 
-from PySide6.QtCore import QObject, QRectF, Qt, Signal
+from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -127,6 +127,58 @@ class _QualityHist(QWidget):
                 round(low.blue() + (high.blue() - low.blue()) * t),
             ))
             p.drawRect(QRectF(i * 7, self.height() - h, 5, h))
+
+
+class QualityChart(QWidget):
+    """Bar chart of a vein's quality odds with the numbers on it: the chance
+    above each bar, the quality below. Bars are square-root scaled so rare
+    high qualities stay visible; the printed chance is the real one.
+    """
+
+    COL_MAX, COL_MIN = 48, 34
+    TOP, BOTTOM, BAR_H = 14, 14, 44
+
+    def __init__(self, dist: list, parent=None):
+        super().__init__(parent)
+        self.dist = dist
+        self.setFixedHeight(self.TOP + self.BAR_H + self.BOTTOM)
+        self.setMinimumWidth(self.COL_MIN * max(1, len(dist)))
+
+    def sizeHint(self):
+        return QSize(self.COL_MAX * max(1, len(self.dist)), self.height())
+
+    def paintEvent(self, _event):
+        if not self.dist:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        font = p.font()
+        font.setPixelSize(10)
+        p.setFont(font)
+        col = min(self.COL_MAX, self.width() / len(self.dist))
+        bar_w = max(8.0, col - 12)
+        peak = max(x for _, x in self.dist) or 1
+        low, high = QColor(PALETTE["text_muted"]), QColor(PALETTE["accent"])
+        base = self.TOP + self.BAR_H
+        p.setPen(QColor(255, 255, 255, 28))
+        p.drawLine(QPointF(0, base + 0.5), QPointF(col * len(self.dist), base + 0.5))
+        for i, (value, chance) in enumerate(self.dist):
+            x = i * col
+            h = max(2.0, (chance / peak) ** 0.5 * self.BAR_H) if chance > 0 else 0
+            t = max(0.0, min(1.0, (value - 300) / 700))
+            colour = QColor(
+                round(low.red() + (high.red() - low.red()) * t),
+                round(low.green() + (high.green() - low.green()) * t),
+                round(low.blue() + (high.blue() - low.blue()) * t),
+            )
+            p.setPen(Qt.NoPen)
+            p.setBrush(colour)
+            p.drawRoundedRect(QRectF(x + (col - bar_w) / 2, base - h, bar_w, h), 2, 2)
+            p.setPen(QColor(PALETTE["text_secondary"]))
+            p.drawText(QRectF(x, base - h - self.TOP, col, self.TOP), Qt.AlignHCenter | Qt.AlignBottom,
+                       _chance(chance))
+            p.setPen(QColor(PALETTE["text_muted"]))
+            p.drawText(QRectF(x, base + 1, col, self.BOTTOM), Qt.AlignHCenter | Qt.AlignTop, str(value))
 
 
 def _signature_line(rock: dict, item: dict, method: str) -> tuple[str, str]:

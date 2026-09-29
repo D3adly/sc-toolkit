@@ -27,8 +27,8 @@ class Settings:
     gameglass_path: str = ""  # optional
     backup_dir: str = ""      # "" = DEFAULT_BACKUP_DIR
     overlay_enabled: bool = False                # in-game overlay (and its hotkeys) on/off
-    hotkey_overlay: str = "Ctrl+Shift+O"         # show / hide the overlay
-    hotkey_clickthrough: str = "Ctrl+Shift+P"    # overlay click-through on/off
+    hotkey_overlay: str = "F7"                   # show / hide the overlay
+    hotkey_clickthrough: str = "F8"              # overlay click-through on/off
 
     @property
     def game_root(self) -> Path | None:
@@ -75,6 +75,11 @@ def load() -> Settings:
     for key, value in raw.items():
         if key in types:
             values[key] = (value is True or str(value).lower() == "true") if types[key] is bool else str(value)
+    # Beta.4 defaulted to Ctrl+Shift+O/P, but the game gets the Ctrl press
+    # too: move anyone still on those to the new defaults.
+    for key, old in (("hotkey_overlay", "Ctrl+Shift+O"), ("hotkey_clickthrough", "Ctrl+Shift+P")):
+        if values.get(key) == old:
+            del values[key]
     return Settings(**values)
 
 

@@ -204,6 +204,26 @@ QMenu::separator {{
     color: {text_primary};
     outline: none;
 }}
+/* The overlay's dropdown list, drawn inside the overlay window. */
+#InlineComboList {{
+    background: {bg_panel_solid};
+    border: 1px solid {border_strong};
+    border-radius: 6px;
+    color: {text_primary};
+    outline: none;
+    padding: 2px;
+}}
+#InlineComboList::item {{
+    padding: 4px 8px;
+    border-radius: 4px;
+}}
+#InlineComboList::item:hover {{
+    background: {bg_hover};
+}}
+#InlineComboList::item:selected {{
+    background: {accent_dim};
+    color: {text_primary};
+}}
 
 #ConfigHelp {{
     color: {text_secondary};

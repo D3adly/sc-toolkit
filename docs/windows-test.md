@@ -26,8 +26,13 @@ Build: `SC-Toolkit-windows.exe` from the release (or workflow artifact) you were
 ## Tools
 - [ ] **Mining Finder** loads (first time can take ~10 s) and shows locations.
 - [ ] **Salvage Claims** loads; **Refresh sheet** and **Refresh prices** work.
-- [ ] **Joystick Bindings** opens and shows your bindings (live button presses aren't
-      supported on Windows yet; that's expected).
+- [ ] **Joystick Bindings** opens and shows your bindings.
+- [ ] With a supported stick (VKB Gladiator EVO SCE Standard) plugged in, the view says
+      **Live input: connected**, and pressing a button highlights its callout.
+- [ ] **Button numbering check:** in Star Citizen's own keybinding screen, bind any action
+      and press a button — note the `jsX_buttonN` it shows. Press the same button in
+      SC-Toolkit's bindings view: it must highlight the callout for that same buttonN.
+      Try a few buttons, the hat and the twist axis. Please report the pairs you checked.
 - [ ] **Update Star Strings** installs the translation (check the game's
       `Data\Localization\english\global.ini` exists afterwards).
 - [ ] Links (Account, SCMDB, SC Maps…) open in your browser.

@@ -4,3 +4,5 @@ PySide6_Essentials==6.11.2
 shiboken6==6.11.2
 platformdirs==4.12.1
 psutil==7.2.2
+pysdl2==0.9.17
+pysdl2-dll==2.32.10

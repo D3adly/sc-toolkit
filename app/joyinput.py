@@ -1,66 +1,63 @@
-"""Live joystick input, reported in Star Citizen's own input names.
+"""Live joystick input, reported in Star Citizen's own input names — the
+same on Windows and Linux, through SDL2 (bundled by the pysdl2-dll package).
 
-Linux implementation over the kernel joydev API (/dev/input/js*): no
-dependencies, just 8-byte `struct js_event` reads driven by a
-QSocketNotifier. joydev orders buttons by evdev key code, which follows HID
-usage order — so joydev button i is the game's (Wine DirectInput)
-`button{i+1}`. Axes are named from the joydev axis map; the first HAT0X/Y
-pair becomes SC's `hat1`.
+Numbering matches the game:
+- **Buttons**: SDL reads DirectInput on Windows (RawInput and HIDAPI are
+  turned off, so nothing reorders) and evdev on Linux in joydev order —
+  both are HID usage order, so SDL button i is the game's `button{i+1}`.
+- **Hats**: SDL hat n is the game's `hat{n+1}`; each held direction is
+  reported as its own input (`hat1_up`, …), diagonals as two.
+- **Axes**: SDL doesn't say *which* axis an index is, only that present
+  axes come in the standard order X, Y, Z, Rx, Ry, Rz, sliders — which is
+  also the order the game names them in. Sticks that skip one of these
+  (e.g. no Z) would need a per-model layout; see `_AXIS_ORDER`.
 
-Windows would need a different backend (e.g. SDL3) behind the same signal.
+SDL events are polled on a short Qt timer; background events are enabled
+because the launcher window usually isn't focused while buttons are
+pressed.
 """
 
 from __future__ import annotations
 
-import array
-import glob
-import os
-import struct
-import sys
+import ctypes
 
-if sys.platform.startswith("linux"):
-    import fcntl  # joydev ioctls; Linux only
-
-from PySide6.QtCore import QObject, QSocketNotifier, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from app.bindings import normalize_product
 
-_JSIOCGAXES = 0x80016A11
-_JSIOCGBUTTONS = 0x80016A12
-_JSIOCGNAME_128 = 0x80806A13
-_JSIOCGAXMAP = 0x80406A32
-
-_JS_EVENT = struct.Struct("IhBB")
-_JS_EVENT_BUTTON = 0x01
-_JS_EVENT_AXIS = 0x02
-_JS_EVENT_INIT = 0x80
-
-# evdev ABS_* code -> SC axis name
-_AXIS_NAMES = {
-    0x00: "x", 0x01: "y", 0x02: "z",
-    0x03: "rotx", 0x04: "roty", 0x05: "rotz",
-    0x06: "slider1", 0x07: "slider2",  # ABS_THROTTLE / ABS_RUDDER
-    0x08: "slider2",                    # ABS_WHEEL
-}
-_HAT_CODES = range(0x10, 0x18)  # ABS_HAT0X .. ABS_HAT3Y
-
 AXIS_MAX = 32767
+POLL_MS = 10
+
+# Game axis names in the standard (DirectInput / evdev) order.
+_AXIS_ORDER = ["x", "y", "z", "rotx", "roty", "rotz", "slider1", "slider2"]
+_HAT_BITS = (("up", 0x01), ("right", 0x02), ("down", 0x04), ("left", 0x08))
+
+try:
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # "Using SDL2 binaries from pysdl2-dll"
+        import sdl2
+    _SDL_ERROR = None
+except Exception as exc:  # missing/broken SDL: live input reports unsupported
+    sdl2 = None
+    _SDL_ERROR = str(exc)
 
 
-class _Device:
-    def __init__(self, path: str, fd: int, name: str, axis_codes: list[int]):
-        self.path = path
-        self.fd = fd
+class _Stick:
+    def __init__(self, handle, instance_id: int, name: str, n_axes: int):
+        self.handle = handle
+        self.instance_id = instance_id
         self.name = name
-        self.axis_codes = axis_codes
-        self.hat_dir: dict[tuple[int, bool], str] = {}  # (hat, vertical?) -> held direction
+        self.axis_names = _AXIS_ORDER[:n_axes]
+        self.hats: dict[int, int] = {}          # hat index -> last bitmask
         self.axis_values: dict[str, int] = {}
 
 
-class JoystickInput(QObject):
+class SdlJoystickInput(QObject):
     """Emits `pressed(device, input)` / `released(device, input)` for
     buttons and hat directions and `axis(device, input, value)` for analog
-    axes (value in -32767..32767). `device` is the normalized product name,
+    axes (value in -32768..32767). `device` is the normalized product name,
     comparable with BindingProfile.joystick_products().
     """
 
@@ -70,114 +67,111 @@ class JoystickInput(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._devices: list[_Device] = []
-        self._notifiers: list[QSocketNotifier] = []
+        self._sticks: dict[int, _Stick] = {}   # SDL instance id -> stick
+        self._running = False
+        self._timer = QTimer(self)
+        self._timer.setInterval(POLL_MS)
+        self._timer.timeout.connect(self._poll)
 
     @staticmethod
     def supported() -> bool:
-        return sys.platform.startswith("linux")
+        return sdl2 is not None
 
     def device_names(self) -> list[str]:
-        return [d.name for d in self._devices]
+        return [s.name for s in self._sticks.values()]
 
     def find_device(self, product: str) -> str | None:
-        """Live device name for a game product name. The kernel name may
-        carry a vendor prefix the game's doesn't ('VKB-Sim © Alex Oz 2021
-        VKBsim Gladiator EVO L' vs 'VKBsim Gladiator EVO L')."""
-        for d in self._devices:
-            if product and (d.name == product or d.name.endswith(" " + product)):
-                return d.name
+        """Live device name for a game product name. The OS name may carry a
+        vendor prefix the game's doesn't ('VKB-Sim © Alex Oz 2021 VKBsim
+        Gladiator EVO L' vs 'VKBsim Gladiator EVO L')."""
+        for s in self._sticks.values():
+            if product and (s.name == product or s.name.endswith(" " + product)):
+                return s.name
         return None
 
     def axis_values(self, device: str) -> dict[str, int]:
-        for d in self._devices:
-            if d.name == device:
-                return dict(d.axis_values)
+        for s in self._sticks.values():
+            if s.name == device:
+                return dict(s.axis_values)
         return {}
 
     def start(self) -> None:
-        if self._devices or not self.supported():
+        if self._running or sdl2 is None:
             return
-        for path in sorted(glob.glob("/dev/input/js*")):
-            try:
-                fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
-            except OSError:
-                continue
-            try:
-                raw = array.array("B", [0] * 128)
-                fcntl.ioctl(fd, _JSIOCGNAME_128, raw)
-                name = bytes(raw).split(b"\x00", 1)[0].decode("utf-8", "replace")
-                n_axes = array.array("B", [0])
-                fcntl.ioctl(fd, _JSIOCGAXES, n_axes)
-                axmap = array.array("B", [0] * 64)
-                fcntl.ioctl(fd, _JSIOCGAXMAP, axmap)
-            except OSError:
-                os.close(fd)
-                continue
-            dev = _Device(path, fd, normalize_product(name), list(axmap[:n_axes[0]]))
-            self._devices.append(dev)
-            notifier = QSocketNotifier(fd, QSocketNotifier.Read, self)
-            notifier.activated.connect(lambda *_args, d=dev: self._read(d))
-            self._notifiers.append(notifier)
+        for hint, value in (
+            (b"SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", b"1"),
+            (b"SDL_JOYSTICK_HIDAPI", b"0"),     # keep raw HID order; no remapping drivers
+            (b"SDL_JOYSTICK_RAWINPUT", b"0"),   # Windows: plain DirectInput, like the game
+        ):
+            sdl2.SDL_SetHint(hint, value)
+        if sdl2.SDL_InitSubSystem(sdl2.SDL_INIT_JOYSTICK) != 0:
+            return
+        sdl2.SDL_JoystickEventState(sdl2.SDL_ENABLE)
+        self._running = True
+        # Devices present at start arrive as JOYDEVICEADDED events.
+        self._poll()
+        self._timer.start()
 
     def stop(self) -> None:
-        for n in self._notifiers:
-            n.setEnabled(False)
-            n.deleteLater()
-        for d in self._devices:
-            try:
-                os.close(d.fd)
-            except OSError:
-                pass
-        self._notifiers.clear()
-        self._devices.clear()
-
-    def _read(self, dev: _Device) -> None:
-        while True:
-            try:
-                data = os.read(dev.fd, _JS_EVENT.size * 64)
-            except BlockingIOError:
-                return
-            except OSError:
-                return  # unplugged; the view rescans next time it opens
-            if not data:
-                return
-            for off in range(0, len(data) - _JS_EVENT.size + 1, _JS_EVENT.size):
-                _time, value, etype, number = _JS_EVENT.unpack_from(data, off)
-                if etype & _JS_EVENT_INIT:
-                    # Initial state burst on open: just record axis rest positions.
-                    if etype & _JS_EVENT_AXIS and number < len(dev.axis_codes):
-                        name = _AXIS_NAMES.get(dev.axis_codes[number])
-                        if name:
-                            dev.axis_values[name] = value
-                    continue
-                if etype & _JS_EVENT_BUTTON:
-                    signal = self.pressed if value else self.released
-                    signal.emit(dev.name, f"button{number + 1}")
-                elif etype & _JS_EVENT_AXIS and number < len(dev.axis_codes):
-                    self._axis(dev, dev.axis_codes[number], value)
-
-    def _axis(self, dev: _Device, code: int, value: int) -> None:
-        if code in _HAT_CODES:
-            hat = (code - 0x10) // 2 + 1
-            vertical = (code - 0x10) % 2 == 1
-            if value == 0:
-                direction = None
-            elif vertical:
-                direction = "up" if value < 0 else "down"
-            else:
-                direction = "left" if value < 0 else "right"
-            held = dev.hat_dir.pop((hat, vertical), None)
-            if held == direction:
-                dev.hat_dir[(hat, vertical)] = held
-                return
-            if held:
-                self.released.emit(dev.name, f"hat{hat}_{held}")
-            if direction:
-                dev.hat_dir[(hat, vertical)] = direction
-                self.pressed.emit(dev.name, f"hat{hat}_{direction}")
+        if not self._running:
             return
-        name = _AXIS_NAMES.get(code)
-        if name:
-            dev.axis_values[name] = value
-            self.axis.emit(dev.name, name, value)
+        self._timer.stop()
+        for s in self._sticks.values():
+            sdl2.SDL_JoystickClose(s.handle)
+        self._sticks.clear()
+        sdl2.SDL_QuitSubSystem(sdl2.SDL_INIT_JOYSTICK)
+        self._running = False
+
+    # -- events ---------------------------------------------------------------
+    def _open(self, device_index: int) -> None:
+        handle = sdl2.SDL_JoystickOpen(device_index)
+        if not handle:
+            return
+        iid = sdl2.SDL_JoystickInstanceID(handle)
+        raw = sdl2.SDL_JoystickName(handle) or b""
+        stick = _Stick(handle, iid, normalize_product(raw.decode("utf-8", "replace")),
+                       sdl2.SDL_JoystickNumAxes(handle))
+        for i, name in enumerate(stick.axis_names):
+            stick.axis_values[name] = sdl2.SDL_JoystickGetAxis(handle, i)
+        for h in range(sdl2.SDL_JoystickNumHats(handle)):
+            stick.hats[h] = sdl2.SDL_JoystickGetHat(handle, h)
+        self._sticks[iid] = stick
+
+    def _poll(self) -> None:
+        event = sdl2.SDL_Event()
+        while sdl2.SDL_PollEvent(ctypes.byref(event)):
+            etype = event.type
+            if etype == sdl2.SDL_JOYDEVICEADDED:
+                self._open(event.jdevice.which)
+            elif etype == sdl2.SDL_JOYDEVICEREMOVED:
+                stick = self._sticks.pop(event.jdevice.which, None)
+                if stick is not None:
+                    sdl2.SDL_JoystickClose(stick.handle)
+            elif etype in (sdl2.SDL_JOYBUTTONDOWN, sdl2.SDL_JOYBUTTONUP):
+                stick = self._sticks.get(event.jbutton.which)
+                if stick is not None:
+                    signal = self.pressed if etype == sdl2.SDL_JOYBUTTONDOWN else self.released
+                    signal.emit(stick.name, f"button{event.jbutton.button + 1}")
+            elif etype == sdl2.SDL_JOYHATMOTION:
+                stick = self._sticks.get(event.jhat.which)
+                if stick is not None:
+                    self._hat(stick, event.jhat.hat, event.jhat.value)
+            elif etype == sdl2.SDL_JOYAXISMOTION:
+                stick = self._sticks.get(event.jaxis.which)
+                if stick is not None and event.jaxis.axis < len(stick.axis_names):
+                    name = stick.axis_names[event.jaxis.axis]
+                    stick.axis_values[name] = event.jaxis.value
+                    self.axis.emit(stick.name, name, event.jaxis.value)
+
+    def _hat(self, stick: _Stick, hat: int, mask: int) -> None:
+        before = stick.hats.get(hat, 0)
+        stick.hats[hat] = mask
+        for direction, bit in _HAT_BITS:
+            if before & bit and not mask & bit:
+                self.released.emit(stick.name, f"hat{hat + 1}_{direction}")
+        for direction, bit in _HAT_BITS:
+            if mask & bit and not before & bit:
+                self.pressed.emit(stick.name, f"hat{hat + 1}_{direction}")
+
+
+JoystickInput = SdlJoystickInput

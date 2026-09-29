@@ -5,6 +5,8 @@
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_dynamic_libs
+
 ROOT = Path(SPECPATH).parent
 WINDOWS = sys.platform.startswith("win")
 
@@ -33,11 +35,13 @@ a = Analysis(
     [str(ROOT / "packaging" / "entry.py")],
     pathex=[str(ROOT)],
     datas=datas,
+    # SDL2 shared library shipped inside pysdl2-dll (joystick input).
+    binaries=collect_dynamic_libs("sdl2dll"),
     excludes=excludes,
     # Tool views are imported lazily (and by name in --smoke-test).
     hiddenimports=[
         "app.ui.bindings_view", "app.ui.mining_view", "app.ui.salvage_view",
-        "app.ui.settings_view",
+        "app.ui.settings_view", "sdl2", "sdl2dll",
     ],
     noarchive=False,
 )
@@ -53,6 +57,7 @@ _DROP = re.compile(
     r"|(qt6(pdf|quick|qml|virtualkeyboard|eglfs|svg)\w*\.(so|dll))"
     r"|(^|[/\\])lib(gtk-3|gdk-3|atk|atspi|cairo|pango|glycin|gdk_pixbuf|tinysparql|cloudproviders"
     r"|json-glib|epoxy|thai|datrie|lcms2|seccomp)[\w.-]*\.so"
+    r"|SDL2_(gfx|image|mixer|ttf)[\w.-]*\.(so|dll)"  # only SDL2 core is used
     r"|opengl32sw\.dll"
     r"|[/\\]translations[/\\]",
     re.IGNORECASE,

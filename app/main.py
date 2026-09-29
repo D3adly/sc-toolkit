@@ -34,6 +34,10 @@ def main():
             importlib.import_module(f"app.ui.{view}")
         for module in ("mining", "salvage", "datacore", "socpak", "joyinput"):
             importlib.import_module(f"app.{module}")
+        from app.joyinput import JoystickInput
+
+        if not JoystickInput.supported():
+            sys.exit("smoke test: joystick input (SDL) failed to load")
         QTimer.singleShot(1500, app.quit)
     sys.exit(app.exec())
 

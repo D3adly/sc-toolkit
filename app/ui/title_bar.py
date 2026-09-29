@@ -19,7 +19,7 @@ def _shadow(widget: QWidget) -> QWidget:
 
 class TitleBar(QWidget):
     """Frameless-window title bar (transparent over the wallpaper): app name
-    and version + drag-to-move + settings / minimize / close.
+    and version + drag-to-move + settings / minimize / maximize / close.
     """
 
     settings_requested = Signal()
@@ -54,6 +54,13 @@ class TitleBar(QWidget):
         self.minimize_btn.clicked.connect(self._minimize)
         layout.addWidget(_shadow(self.minimize_btn))
 
+        self.maximize_btn = QPushButton()
+        self.maximize_btn.setObjectName("TitleBarButton")
+        self.maximize_btn.setFixedSize(28, 28)
+        self.maximize_btn.clicked.connect(self.toggle_maximized)
+        layout.addWidget(_shadow(self.maximize_btn))
+        self.sync_maximized(False)
+
         self.close_btn = QPushButton("✕")
         self.close_btn.setObjectName("TitleBarButton")
         self.close_btn.setProperty("kind", "close")
@@ -70,6 +77,23 @@ class TitleBar(QWidget):
 
     def _close(self):
         self.window().close()
+
+    def toggle_maximized(self):
+        window = self.window()
+        if window.isMaximized():
+            window.showNormal()
+        else:
+            window.showMaximized()
+
+    def sync_maximized(self, maximized: bool) -> None:
+        """Called by the window when its state changes."""
+        self.maximize_btn.setText("❐" if maximized else "□")
+        self.maximize_btn.setToolTip("Restore" if maximized else "Maximise")
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.toggle_maximized()
+            event.accept()
 
     # --- window dragging -----------------------------------------------
     # Wayland compositors don't let clients set their own absolute window

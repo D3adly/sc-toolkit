@@ -52,14 +52,19 @@ class CommandServer(QObject):
 
     def listen(self) -> bool:
         """False if another process already serves this name."""
-        if self._server.listen(self.name):
-            return True
+        # Ask first: with UserAccessOption, Qt creates the socket under a
+        # temporary name and renames it into place, which would silently
+        # replace a live server's socket (leaving that process unreachable).
         probe = QLocalSocket()
         probe.connectToServer(self.name)
         if probe.waitForConnected(TIMEOUT_MS):
             probe.disconnectFromServer()
             return False
-        # Nobody answers: a stale socket from a crashed run (Unix) blocks the name.
+        if probe.error() not in (QLocalSocket.ConnectionRefusedError, QLocalSocket.ServerNotFoundError):
+            return False   # there, just slow to answer (e.g. still starting)
+        if self._server.listen(self.name):
+            return True
+        # Refused: a stale socket from a crashed run (Unix) blocks the name.
         QLocalServer.removeServer(self.name)
         return self._server.listen(self.name)
 

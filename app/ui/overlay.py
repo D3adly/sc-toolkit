@@ -489,6 +489,10 @@ def run(parent_pid: int | None) -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName(config.DISPLAY_NAME + " overlay")
+    from app import __version__, settings
+    print(f"overlay: SC-Toolkit {__version__} on {sys.platform} ({QApplication.platformName()}), "
+          f"settings {settings.SETTINGS_FILE} (game folder: {settings.current().live_dir or 'not set'})",
+          file=sys.stderr, flush=True)
     app.setQuitOnLastWindowClosed(False)   # hidden overlay keeps running for the hotkeys
     app.setStyleSheet(build_stylesheet())
     overlay = OverlayWindow()

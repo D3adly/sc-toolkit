@@ -1,6 +1,6 @@
 import subprocess
 
-from PySide6.QtCore import Qt, QRectF, QSize, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QRectF, QSize, QTimer, Signal
 from PySide6.QtGui import QAction, QPixmap, QPainter, QPainterPath, QColor, QIcon
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -144,7 +144,8 @@ class RootFrame(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
 
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), CORNER_RADIUS, CORNER_RADIUS)
+        radius = 0 if self.window().isMaximized() else CORNER_RADIUS
+        path.addRoundedRect(QRectF(self.rect()), radius, radius)
         painter.setClipPath(path)
 
         painter.fillPath(path, QColor(PALETTE["bg_panel_solid"]))
@@ -202,7 +203,7 @@ class MainWindow(QMainWindow):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        title_bar = TitleBar()
+        self.title_bar = title_bar = TitleBar()
         title_bar.settings_requested.connect(self._show_settings)
         outer.addWidget(title_bar)
 
@@ -366,6 +367,23 @@ class MainWindow(QMainWindow):
         self.overlay.stop()
         if self.tray is not None:
             self.tray.hide()
+
+    # -- maximise -----------------------------------------------------------------
+    def resize(self, *args):
+        # Each tool view picks its own window size; not while maximised.
+        if self.isMaximized():
+            return
+        super().resize(*args)
+
+    def _normal_size(self):
+        """The size to come back to (the un-maximised one while maximised)."""
+        return self.normalGeometry().size() if self.isMaximized() else self.size()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange and hasattr(self, "title_bar"):
+            self.title_bar.sync_maximized(self.isMaximized())
+            self.update()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -730,7 +748,7 @@ class MainWindow(QMainWindow):
             self.bindings_view.profiles_changed.connect(self._refresh_config_combo)
             self.stack.addWidget(self.bindings_view)
         # The diagram wants more room than the launcher's compact size.
-        self._main_size = self.size()
+        self._main_size = self._normal_size()
         screen = self.screen().availableGeometry()
         self.resize(min(1640, int(screen.width() * 0.94)), min(980, int(screen.height() * 0.92)))
         self.stack.setCurrentWidget(self.bindings_view)
@@ -744,7 +762,7 @@ class MainWindow(QMainWindow):
             self.salvage_view = SalvageView(self.channel)
             self.salvage_view.back_requested.connect(self._show_main)
             self.stack.addWidget(self.salvage_view)
-        self._main_size = self.size()
+        self._main_size = self._normal_size()
         screen = self.screen().availableGeometry()
         self.resize(min(1320, int(screen.width() * 0.9)), min(900, int(screen.height() * 0.9)))
         self.stack.setCurrentWidget(self.salvage_view)
@@ -758,7 +776,7 @@ class MainWindow(QMainWindow):
             self.maps_view = MapsView()
             self.maps_view.back_requested.connect(self._show_main)
             self.stack.addWidget(self.maps_view)
-        self._main_size = self.size()
+        self._main_size = self._normal_size()
         screen = self.screen().availableGeometry()
         self.resize(min(1400, int(screen.width() * 0.92)), min(960, int(screen.height() * 0.92)))
         self.stack.setCurrentWidget(self.maps_view)
@@ -772,7 +790,7 @@ class MainWindow(QMainWindow):
             self.mining_view = MiningView(self.channel)
             self.mining_view.back_requested.connect(self._show_main)
             self.stack.addWidget(self.mining_view)
-        self._main_size = self.size()
+        self._main_size = self._normal_size()
         screen = self.screen().availableGeometry()
         self.resize(min(1400, int(screen.width() * 0.92)), min(920, int(screen.height() * 0.9)))
         self.stack.setCurrentWidget(self.mining_view)

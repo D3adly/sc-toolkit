@@ -21,6 +21,16 @@ def _arg_value(name: str) -> str | None:
 def _run_overlay() -> int:
     if sys.platform.startswith("linux") and os.environ.get("DISPLAY"):
         os.environ.setdefault("QT_QPA_PLATFORM", "xcb")   # see app.overlay_host
+    if sys.stderr is None:
+        # Windowed Windows build: no stdout/stderr at all, so prints and
+        # tracebacks would vanish. Write them to the overlay's log instead.
+        from app import overlay_host
+
+        try:
+            overlay_host.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            sys.stdout = sys.stderr = open(overlay_host.LOG_FILE, "a", buffering=1, encoding="utf-8")
+        except OSError:
+            pass
     from app.ui import overlay
 
     pid = _arg_value("--parent-pid")

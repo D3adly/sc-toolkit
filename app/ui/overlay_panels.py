@@ -6,7 +6,9 @@ layout differs.
 
 from __future__ import annotations
 
+import sys
 import threading
+import traceback
 
 from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -118,10 +120,17 @@ def _combo(min_width: int = 0) -> QComboBox:
     return combo
 
 
+def _log(text: str) -> None:
+    """To the overlay's log (overlay.log, via the launcher)."""
+    print(f"overlay: {text}", file=sys.stderr, flush=True)
+
+
 def _channel_root():
     root = settings.current().game_root
     ch = channel_mod.pick_default_channel(root)
-    return channel_mod.resolve_channel_paths(root, ch).channel_root if ch else None
+    found = channel_mod.resolve_channel_paths(root, ch).channel_root if ch else None
+    _log(f"game folder {root} → channel {ch} → {found}")
+    return found
 
 
 class _Task(QObject):
@@ -130,12 +139,16 @@ class _Task(QObject):
     done = Signal(object)
     failed = Signal(str)
 
-    def run(self, fn) -> None:
+    def run(self, fn, what: str = "data") -> None:
         def work():
             try:
-                self.done.emit(fn())
+                result = fn()
             except Exception as exc:
+                _log(f"loading {what} failed:\n{traceback.format_exc()}")
                 self.failed.emit(str(exc))
+                return
+            _log(f"loaded {what}")
+            self.done.emit(result)
         threading.Thread(target=work, daemon=True).start()
 
 
@@ -307,7 +320,7 @@ class MiningPanel(_ScrollPanel):
             if root is None:
                 self._message("Set up your Star Citizen folder in the launcher first.")
                 return
-            self._task.run(lambda: mining.load(root))
+            self._task.run(lambda: mining.load(root), "mining data")
 
     def _on_loaded(self, data: dict) -> None:
         self.data = data
@@ -563,7 +576,7 @@ class SalvagePanel(_ScrollPanel):
             if root is None:
                 self._message("Set up your Star Citizen folder in the launcher first.")
                 return
-            self._task.run(lambda: salvage.load_game_data(root))
+            self._task.run(lambda: salvage.load_game_data(root), "salvage data")
 
     def _on_loaded(self, game: dict) -> None:
         self.game = game

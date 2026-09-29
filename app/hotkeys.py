@@ -179,8 +179,13 @@ class _WindowsHotkeys(QAbstractNativeEventFilter):
             self._user32.UnregisterHotKey(None, i)
         self._ids.clear()
 
+    # RegisterHotKey without a window posts WM_HOTKEY to the thread's queue;
+    # Qt passes those thread messages as "windows_dispatcher_MSG" (window
+    # messages are "windows_generic_MSG").
+    EVENT_TYPES = (b"windows_dispatcher_MSG", b"windows_generic_MSG")
+
     def nativeEventFilter(self, event_type, message):
-        if event_type == b"windows_generic_MSG":
+        if bytes(event_type) in self.EVENT_TYPES:
             msg = self._wintypes.MSG.from_address(int(message))
             if msg.message == self.WM_HOTKEY and msg.wParam in self._ids:
                 self._emit(self._ids[msg.wParam])

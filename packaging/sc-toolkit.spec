@@ -38,10 +38,11 @@ a = Analysis(
     # SDL2 shared library shipped inside pysdl2-dll (joystick input).
     binaries=collect_dynamic_libs("sdl2dll"),
     excludes=excludes,
-    # Tool views are imported lazily (and by name in --smoke-test).
+    # Tool views and the overlay are imported lazily (and by name in --smoke-test).
     hiddenimports=[
         "app.ui.bindings_view", "app.ui.maps_view", "app.ui.mining_view", "app.ui.salvage_view",
-        "app.ui.settings_view", "sdl2", "sdl2dll",
+        "app.ui.settings_view", "app.ui.overlay", "app.ui.overlay_panels", "app.hotkeys",
+        "sdl2", "sdl2dll",
     ],
     noarchive=False,
 )

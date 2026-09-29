@@ -16,7 +16,8 @@ LOGO_SIZE = 28
 RADIUS = 9
 CHIP_COLOR = (255, 255, 255, 235)
 
-NAMES = ["rsi", "status", "scmdb", "erkul", "uexcorp", "gameglass", "starstrings", "scmaps", "joystick", "salvage", "mining"]
+NAMES = ["rsi", "status", "scmdb", "erkul", "uexcorp", "gameglass"]
+# SC-Toolkit's own icons (app, tools) come from build_icons.py.
 
 
 def rounded_chip() -> Image.Image:

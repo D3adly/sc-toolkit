@@ -1,28 +1,32 @@
 """Settings view: where the user points the launcher at their own machine
 — the game's LIVE folder, the launch script, GameGlass and the backup
-folder. Each path is checked as it's edited, so problems show up here
-rather than when pressing START.
+folder — plus the in-game overlay's hotkeys. Each value is checked as it's
+edited, so problems show up here rather than when pressing START.
 """
 
 from __future__ import annotations
 
 import sys
+from dataclasses import fields, replace
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QFileDialog,
+    QKeySequenceEdit,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from app import __version__, channel as channel_mod, settings
+from app import __version__, channel as channel_mod, hotkeys, settings
 from app.settings import Settings
 from app.theme import PALETTE
 
@@ -83,6 +87,49 @@ class _PathRow:
             self.set_value(chosen)
 
 
+class _HotkeyRow:
+    """Label, a field that records a key combination, Default button and a
+    validation line."""
+
+    def __init__(self, grid: QGridLayout, row: int, title: str, default: str, on_change):
+        self.default = default
+        grid.addWidget(QLabel(title, objectName="SlotTitle"), row, 0, Qt.AlignTop)
+        box = QVBoxLayout()
+        box.setSpacing(4)
+        line = QHBoxLayout()
+        line.setSpacing(6)
+        self.edit = QKeySequenceEdit()
+        self.edit.setMaximumSequenceLength(1)
+        self.edit.setClearButtonEnabled(True)
+        self.edit.setFixedWidth(220)
+        inner = self.edit.findChild(QLineEdit)
+        if inner is not None:
+            inner.setObjectName("SearchField")
+            inner.setPlaceholderText("Click, then press the keys")
+        self.edit.keySequenceChanged.connect(lambda _s: on_change())
+        line.addWidget(self.edit)
+        reset = QPushButton("Default", objectName="MiniButton")
+        reset.setToolTip(f"Back to {default}")
+        reset.setCursor(Qt.PointingHandCursor)
+        reset.clicked.connect(lambda: self.set_value(default))
+        line.addWidget(reset)
+        line.addStretch(1)
+        box.addLayout(line)
+        self.status = QLabel("", objectName="InspectorHint")
+        self.status.setWordWrap(True)
+        box.addWidget(self.status)
+        grid.addLayout(box, row, 1)
+
+    @property
+    def value(self) -> str:
+        return self.edit.keySequence().toString(QKeySequence.PortableText)
+
+    def set_value(self, text: str) -> None:
+        self.edit.setKeySequence(QKeySequence.fromString(text, QKeySequence.PortableText))
+
+    set_status = _PathRow.set_status
+
+
 class SettingsView(QWidget):
     saved = Signal()
     back_requested = Signal()
@@ -118,6 +165,17 @@ class SettingsView(QWidget):
         self.intro = QLabel("", objectName="InspectorNote")
         self.intro.setWordWrap(True)
         outer.addWidget(self.intro)
+
+        # Scrolls when the window is too short for every section.
+        scroll = QScrollArea(objectName="InspectorScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.NoFrame)
+        content = QWidget(objectName="Inspector")
+        sections = QVBoxLayout(content)
+        sections.setContentsMargins(0, 0, 0, 0)
+        sections.setSpacing(10)
+        scroll.setWidget(content)
 
         panel = QFrame(objectName="SidePanel")
         grid = QGridLayout(panel)
@@ -157,8 +215,31 @@ class SettingsView(QWidget):
             "Where keybind backups and saved binding profiles are kept. Leave empty for the default.",
             folder=True, placeholder=str(settings.DEFAULT_BACKUP_DIR), on_change=self._validate,
         )
-        outer.addWidget(panel)
-        outer.addStretch(1)
+        sections.addWidget(panel)
+
+        overlay_panel = QFrame(objectName="SidePanel")
+        ogrid = QGridLayout(overlay_panel)
+        ogrid.setContentsMargins(20, 18, 20, 18)
+        ogrid.setHorizontalSpacing(18)
+        ogrid.setVerticalSpacing(12)
+        ogrid.setColumnMinimumWidth(0, 190)
+        ogrid.setColumnStretch(1, 1)
+        ogrid.addWidget(QLabel("IN-GAME OVERLAY HOTKEYS", objectName="SectionLabel"), 0, 0, 1, 2)
+        note = QLabel(
+            "They work while Star Citizen has focus, as long as the overlay is switched on "
+            "(the switch next to SC-TOOLKIT TOOLS). Click a field and press the new keys: "
+            "Ctrl, Alt or Meta plus a letter, digit or F1–F12.",
+            objectName="InspectorHint",
+        )
+        note.setWordWrap(True)
+        ogrid.addWidget(note, 1, 0, 1, 2)
+        defaults = {f.name: f.default for f in fields(Settings)}
+        self.hotkey_rows: dict[str, _HotkeyRow] = {}
+        for i, (action, (field, title)) in enumerate(hotkeys.ACTIONS.items()):
+            self.hotkey_rows[field] = _HotkeyRow(ogrid, 2 + i, title, defaults[field], self._validate)
+        sections.addWidget(overlay_panel)
+        sections.addStretch(1)
+        outer.addWidget(scroll, stretch=1)
 
         about = QLabel(
             f"SC-Toolkit v{__version__} · GPL-3.0 · "
@@ -175,6 +256,8 @@ class SettingsView(QWidget):
         for row, value in ((self.live, s.live_dir), (self.launch, s.launch_path),
                            (self.gameglass, s.gameglass_path), (self.backups, s.backup_dir)):
             row.set_value(value)
+        for field, row in self.hotkey_rows.items():
+            row.set_value(getattr(s, field))
         self.back_btn.setVisible(not first_run)
         self.intro.setVisible(first_run)
         self.intro.setText(
@@ -226,15 +309,34 @@ class SettingsView(QWidget):
             else:
                 self.backups.set_status(None, "Will be created on first backup")
 
+        hotkeys_ok = True
+        seen: dict[str, str] = {}
+        for field, row in self.hotkey_rows.items():
+            try:
+                combo = hotkeys.format_combo(*hotkeys.parse(row.value))
+            except ValueError as exc:
+                row.set_status(False, str(exc))
+                hotkeys_ok = False
+                continue
+            if combo in seen:
+                row.set_status(False, "Already used for the other hotkey")
+                hotkeys_ok = False
+            else:
+                row.set_status(True, "OK")
+            seen[combo] = field
+
         # The game folder is the one thing nothing works without.
-        self.save_btn.setEnabled(live_err is None and not (Path(self.backups.value).is_file()
-                                                           if self.backups.value else False))
+        self.save_btn.setEnabled(live_err is None and hotkeys_ok and not (
+            Path(self.backups.value).is_file() if self.backups.value else False))
 
     def _save(self) -> None:
-        settings.apply(Settings(
+        settings.apply(replace(
+            settings.current(),
             live_dir=self.live.value,
             launch_path=self.launch.value,
             gameglass_path=self.gameglass.value,
             backup_dir=self.backups.value,
+            **{field: hotkeys.format_combo(*hotkeys.parse(row.value))
+               for field, row in self.hotkey_rows.items()},
         ))
         self.saved.emit()

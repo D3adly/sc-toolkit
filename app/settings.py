@@ -26,6 +26,9 @@ class Settings:
     launch_path: str = ""     # LUG sc-launch.sh (Linux) or RSI Launcher.exe
     gameglass_path: str = ""  # optional
     backup_dir: str = ""      # "" = DEFAULT_BACKUP_DIR
+    overlay_enabled: bool = False                # in-game overlay (and its hotkeys) on/off
+    hotkey_overlay: str = "Ctrl+Shift+O"         # show / hide the overlay
+    hotkey_clickthrough: str = "Ctrl+Shift+P"    # overlay click-through on/off
 
     @property
     def game_root(self) -> Path | None:
@@ -67,8 +70,12 @@ def load() -> Settings:
         raw = json.loads(SETTINGS_FILE.read_text())
     except (OSError, ValueError):
         return Settings()
-    known = {f.name for f in fields(Settings)}
-    return Settings(**{k: str(v) for k, v in raw.items() if k in known})
+    types = {f.name: type(f.default) for f in fields(Settings)}
+    values = {}
+    for key, value in raw.items():
+        if key in types:
+            values[key] = (value is True or str(value).lower() == "true") if types[key] is bool else str(value)
+    return Settings(**values)
 
 
 def save(settings: Settings) -> None:

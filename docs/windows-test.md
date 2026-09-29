@@ -45,6 +45,36 @@ Build: `SC-Toolkit-windows.exe` from the release (or workflow artifact) you were
       drag to pan, double-click to fit; **Original post ↗** opens the browser.
 - [ ] GameGlass (if you use it): set the path in Settings, then the button starts it.
 
+## In-game overlay
+Set Star Citizen to **Borderless** (Graphics → Window Mode) first: nothing can draw over
+exclusive fullscreen.
+- [ ] With the **IN-GAME OVERLAY** switch (next to SC-TOOLKIT TOOLS) off, Ctrl+Shift+O
+      does nothing.
+- [ ] Switch it on. In game, **Ctrl+Shift+O** shows and hides a small bar (Maps, Mining,
+      Salvage) on top of the game.
+- [ ] In **Settings**, change the overlay hotkey (click the field, press e.g. Ctrl+Alt+M),
+      **Save**: the new key works in game and the old one doesn't.
+- [ ] Each tool opens its compact panel under the bar; clicking the same tool again
+      collapses it back to the bar.
+- [ ] **Maps:** a guide loads and zooms/pans. **Mining:** pick a resource, locations
+      appear. **Salvage:** pick a difficulty and a ship, its values appear.
+- [ ] The bar can be dragged by the ⠿ grip / title; the panel resizes from its corner.
+- [ ] The opacity slider fades the overlay.
+- [ ] **Ctrl+Shift+P** (or ⇲) turns on click-through: the banner shows, and clicks go to
+      the game. Ctrl+Shift+P again makes the overlay clickable.
+- [ ] Close and reopen SC-Toolkit: the overlay comes back at the same place, size and
+      opacity.
+- [ ] Tell us if the game loses focus, stutters, or minimises when the overlay shows.
+
+## Tray and single instance
+- [ ] Minimise (–) hides SC-Toolkit to the tray; clicking the tray icon brings it back.
+- [ ] The tray menu has Show launcher, Switch the overlay on/off, Quit (and, while the
+      overlay is on, Overlay / Overlay click-through), and they work.
+- [ ] Starting the exe a second time brings the running window forward instead of
+      opening another one.
+- [ ] With the game running, closing (✕) keeps SC-Toolkit in the tray, so the backup on
+      game exit still happens.
+
 ## General
 - [ ] Window moves by dragging the title bar; minimise and close work.
 - [ ] Settings survive closing and reopening the app

@@ -49,6 +49,7 @@ class TitleBar(QWidget):
 
         self.minimize_btn = QPushButton("–")
         self.minimize_btn.setObjectName("TitleBarButton")
+        self.minimize_btn.setToolTip("Minimise to tray")
         self.minimize_btn.setFixedSize(28, 28)
         self.minimize_btn.clicked.connect(self._minimize)
         layout.addWidget(_shadow(self.minimize_btn))
@@ -61,7 +62,11 @@ class TitleBar(QWidget):
         layout.addWidget(_shadow(self.close_btn))
 
     def _minimize(self):
-        self.window().showMinimized()
+        window = self.window()
+        if hasattr(window, "minimize_to_tray"):
+            window.minimize_to_tray()
+        else:
+            window.showMinimized()
 
     def _close(self):
         self.window().close()

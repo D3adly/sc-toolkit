@@ -1,8 +1,12 @@
 import subprocess
 
 from PySide6.QtCore import Qt, QRectF, QSize, QTimer, Signal
-from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor, QIcon
+from PySide6.QtGui import QAction, QPixmap, QPainter, QPainterPath, QColor, QIcon
 from PySide6.QtWidgets import (
+    QAbstractButton,
+    QApplication,
+    QMenu,
+    QSystemTrayIcon,
     QWidget,
     QMainWindow,
     QVBoxLayout,
@@ -18,9 +22,13 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 
+from dataclasses import replace
+
 from app import backup, channel as channel_mod, config, links, osutil, settings
 from app.backup import BackupInfo
+from app import hotkeys
 from app.launch import LaunchController
+from app.overlay_host import OverlayHost
 from app.starstrings_controller import StarStringsController
 from app.theme import PALETTE
 from app.ui.title_bar import TitleBar
@@ -45,6 +53,40 @@ def _section_label(text: str) -> QLabel:
     lbl = QLabel(text)
     lbl.setObjectName("SectionLabel")
     return lbl
+
+
+class _Switch(QAbstractButton):
+    """An on/off slider switch."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(38, 20)
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        on = self.isChecked()
+        track = QColor(PALETTE["accent"] if on else "#3a3f45")
+        if self.underMouse():
+            track = track.lighter(115)
+        p.setPen(Qt.NoPen)
+        p.setBrush(track)
+        r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
+        d = r.height() - 6
+        x = r.right() - 3 - d if on else r.left() + 3
+        p.setBrush(QColor("#15181c" if on else PALETTE["text_secondary"]))
+        p.drawEllipse(QRectF(x, r.top() + 3, d, d))
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        self.update()
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        self.update()
 
 
 class _ToolTile(QFrame):
@@ -125,7 +167,7 @@ class MainWindow(QMainWindow):
     WIDTH = 1240
     HEIGHT = 760
 
-    def __init__(self):
+    def __init__(self, start_overlay: bool = True):
         super().__init__()
         self.setWindowFlag(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -203,6 +245,116 @@ class MainWindow(QMainWindow):
         # Nothing configured yet (first run on this machine): settings first.
         if settings.validate_live_dir(settings.current().live_dir) is not None:
             QTimer.singleShot(0, lambda: self._show_settings(first_run=True))
+
+        self.overlay = OverlayHost(self)
+        self._build_tray()
+        app = QApplication.instance()
+        app.aboutToQuit.connect(self._on_about_to_quit)
+        self._start_overlay = start_overlay
+        if start_overlay and settings.current().overlay_enabled:
+            # Started right away (hidden), so the overlay hotkeys work in game.
+            QTimer.singleShot(500, self.overlay.start)
+
+    # -- tray, overlay, commands from other processes -------------------------
+    def _build_tray(self) -> None:
+        self.tray = None
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        QApplication.instance().setQuitOnLastWindowClosed(False)
+        self.tray = QSystemTrayIcon(QIcon(str(config.APP_ICON)), self)
+        self.tray.setToolTip(config.DISPLAY_NAME)
+        menu = QMenu(self)
+        menu.addAction("Show launcher", self.show_launcher)
+        self._tray_overlay = menu.addAction("", lambda: self.handle_command("toggle-overlay"))
+        self._tray_clickthrough = menu.addAction("", lambda: self.handle_command("toggle-clickthrough"))
+        self._tray_enable = menu.addAction("", lambda: self.overlay_switch.toggle())
+        menu.addSeparator()
+        self._quit_action = QAction("Quit", self)
+        self._quit_action.triggered.connect(QApplication.instance().quit)
+        menu.addAction(self._quit_action)
+        menu.aboutToShow.connect(self._update_quit_action)
+        self._tray_menu = menu
+        self.tray.setContextMenu(menu)
+        self.tray.activated.connect(self._on_tray_activated)
+        self.tray.show()
+        self._tray_hint_shown = False
+
+    def _update_quit_action(self) -> None:
+        enabled = settings.current().overlay_enabled
+        self._tray_overlay.setText(f"Overlay\t{hotkeys.label('toggle-overlay')}")
+        self._tray_clickthrough.setText(f"Overlay click-through\t{hotkeys.label('toggle-clickthrough')}")
+        self._tray_overlay.setVisible(enabled)
+        self._tray_clickthrough.setVisible(enabled)
+        self._tray_enable.setText("Switch the overlay off" if enabled else "Switch the overlay on")
+        self._quit_action.setText(
+            "Quit (skips the settings backup when the game exits)" if self.controller.busy else "Quit")
+
+    def _on_tray_activated(self, reason) -> None:
+        if reason == QSystemTrayIcon.Trigger:
+            if self.isVisible() and not self.isMinimized():
+                self.hide()
+            else:
+                self.show_launcher()
+
+    def show_launcher(self) -> None:
+        if self.isMinimized():
+            self.showNormal()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def minimize_to_tray(self) -> None:
+        if self.tray is None:
+            self.showMinimized()
+            return
+        self.hide()
+        if not self._tray_hint_shown:
+            self._tray_hint_shown = True
+            self.tray.showMessage(
+                config.DISPLAY_NAME,
+                "Still running in the tray."
+                + (f" Overlay: {hotkeys.label('toggle-overlay')}." if settings.current().overlay_enabled else ""),
+                QSystemTrayIcon.Information, 4000,
+            )
+
+    def handle_command(self, command: str) -> None:
+        """Commands from `sc-toolkit --show / --toggle-overlay / …` (app.main)."""
+        if command == "show":
+            self.show_launcher()
+        elif command in ("toggle-overlay", "toggle-clickthrough"):
+            if settings.current().overlay_enabled:
+                self.overlay.send(command)
+
+    def _set_overlay_enabled(self, on: bool) -> None:
+        if on != settings.current().overlay_enabled:
+            settings.apply(replace(settings.current(), overlay_enabled=on))
+        self._update_overlay_hint()
+        if not self._start_overlay:
+            return
+        if on:
+            self.overlay.start()
+        else:
+            self.overlay.stop()
+
+    def _update_overlay_hint(self) -> None:
+        on = settings.current().overlay_enabled
+        self.overlay_hint.setText(
+            f"{hotkeys.label('toggle-overlay')} to show" if on else "off")
+
+    def closeEvent(self, event):
+        # While a game session runs, closing would skip the backup on game
+        # exit: keep running in the tray instead.
+        if self.controller.busy and self.tray is not None:
+            event.ignore()
+            self.minimize_to_tray()
+            return
+        super().closeEvent(event)
+        QApplication.instance().quit()
+
+    def _on_about_to_quit(self) -> None:
+        self.overlay.stop()
+        if self.tray is not None:
+            self.tray.hide()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -410,6 +562,24 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, config.DISPLAY_NAME, message)
 
     # -- middle: SC-Toolkit's own tools ---------------------------------------
+    def _build_overlay_switch(self) -> QWidget:
+        box = QFrame(objectName="OverlaySwitchBox")
+        box.setToolTip(
+            "Maps, Mining and Salvage in a small window on top of the game "
+            "(run Star Citizen in Borderless mode). Hotkeys are set in Settings.")
+        row = QHBoxLayout(box)
+        row.setContentsMargins(12, 3, 8, 3)
+        row.setSpacing(10)
+        row.addWidget(QLabel("IN-GAME OVERLAY", objectName="OverlaySwitchLabel"))
+        self.overlay_hint = QLabel("", objectName="OverlaySwitchHint")
+        row.addWidget(self.overlay_hint)
+        self.overlay_switch = _Switch()
+        self.overlay_switch.setChecked(settings.current().overlay_enabled)
+        self.overlay_switch.toggled.connect(self._set_overlay_enabled)
+        row.addWidget(self.overlay_switch)
+        self._update_overlay_hint()
+        return box
+
     def _build_tools_panel(self) -> QWidget:
         # No panel behind this column: each tile carries its own glass, so the
         # wallpaper shows through around and below them.
@@ -417,8 +587,12 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        heading = QLabel("SC-TOOLKIT TOOLS", objectName="ToolsHeading")
-        layout.addWidget(heading, alignment=Qt.AlignLeft)
+        heading_row = QHBoxLayout()
+        heading_row.setSpacing(12)
+        heading_row.addWidget(QLabel("SC-TOOLKIT TOOLS", objectName="ToolsHeading"))
+        heading_row.addStretch(1)
+        heading_row.addWidget(self._build_overlay_switch())
+        layout.addLayout(heading_row)
 
         grid = QGridLayout()
         grid.setSpacing(12)
@@ -619,6 +793,11 @@ class MainWindow(QMainWindow):
         self.channel = channel_mod.pick_default_channel(settings.current().game_root)
         self._refresh_config_combo()
         self._apply_channel_state()
+        self._update_overlay_hint()
+        if self._start_overlay and settings.current().overlay_enabled:
+            # New hotkeys / game folder: the overlay reads them at start.
+            self.overlay.stop()
+            self.overlay.start()
         self._show_main()
 
     def _show_main(self) -> None:

@@ -648,6 +648,25 @@ QAbstractScrollArea::corner {{
     background: transparent;
 }}
 
+QMenu {{
+    background: {bg_panel_solid};
+    border: 1px solid {border_strong};
+    padding: 4px;
+}}
+QMenu::item {{
+    color: {text_primary};
+    padding: 5px 18px 5px 12px;
+    border-radius: 4px;
+}}
+QMenu::item:selected {{
+    background: {accent_soft};
+}}
+QMenu::separator {{
+    height: 1px;
+    background: {border};
+    margin: 4px 6px;
+}}
+
 QInputDialog, QMessageBox {{
     background: {bg_panel_solid};
 }}
@@ -670,6 +689,97 @@ QInputDialog QLineEdit {{
     border: 1px solid {border};
     border-radius: 6px;
     padding: 6px 8px;
+}}
+
+#OverlaySwitchBox {{
+    background: {bg_panel};
+    border: 1px solid {border};
+    border-radius: 6px;
+}}
+#OverlaySwitchLabel {{
+    color: {text_primary};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}}
+#OverlaySwitchHint {{
+    color: {text_muted};
+    font-size: 11px;
+}}
+
+/* -- in-game overlay ------------------------------------------------------ */
+#OverlayFrame {{
+    background: {bg_panel_strong};
+    border: 1px solid {border_strong};
+    border-radius: 10px;
+}}
+#OverlayFrame[clickThrough="true"] {{
+    border: 1px dashed {accent_dim};
+}}
+#OverlayHeader {{
+    background: transparent;
+}}
+#OverlayGrip {{
+    color: {text_muted};
+    font-size: 15px;
+}}
+#OverlayTitle {{
+    color: {text_secondary};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}}
+#OverlayTool {{
+    background: {bg_input};
+    border: 1px solid {border};
+    border-radius: 5px;
+    color: {text_secondary};
+    font-size: 12px;
+    padding: 4px 10px;
+}}
+#OverlayTool:hover {{
+    border: 1px solid {info};
+    color: {text_primary};
+}}
+#OverlayTool:checked {{
+    background: {accent_soft};
+    border: 1px solid {accent};
+    color: {text_primary};
+}}
+#OverlayIcon {{
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: {text_secondary};
+    font-size: 14px;
+    min-width: 24px;
+    min-height: 24px;
+}}
+#OverlayIcon:hover {{
+    background: {bg_hover};
+    color: {text_primary};
+}}
+#OverlayBanner {{
+    background: {accent_soft};
+    border-radius: 5px;
+    color: {accent};
+    font-size: 11px;
+    padding: 3px 8px;
+}}
+#OverlayOpacity::groove:horizontal {{
+    background: {bg_input};
+    border-radius: 2px;
+    height: 4px;
+}}
+#OverlayOpacity::sub-page:horizontal {{
+    background: {accent_dim};
+    border-radius: 2px;
+}}
+#OverlayOpacity::handle:horizontal {{
+    background: {accent};
+    border-radius: 5px;
+    width: 10px;
+    margin: -3px 0;
 }}
 """
 

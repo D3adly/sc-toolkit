@@ -3,7 +3,7 @@ background art: warm amber/dust haze with cool cyan ship-light accents.
 """
 
 PALETTE = {
-    "bg_panel": "rgba(13, 15, 18, 0.52)",
+    "bg_panel": "rgba(13, 15, 18, 0.68)",
     "bg_panel_solid": "#0d0f12",
     "bg_titlebar": "rgba(9, 10, 12, 0.85)",
     "border": "rgba(255, 255, 255, 0.08)",
@@ -56,6 +56,18 @@ QWidget {{
 #TitleBarButton[kind="close"]:hover {{
     background: {danger};
     color: white;
+}}
+
+#DiagramView {{
+    background: {bg_panel};
+    border-radius: 10px;
+    border: 1px solid {border};
+}}
+
+#ToolBar {{
+    background: {bg_panel};
+    border-radius: 10px;
+    border: 1px solid {border};
 }}
 
 #SidePanel {{
@@ -420,6 +432,13 @@ QFrame#Divider {{
     color: {text_muted};
 }}
 
+#CigNotice {{
+    color: {text_secondary};
+    font-size: 9px;
+    background: rgba(9, 10, 12, 0.62);
+    border-radius: 6px;
+    padding: 4px 8px;
+}}
 #SettingsOk {{
     color: {accent_cyan};
     font-size: 11px;

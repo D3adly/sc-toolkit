@@ -12,14 +12,12 @@ is exactly "close the RSI Launcher".
 
 from __future__ import annotations
 
-import os
-import signal
 import subprocess
 import threading
 
 from PySide6.QtCore import QObject, Signal
 
-from app import backup, channel, process, settings
+from app import backup, channel, osutil, process, settings
 from app.backup import BackupInfo
 
 
@@ -73,10 +71,7 @@ class LaunchController(QObject):
         proc = self._proc
         if proc is None or proc.poll() is not None:
             return
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        osutil.terminate_tree(proc.pid)
 
     def _run_session(self, real_launch_script, ch: str, restore_info: BackupInfo | None) -> None:
         paths = channel.resolve_channel_paths(settings.current().game_root, ch)
@@ -93,17 +88,7 @@ class LaunchController(QObject):
 
         self.status_changed.emit(f"Launching ({ch})…")
         try:
-            # A shell script (LUG Helper's sc-launch.sh) runs through bash;
-            # anything else is executed directly.
-            argv = [str(real_launch_script)]
-            if real_launch_script.suffix == ".sh":
-                argv = ["/usr/bin/env", "bash", *argv]
-            proc = subprocess.Popen(
-                argv,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
+            proc = osutil.spawn(real_launch_script)
         except OSError as exc:
             self._busy = False
             self.launch_failed.emit(f"Failed to start launch script:\n{exc}")

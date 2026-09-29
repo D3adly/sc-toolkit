@@ -12,6 +12,8 @@ class TitleBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("TitleBar")
+        # Plain QWidget subclasses only paint their stylesheet background with this.
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(36)
 
         layout = QHBoxLayout(self)

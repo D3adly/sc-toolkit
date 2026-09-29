@@ -225,7 +225,9 @@ class DiagramView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setFrameShape(QFrame.NoFrame)
-        self.setStyleSheet("background: transparent;")
+        # Same translucent backing as the side panels, so the drawing reads
+        # against a bright wallpaper.
+        self.setObjectName("DiagramView")
         self.setBackgroundBrush(Qt.NoBrush)
 
     def fit(self) -> None:
@@ -319,7 +321,9 @@ class BindingsView(QWidget):
         outer.setContentsMargins(20, 14, 20, 20)
         outer.setSpacing(10)
 
-        bar = QHBoxLayout()
+        bar_frame = QFrame(objectName="ToolBar")
+        bar = QHBoxLayout(bar_frame)
+        bar.setContentsMargins(10, 8, 10, 8)
         bar.setSpacing(8)
         back = QPushButton("←  Back")
         back.setObjectName("ToolButton")
@@ -353,7 +357,7 @@ class BindingsView(QWidget):
         self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.clicked.connect(self._on_save_clicked)
         bar.addWidget(self.save_btn)
-        outer.addLayout(bar)
+        outer.addWidget(bar_frame)
 
         body = QHBoxLayout()
         body.setSpacing(14)

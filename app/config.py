@@ -4,6 +4,7 @@ install, launch script, GameGlass, backups) lives in app.settings.
 """
 
 import shutil
+import sys
 from pathlib import Path
 
 import platformdirs
@@ -12,8 +13,22 @@ APP_NAME = "sc-toolkit"
 DISPLAY_NAME = "SC-Toolkit"
 USER_AGENT = "sc-toolkit"
 _LEGACY_APP_NAME = "sc-launcher-app"  # name before the SC-Toolkit rename
-ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
-BACKGROUND_IMAGE = ASSETS_DIR / "polaris_bg.png"
+# Bundled assets live next to the package, or in PyInstaller's unpack dir
+# when running as a built executable.
+_BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+ASSETS_DIR = _BASE / "assets"
+# Official CIG Fankit wallpaper (SC_26, the Corsair), used under the Fankit Agreement:
+# its "STAR CITIZEN" watermark must stay visible and CIG_NOTICE must be shown.
+BACKGROUND_IMAGE = ASSETS_DIR / "background.jpg"
+BACKGROUND_WATERMARK = (0.94, 0.917, 0.058, 0.08)  # x, y, w, h as fractions of the image
+BACKGROUND_ANCHOR_RIGHT = True  # the watermark is in the bottom-right corner
+CIG_NOTICE = (
+    "This site is not endorsed by or affiliated with the Cloud Imperium or Roberts Space "
+    "Industries group of companies. All game content and materials are copyright Cloud "
+    "Imperium Rights LLC and Cloud Imperium Rights Ltd.. Star Citizen®, Squadron 42®, "
+    "Roberts Space Industries®, and Cloud Imperium® are registered trademarks of Cloud "
+    "Imperium Rights LLC. All rights reserved."
+)
 ICONS_DIR = ASSETS_DIR / "icons"
 APP_ICON = ASSETS_DIR / "app_icon.png"
 # Per-user app state (settings, joystick identify results, layout tweaks),

@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import channel as channel_mod, settings
+from app import __version__, channel as channel_mod, settings
 from app.settings import Settings
 
 WINDOWS = sys.platform.startswith("win")
@@ -92,7 +92,9 @@ class SettingsView(QWidget):
         outer.setContentsMargins(20, 14, 20, 20)
         outer.setSpacing(10)
 
-        bar = QHBoxLayout()
+        bar_frame = QFrame(objectName="ToolBar")
+        bar = QHBoxLayout(bar_frame)
+        bar.setContentsMargins(10, 8, 10, 8)
         bar.setSpacing(8)
         self.back_btn = QPushButton("←  Back", objectName="ToolButton")
         self.back_btn.setCursor(Qt.PointingHandCursor)
@@ -110,7 +112,7 @@ class SettingsView(QWidget):
         self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.clicked.connect(self._save)
         bar.addWidget(self.save_btn)
-        outer.addLayout(bar)
+        outer.addWidget(bar_frame)
 
         self.intro = QLabel("", objectName="InspectorNote")
         self.intro.setWordWrap(True)
@@ -156,6 +158,15 @@ class SettingsView(QWidget):
         )
         outer.addWidget(panel)
         outer.addStretch(1)
+
+        about = QLabel(
+            f"SC-Toolkit v{__version__} · GPL-3.0 · "
+            "<a style='color:#5fd4e8' href='https://github.com/D3adly/sc-toolkit'>"
+            "github.com/D3adly/sc-toolkit</a>",
+            objectName="InspectorHint",
+        )
+        about.setOpenExternalLinks(True)
+        outer.addWidget(about, alignment=Qt.AlignRight)
 
     # -- lifecycle ------------------------------------------------------------
     def activate(self, first_run: bool = False) -> None:

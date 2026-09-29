@@ -1,8 +1,7 @@
-import os
 import subprocess
 
 from PySide6.QtCore import Qt, QRectF, QSize, QTimer
-from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QLinearGradient, QColor, QIcon
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor, QIcon
 from PySide6.QtWidgets import (
     QWidget,
     QMainWindow,
@@ -19,7 +18,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 
-from app import backup, channel as channel_mod, config, links, maps, settings
+from app import backup, channel as channel_mod, config, links, maps, osutil, settings
 from app.backup import BackupInfo
 from app.launch import LaunchController
 from app.starstrings_controller import StarStringsController
@@ -66,22 +65,17 @@ class RootFrame(QWidget):
         path.addRoundedRect(QRectF(self.rect()), CORNER_RADIUS, CORNER_RADIUS)
         painter.setClipPath(path)
 
+        painter.fillPath(path, QColor("#0d0f12"))
+        scaled = None
+        bottom = self.height()
         if not self._bg.isNull():
             scaled = self._bg.scaled(
-                self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+                self.width(), bottom, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
             )
-            x = (self.width() - scaled.width()) / 2
-            y = (self.height() - scaled.height()) / 2
-            painter.drawPixmap(int(x), int(y), scaled)
-        else:
-            painter.fillPath(path, QColor("#0d0f12"))
+            # Anchored to the watermark's corner so it's never cropped.
+            x0 = self.width() - scaled.width() if config.BACKGROUND_ANCHOR_RIGHT else 0
+            painter.drawPixmap(x0, bottom - scaled.height(), scaled)
 
-        gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0.0, QColor(6, 7, 9, 210))
-        gradient.setColorAt(0.35, QColor(6, 7, 9, 120))
-        gradient.setColorAt(0.7, QColor(6, 7, 9, 150))
-        gradient.setColorAt(1.0, QColor(6, 7, 9, 215))
-        painter.fillPath(path, gradient)
 
         painter.setPen(QColor(255, 255, 255, 20))
         painter.drawPath(path)
@@ -89,14 +83,14 @@ class RootFrame(QWidget):
 
 class MainWindow(QMainWindow):
     WIDTH = 1080
-    HEIGHT = 800
+    HEIGHT = 840
 
     def __init__(self):
         super().__init__()
         self.setWindowFlag(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.resize(self.WIDTH, self.HEIGHT)
-        self.setMinimumSize(900, 780)
+        self.setMinimumSize(900, 820)
 
         self.channel = channel_mod.pick_default_channel(settings.current().game_root)
         self._mode = "start"  # "start" | "close"
@@ -131,6 +125,20 @@ class MainWindow(QMainWindow):
         # bindings view is built on first use.
         self.stack = QStackedWidget()
         outer.addWidget(self.stack, stretch=1)
+
+        # Footer band: CIG's notice (required by the Fankit Agreement wherever
+        # their material is shown) on the left, and a clear area on the right
+        # where the wallpaper's watermark shows. Its height follows the window
+        # because the watermark scales with the wallpaper.
+        self.footer = QWidget()
+        footer_layout = QHBoxLayout(self.footer)
+        footer_layout.setContentsMargins(24, 0, 0, 6)
+        notice = QLabel(config.CIG_NOTICE, objectName="CigNotice")
+        notice.setWordWrap(True)
+        notice.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        footer_layout.addWidget(notice, stretch=1)
+        self._watermark_gap = footer_layout.addSpacing(0) or footer_layout.itemAt(1)
+        outer.addWidget(self.footer)
         self.bindings_view = None
         self.salvage_view = None
         self.mining_view = None
@@ -151,6 +159,17 @@ class MainWindow(QMainWindow):
         # Nothing configured yet (first run on this machine): settings first.
         if settings.validate_live_dir(settings.current().live_dir) is not None:
             QTimer.singleShot(0, lambda: self._show_settings(first_run=True))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Keep the footer as tall as the wallpaper's watermark and reserve its
+        # width on the right, so no panel ever covers it.
+        fx, fy, fw, fh = config.BACKGROUND_WATERMARK
+        img_h = self.height()
+        img_w = max(self.width(), img_h * 16 / 9)
+        self.footer.setFixedHeight(max(44, int(img_h * (1 - fy)) + 4))
+        self._watermark_gap.changeSize(int(img_w * (1 - fx)) + 8, 0)
+        self.footer.layout().invalidate()
 
     # -- left panel: Start + config selector --------------------------------
     def _build_launch_panel(self) -> QWidget:
@@ -186,12 +205,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.config_combo)
         self._refresh_config_combo()
 
-        layout.addStretch(1)
-
+        layout.addSpacing(10)
         self.status_label = QLabel("")
         self.status_label.setObjectName("SectionLabel")
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
+        layout.addStretch(1)
 
         return panel
 
@@ -393,9 +412,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _open_url(url: str) -> None:
-        subprocess.Popen(
-            ["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
+        osutil.open_url(url)
 
     def _show_maps_menu(self, anchor: QPushButton) -> None:
         menu = QMenu(self)
@@ -421,8 +438,7 @@ class MainWindow(QMainWindow):
                 self, "GameGlass", f"GameGlass not found:\n{path}\n\nCheck the path in Settings."
             )
             return
-        if os.name == "posix" and not os.access(path, os.X_OK):
-            os.chmod(path, 0o755)
+        osutil.make_executable(path)
         try:
             subprocess.Popen(
                 [str(path)],

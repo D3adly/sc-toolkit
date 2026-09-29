@@ -23,6 +23,18 @@ def main():
     window = MainWindow()
     window.show()
 
+    if "--smoke-test" in sys.argv:
+        # CI check that a built executable starts: build the UI, load every
+        # tool view's code (they're imported lazily), then quit.
+        import importlib
+
+        from PySide6.QtCore import QTimer
+
+        for view in ("bindings_view", "mining_view", "salvage_view", "settings_view"):
+            importlib.import_module(f"app.ui.{view}")
+        for module in ("mining", "salvage", "datacore", "socpak", "joyinput"):
+            importlib.import_module(f"app.{module}")
+        QTimer.singleShot(1500, app.quit)
     sys.exit(app.exec())
 
 

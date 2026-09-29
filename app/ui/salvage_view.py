@@ -11,7 +11,6 @@ works from the local copies.
 
 from __future__ import annotations
 
-import subprocess
 import threading
 import time
 
@@ -30,7 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import channel as channel_mod, salvage, settings
+from app import channel as channel_mod, osutil, salvage, settings
 from app.salvage import ComponentRow, ShipRow
 
 ALL_TIERS = "__all__"
@@ -290,7 +289,9 @@ class SalvageView(QWidget):
         outer.setContentsMargins(20, 14, 20, 20)
         outer.setSpacing(10)
 
-        bar = QHBoxLayout()
+        bar_frame = QFrame(objectName="ToolBar")
+        bar = QHBoxLayout(bar_frame)
+        bar.setContentsMargins(10, 8, 10, 8)
         bar.setSpacing(8)
         back = QPushButton("←  Back", objectName="ToolButton")
         back.setCursor(Qt.PointingHandCursor)
@@ -329,9 +330,11 @@ class SalvageView(QWidget):
         self.uex_btn.setCursor(Qt.PointingHandCursor)
         self.uex_btn.clicked.connect(lambda: self._refresh("uex"))
         bar.addWidget(self.uex_btn)
-        outer.addLayout(bar)
+        outer.addWidget(bar_frame)
 
-        fbar = QHBoxLayout()
+        fbar_frame = QFrame(objectName="ToolBar")
+        fbar = QHBoxLayout(fbar_frame)
+        fbar.setContentsMargins(10, 6, 10, 6)
         fbar.setSpacing(8)
         fbar.addWidget(QLabel("FIND COMPONENT", objectName="ConfigLabel"))
         self.family_combo = QComboBox(objectName="ConfigCombo")
@@ -352,7 +355,7 @@ class SalvageView(QWidget):
         self.result_label = QLabel("", objectName="InspectorHint")
         fbar.addWidget(self.result_label)
         fbar.addStretch(1)
-        outer.addLayout(fbar)
+        outer.addWidget(fbar_frame)
 
         self.scroll = QScrollArea(objectName="InspectorScroll")
         self.scroll.setWidgetResizable(True)
@@ -544,9 +547,7 @@ class SalvageView(QWidget):
                              "InspectorHint"), stretch=1)
         open_sheet = QPushButton("Open spreadsheet", objectName="MiniButton")
         open_sheet.setCursor(Qt.PointingHandCursor)
-        open_sheet.clicked.connect(lambda: subprocess.Popen(
-            ["xdg-open", salvage.SHEET_URL], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        ))
+        open_sheet.clicked.connect(lambda: osutil.open_url(salvage.SHEET_URL))
         src.addWidget(open_sheet)
         v.addLayout(src)
         return box

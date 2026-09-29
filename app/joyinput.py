@@ -13,11 +13,13 @@ Windows would need a different backend (e.g. SDL3) behind the same signal.
 from __future__ import annotations
 
 import array
-import fcntl
 import glob
 import os
 import struct
 import sys
+
+if sys.platform.startswith("linux"):
+    import fcntl  # joydev ioctls; Linux only
 
 from PySide6.QtCore import QObject, QSocketNotifier, Signal
 

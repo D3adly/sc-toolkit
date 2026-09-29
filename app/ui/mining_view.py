@@ -304,7 +304,9 @@ class MiningView(QWidget):
         outer.setContentsMargins(20, 14, 20, 20)
         outer.setSpacing(10)
 
-        bar = QHBoxLayout()
+        bar_frame = QFrame(objectName="ToolBar")
+        bar = QHBoxLayout(bar_frame)
+        bar.setContentsMargins(10, 8, 10, 8)
         bar.setSpacing(8)
         back = QPushButton("←  Back", objectName="ToolButton")
         back.setCursor(Qt.PointingHandCursor)
@@ -329,7 +331,7 @@ class MiningView(QWidget):
         bar.addStretch(1)
         self.result_label = QLabel("", objectName="InspectorHint")
         bar.addWidget(self.result_label)
-        outer.addLayout(bar)
+        outer.addWidget(bar_frame)
 
         body = QHBoxLayout()
         body.setSpacing(14)

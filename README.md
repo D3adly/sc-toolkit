@@ -17,6 +17,12 @@
 > related names, logos, ships, artwork and game data are trademarks and/or
 > copyrighted property of **Cloud Imperium Rights LLC** and **Cloud Imperium Rights
 > Ltd.** All rights belong to their respective owners.
+>
+> *This site is not endorsed by or affiliated with the Cloud Imperium or Roberts Space
+> Industries group of companies. All game content and materials are copyright Cloud
+> Imperium Rights LLC and Cloud Imperium Rights Ltd.. Star Citizen®, Squadron 42®,
+> Roberts Space Industries®, and Cloud Imperium® are registered trademarks of Cloud
+> Imperium Rights LLC. All rights reserved.*
 
 ## Credits: community tools and data
 
@@ -152,6 +158,22 @@ python3 -m venv .venv
 ./run.sh                                    # Windows: .venv\Scripts\python -m app.main
 ```
 
+## Building & releasing
+
+Builds are made by GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml))
+on Windows and Ubuntu 22.04, smoke-tested, and attached to a GitHub Release:
+
+1. Bump `__version__` in [`app/__init__.py`](app/__init__.py) and commit.
+2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+   Tags with a suffix (e.g. `v0.2.0-beta.1`) become pre-releases.
+
+For a test build without a release, run the workflow manually (**Actions → Build &
+release → Run workflow**) and download the files from the run's artifacts.
+
+To build locally: `packaging/build_linux.sh` (AppImage) or
+`packaging/build_windows.ps1` (exe), with `pyinstaller` installed next to the
+requirements.
+
 ## Contact
 
 - **Bugs, ideas, joystick profile requests:** please use
@@ -169,7 +191,12 @@ The source code is licensed under the **GNU General Public License v3.0**; see
 The GPL covers the code only. Artwork and logos in `assets/` belong to their
 respective owners and are **not** covered by it:
 
-- Star Citizen / RSI imagery and logos: © Cloud Imperium Rights LLC.
+- **Background wallpaper** (`assets/background.jpg`):
+  official *Star Citizen Fankit* wallpaper (SC_26, the Corsair), © Cloud Imperium Rights LLC and
+  Cloud Imperium Rights Ltd., used under the
+  [Fankit Agreement](https://robertsspaceindustries.com/en/fankit) for this
+  non-commercial fan project, with its watermark kept visible as the agreement requires.
+- Other Star Citizen / RSI imagery and logos: © Cloud Imperium Rights LLC.
 - Link-button icons are the logos of the linked sites (RSI, SCMDB, Erkul, UEX Corp,
   GameGlass, SC Maps, StarStrings) and belong to those projects.
 - Joystick photos are not included: they are the manufacturer's copyrighted product

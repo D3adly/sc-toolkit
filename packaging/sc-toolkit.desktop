@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=SC-Toolkit
+Comment=Star Citizen companion launcher and toolkit
+Exec=SC-Toolkit
+Icon=sc-toolkit
+Terminal=false
+Categories=Game;

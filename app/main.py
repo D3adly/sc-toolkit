@@ -19,7 +19,15 @@ def _arg_value(name: str) -> str | None:
 
 
 def _run_overlay() -> int:
-    if sys.platform.startswith("linux") and os.environ.get("DISPLAY"):
+    layer_shell = "--layer-shell" in sys.argv
+    if layer_shell:
+        # Started with the system Python (see overlay_host.layer_shell_command):
+        # its PySide6 comes first; the app's other libraries after it.
+        extra = os.environ.get("SCT_EXTRA_SITE", "")
+        sys.path.extend(p for p in extra.split(os.pathsep) if p and p not in sys.path)
+        os.environ["QT_QPA_PLATFORM"] = "wayland"
+        os.environ["QT_WAYLAND_SHELL_INTEGRATION"] = "layer-shell"
+    elif sys.platform.startswith("linux") and os.environ.get("DISPLAY"):
         os.environ.setdefault("QT_QPA_PLATFORM", "xcb")   # see app.overlay_host
     if sys.stderr is None:
         # Windowed Windows build: no stdout/stderr at all, so prints and
@@ -34,7 +42,7 @@ def _run_overlay() -> int:
     from app.ui import overlay
 
     pid = _arg_value("--parent-pid")
-    return overlay.run(int(pid) if pid and pid.isdigit() else None)
+    return overlay.run(int(pid) if pid and pid.isdigit() else None, layer_shell=layer_shell)
 
 
 def _forward_command(command: str) -> int:
@@ -101,9 +109,10 @@ def main():
         from PySide6.QtCore import QTimer
 
         for view in ("bindings_view", "maps_view", "mining_view", "salvage_view", "settings_view",
-                     "overlay", "overlay_panels"):
+                     "overlay", "overlay_panels", "overlay_live", "stats_view"):
             importlib.import_module(f"app.ui.{view}")
-        for module in ("mining", "salvage", "datacore", "socpak", "joyinput", "hotkeys"):
+        for module in ("mining", "salvage", "datacore", "socpak", "joyinput", "hotkeys", "gamelog",
+                       "contracts", "tracker", "stats"):
             importlib.import_module(f"app.{module}")
         from app.joyinput import JoystickInput
 
@@ -113,7 +122,7 @@ def main():
         from app.ui.overlay import OverlayWindow
 
         probe = OverlayWindow()
-        for tool in ("maps", "mining", "salvage"):
+        for tool in ("maps", "mining", "salvage", "missions", "session"):
             probe._make_panel(tool)
         QTimer.singleShot(1500, app.quit)
     sys.exit(app.exec())

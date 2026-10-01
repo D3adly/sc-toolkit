@@ -9,7 +9,7 @@ whatever actually exists on disk instead of a hardcoded case.
 from dataclasses import dataclass
 from pathlib import Path
 
-CHANNELS = ["LIVE", "PTU", "EPTU", "TECH-PREVIEW"]
+CHANNELS = ["LIVE", "HOTFIX", "PTU", "EPTU", "TECH-PREVIEW"]
 
 
 def resolve_ci(base: Path, *components: str) -> Path:

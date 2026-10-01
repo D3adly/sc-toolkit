@@ -732,6 +732,100 @@ QInputDialog QLineEdit {{
     font-size: 11px;
 }}
 
+/* -- My Stats ------------------------------------------------------------ */
+#StatValue {{
+    color: {accent};
+    font-size: 20px;
+    font-weight: 700;
+}}
+#StatLabel {{
+    color: {text_muted};
+    font-size: 11px;
+}}
+#StatRowName {{
+    color: {text_primary};
+    font-size: 12px;
+}}
+#StatRowValue {{
+    color: {text_secondary};
+    font-size: 12px;
+}}
+
+/* -- overlay: live missions / session ------------------------------------ */
+#LiveCard {{
+    background: {bg_input};
+    border: 1px solid {border};
+    border-radius: 8px;
+}}
+#LiveCard[state="done"] {{
+    border: 1px solid {info_dim};
+}}
+#LiveCard[state="reward"] {{
+    background: rgba(156, 196, 140, 0.20);
+    border: 1px solid {ok};
+}}
+#LiveReward {{
+    color: #d7ecc9;
+    font-size: 13px;
+    font-weight: 600;
+}}
+#LiveBlueprintOwned {{
+    color: {ok};
+    font-size: 12px;
+}}
+#LiveGroup {{
+    color: {info};
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    padding-top: 4px;
+}}
+#LiveTitle {{
+    color: {text_primary};
+    font-size: 13px;
+    font-weight: 600;
+}}
+#LiveMuted {{
+    color: {text_muted};
+    font-size: 11px;
+}}
+#LiveText {{
+    color: {text_secondary};
+    font-size: 12px;
+}}
+#LiveGood {{
+    color: {ok};
+    font-size: 12px;
+}}
+#LiveBad {{
+    color: {danger};
+    font-size: 12px;
+}}
+#LiveValue {{
+    color: {accent};
+    font-size: 16px;
+    font-weight: 700;
+}}
+#LiveChip {{
+    background: {accent_soft};
+    border-radius: 4px;
+    color: {accent};
+    font-size: 11px;
+    padding: 1px 6px;
+}}
+#LiveChip[tone="info"] {{
+    background: rgba(141, 180, 207, 0.16);
+    color: {info};
+}}
+#LiveChip[tone="good"] {{
+    background: rgba(156, 196, 140, 0.22);
+    color: {ok};
+}}
+#LiveChip[tone="bad"] {{
+    background: rgba(226, 106, 85, 0.16);
+    color: {danger};
+}}
+
 /* -- in-game overlay ------------------------------------------------------ */
 #OverlayFrame {{
     background: {bg_panel_strong};
@@ -760,7 +854,7 @@ QInputDialog QLineEdit {{
     border-radius: 5px;
     color: {text_secondary};
     font-size: 12px;
-    padding: 4px 10px;
+    padding: 3px;
 }}
 #OverlayTool:hover {{
     border: 1px solid {info};

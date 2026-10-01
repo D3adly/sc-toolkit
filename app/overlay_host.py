@@ -11,6 +11,7 @@ cache folder.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -24,16 +25,73 @@ MAX_RESTARTS = 3            # within RESTART_WINDOW seconds
 RESTART_WINDOW = 60
 
 
+SYSTEM_PYTHON = Path("/usr/bin/python3")
+_layer_shell_ok: bool | None = None
+
+
+def _app_site_packages() -> list[str]:
+    import site
+
+    return [p for p in site.getsitepackages() if Path(p).is_dir()]
+
+
+def layer_shell_available() -> bool:
+    """KDE Wayland overlay (app.ui.layer_overlay): needs a Wayland session,
+    the system's LayerShellQt, and a system Python with the system's
+    PySide6 (LayerShellQt's Qt plugin only loads into the Qt it was built
+    for, not the Qt bundled with our PySide6), the same Python version as
+    ours (it borrows our other libraries). Checked once; SCT_OVERLAY_BACKEND=x11
+    forces the X11 overlay."""
+    global _layer_shell_ok
+    if _layer_shell_ok is None:
+        _layer_shell_ok = False
+        if (sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY")
+                and os.environ.get("SCT_OVERLAY_BACKEND", "").lower() != "x11"
+                and not getattr(sys, "frozen", False) and SYSTEM_PYTHON.is_file()):
+            check = (
+                "import ctypes, os, sys\n"
+                f"assert sys.version_info[:2] == {tuple(sys.version_info[:2])}\n"
+                "sys.path.extend(os.environ['SCT_EXTRA_SITE'].split(os.pathsep))\n"
+                "import PySide6.QtCore, shiboken6, psutil, platformdirs\n"
+                "ctypes.CDLL('libLayerShellQtInterface.so.6')\n"
+            )
+            env = dict(os.environ, SCT_EXTRA_SITE=os.pathsep.join(_app_site_packages()))
+            try:
+                result = subprocess.run([str(SYSTEM_PYTHON), "-c", check], env=env, capture_output=True,
+                                        text=True, timeout=20)
+                _layer_shell_ok = result.returncode == 0
+                if not _layer_shell_ok:
+                    _note(f"layer-shell overlay unavailable, using X11: {result.stderr.strip()[-300:]}")
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                _note(f"layer-shell overlay check failed, using X11: {exc}")
+    return _layer_shell_ok
+
+
+def _note(text: str) -> None:
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with LOG_FILE.open("a") as log:
+            log.write(f"launcher: {text}\n")
+    except OSError:
+        pass
+
+
 def overlay_command() -> list[str]:
     args = ["--overlay", "--parent-pid", str(os.getpid())]
     if getattr(sys, "frozen", False):
         return [sys.executable, *args]
+    if layer_shell_available():
+        return [str(SYSTEM_PYTHON), "-m", "app.main", *args, "--layer-shell"]
     return [sys.executable, "-m", "app.main", *args]
 
 
 def overlay_environment() -> QProcessEnvironment:
     env = QProcessEnvironment.systemEnvironment()
-    if sys.platform.startswith("linux") and env.contains("DISPLAY"):
+    if layer_shell_available():
+        env.insert("SCT_EXTRA_SITE", os.pathsep.join(_app_site_packages()))
+        env.insert("QT_QPA_PLATFORM", "wayland")
+        env.insert("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")
+    elif sys.platform.startswith("linux") and env.contains("DISPLAY"):
         # XWayland: an X11 window can keep itself above the (also XWayland)
         # game and grab the global hotkeys; a Wayland one can do neither.
         env.insert("QT_QPA_PLATFORM", "xcb")

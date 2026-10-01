@@ -29,6 +29,7 @@ class Settings:
     overlay_enabled: bool = False                # in-game overlay (and its hotkeys) on/off
     hotkey_overlay: str = "F7"                   # show / hide the overlay
     hotkey_clickthrough: str = "F8"              # overlay click-through on/off
+    gamelog_live_enabled: bool = False           # follow Game.log while playing (app.gamelog)
 
     @property
     def game_root(self) -> Path | None:

@@ -79,8 +79,17 @@ it adds a few tools that read their data straight from your own game files.
   when it matches your game build.
 - **SC Maps** viewer: Mr Kraken's community one-page guides and maps, opened inside
   the launcher with zoom and pan (downloaded once, then cached for offline use).
-- **In-game overlay:** compact Maps, Mining and Salvage panels on top of the game
-  (see [below](#in-game-overlay)).
+- **My Stats.** Your statistics from the game's own logs (`Game.log` and the
+  `logbackups` folder, as far back as the game keeps them), all time or for your last
+  session. It covers play time, missions (completed, failed, reputation, contractors),
+  blueprints received, money (awards, shop and commodity trades), travel, ships
+  flown, and deaths and losses.
+- **Live log reader** (the **LIVE LOG** switch, off by default). While you play, it
+  follows the current session's `Game.log`, from the moment the game started, even if
+  SC-Toolkit was opened later. It feeds the overlay's Missions and Session tabs. It
+  only reads the log: nothing is sent anywhere.
+- **In-game overlay:** Missions, Session, Maps, Mining and Salvage panels on top of
+  the game (see [below](#in-game-overlay)).
 - **Quick links** to RSI, server status, SCMDB, Erkul and UEX, plus a GameGlass
   shortcut.
 - Minimises to the **system tray**, so it keeps running (for the overlay and the
@@ -91,8 +100,18 @@ per game patch and cached, so it's always current and works offline.
 
 ## In-game overlay
 
-A small always-on-top bar with **Maps**, **Mining** and **Salvage**. Picking one opens
-its compact panel underneath; picking it again folds it back to the bar.
+A small always-on-top bar with five tabs, picked by icon:
+
+- **Missions** (needs LIVE LOG): your active missions with contractor, reputation and
+  objectives. It also lists the blueprints each mission can drop, marking the ones
+  you already have, and the missions you finished this session with what they gave you.
+- **Session** (needs LIVE LOG): your ship, location, jurisdiction, and whether you're in
+  an armistice zone or monitored space. It also shows what you've done this session
+  (time played, missions, reputation, trades, quantum jumps, deaths), blueprints
+  received and recent moments.
+- **Maps**, **Mining** and **Salvage**: compact versions of the launcher tools.
+
+Picking a tab opens its panel underneath; picking it again folds it back to the bar.
 
 Switch it on with **IN-GAME OVERLAY** next to *SC-TOOLKIT TOOLS* in the launcher. While
 it's off, nothing runs and the hotkeys do nothing. Then:

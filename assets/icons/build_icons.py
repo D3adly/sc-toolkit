@@ -162,6 +162,49 @@ GLYPHS = {
   <path d="M25 61 H57" stroke="url(#gold)" stroke-opacity="0.7"/>
 </g>
 """,
+    # Bar chart with a rising trend line (My Stats).
+    "stats": f"""
+<path d="M18 106 H110" stroke="url(#goldDark)" stroke-width="4" stroke-linecap="round"/>
+<rect x="24" y="70" width="16" height="32" rx="2.5" fill="url(#goldDark)"/>
+<rect x="46" y="54" width="16" height="48" rx="2.5" fill="url(#gold)"/>
+<rect x="68" y="62" width="16" height="40" rx="2.5" fill="url(#goldDark)"/>
+<rect x="90" y="36" width="16" height="66" rx="2.5" fill="url(#gold)"/>
+<path d="M46 54 H62 V102 H54 Z M90 36 H106 V102 H98 Z" fill="{INK}" fill-opacity="0.18"/>
+<path d="M22 58 L48 38 L72 48 L102 20" fill="none" stroke="{INK}" stroke-width="8"
+      stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22 58 L48 38 L72 48 L102 20" fill="none" stroke="url(#steel)" stroke-width="4"
+      stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M90 18 L106 16 L104 32 Z" fill="url(#steel)"/>
+""",
+    # Contract sheet on a clipboard with a check mark (active missions).
+    "missions": f"""
+<rect x="26" y="20" width="68" height="90" rx="7" fill="url(#goldDark)"/>
+<rect x="31" y="26" width="58" height="79" rx="4" fill="url(#gold)"/>
+<rect x="44" y="13" width="32" height="14" rx="4" fill="{INK}"/>
+<rect x="47" y="16" width="26" height="8" rx="2.5" fill="url(#steel)"/>
+<g stroke="{INK}" stroke-width="3" stroke-linecap="round" stroke-opacity="0.6">
+  <path d="M40 44 H80 M40 56 H74 M40 68 H66"/>
+</g>
+<circle cx="88" cy="88" r="21" fill="{INK}"/>
+<circle cx="88" cy="88" r="17.5" fill="none" stroke="url(#steel)" stroke-width="2.4"/>
+<path d="M79 88 L86 95 L98 81" fill="none" stroke="url(#steel)" stroke-width="5"
+      stroke-linecap="round" stroke-linejoin="round"/>
+""",
+    # Radar sweep with a live blip (live session status).
+    "session": f"""
+<circle cx="64" cy="66" r="46" fill="url(#goldDark)" fill-opacity="0.35"/>
+<g fill="none" stroke="url(#gold)" stroke-width="3">
+  <circle cx="64" cy="66" r="46"/>
+  <circle cx="64" cy="66" r="30" stroke-opacity="0.7"/>
+  <circle cx="64" cy="66" r="14" stroke-opacity="0.5"/>
+</g>
+<path d="M64 66 L64 20 A46 46 0 0 1 104 43 Z" fill="url(#beam)"/>
+<path d="M64 66 L104 43" stroke="url(#steel)" stroke-width="3.2" stroke-linecap="round"/>
+<circle cx="64" cy="66" r="4.5" fill="url(#steel)"/>
+<circle cx="86" cy="40" r="6" fill="{INK}"/>
+<circle cx="86" cy="40" r="4" fill="#e26a55"/>
+<circle cx="40" cy="84" r="3.5" fill="url(#steel)" fill-opacity="0.8"/>
+""",
     # Globe with an update arrow (Star Strings localisation).
     "starstrings": f"""
 <circle cx="56" cy="58" r="38" fill="url(#gold)"/>

@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 
 from dataclasses import replace
 
-from app import backup, channel as channel_mod, config, links, osutil, settings
+from app import backup, channel as channel_mod, config, gamelog, ipc, links, osutil, settings
 from app.backup import BackupInfo
 from app import hotkeys
 from app.launch import LaunchController
@@ -180,6 +180,7 @@ class MainWindow(QMainWindow):
         self._combo_backups: list[BackupInfo] = []
 
         self.controller = LaunchController(self)
+        self.gamelog = gamelog.LiveReader(lambda: settings.current().game_root, self)
         self.controller.status_changed.connect(self._set_status)
         self.controller.session_started.connect(self._on_session_started)
         self.controller.game_started.connect(self._on_game_started)
@@ -230,6 +231,7 @@ class MainWindow(QMainWindow):
         self.mining_view = None
         self.settings_view = None
         self.maps_view = None
+        self.stats_view = None
         self._main_size = None
 
         body = QWidget()
@@ -255,6 +257,12 @@ class MainWindow(QMainWindow):
         if start_overlay and settings.current().overlay_enabled:
             # Started right away (hidden), so the overlay hotkeys work in game.
             QTimer.singleShot(500, self.overlay.start)
+        # Game.log: live reader (switch next to the overlay's) and history
+        # reads. Features hook in with self.gamelog.add_listener().
+        self.gamelog.state_changed.connect(self._update_gamelog_hint)
+        self._history_jobs: set[gamelog.HistoryJob] = set()
+        if start_overlay and settings.current().gamelog_live_enabled:
+            self.gamelog.start()
 
     # -- tray, overlay, commands from other processes -------------------------
     def _build_tray(self) -> None:
@@ -325,6 +333,8 @@ class MainWindow(QMainWindow):
         elif command in ("toggle-overlay", "toggle-clickthrough"):
             if settings.current().overlay_enabled:
                 self.overlay.send(command)
+        elif command == "live-log-on":         # the overlay's "Turn on live log"
+            self.gamelog_switch.setChecked(True)
 
     def _set_overlay_enabled(self, on: bool) -> None:
         if on != settings.current().overlay_enabled:
@@ -343,8 +353,47 @@ class MainWindow(QMainWindow):
         self.overlay_hint.setText(f"{show} to show" if on else "off")
         if hasattr(self, "overlay_tile"):
             self.overlay_tile.body.setText(
-                f"Maps, Mining and Salvage in a small window on top of the game (Borderless mode). "
+                f"Missions, session status, Maps, Mining and Salvage in a small window on top of the "
+                f"game (Borderless mode). "
                 f"{show} shows or hides it, {click} lets clicks through to the game.")
+
+    def _set_gamelog_enabled(self, on: bool) -> None:
+        if on != settings.current().gamelog_live_enabled:
+            settings.apply(replace(settings.current(), gamelog_live_enabled=on))
+        if not self._start_overlay:
+            return
+        # The overlay's live tabs run their own reader behind the same switch.
+        ipc.send(ipc.OVERLAY, "live-log-on" if on else "live-log-off")
+        if on:
+            self.gamelog.start()
+        else:
+            self.gamelog.stop()
+
+    def _update_gamelog_hint(self, state: str | None = None) -> None:
+        state = state or self.gamelog.state
+        self.gamelog_hint.setText({"waiting": "waiting for game", "reading": "reading"}.get(state, "off"))
+
+    def read_log_history(self, kinds, output: str = gamelog.OUTPUT_EVENTS, on_done=None,
+                         on_failed=None, **options) -> gamelog.HistoryJob:
+        """Reads every Game.log on disk in the background for the given
+        event kinds (see gamelog.EVENT_TYPES). `on_done` gets a list of
+        gamelog.Event (output "events") or per-kind totals ("aggregate");
+        options go to gamelog.read_history (channels, since, until).
+        """
+        job = gamelog.HistoryJob(settings.current().game_root, kinds, output, self, **options)
+        self._history_jobs.add(job)
+
+        def finish(*_):
+            self._history_jobs.discard(job)
+            job.deleteLater()
+        if on_done is not None:
+            job.finished.connect(on_done)
+        if on_failed is not None:
+            job.failed.connect(on_failed)
+        job.finished.connect(finish)
+        job.failed.connect(finish)
+        job.start()
+        return job
 
     def _open_overlay(self) -> None:
         """The tile: switches the overlay on if needed and shows it."""
@@ -365,6 +414,9 @@ class MainWindow(QMainWindow):
 
     def _on_about_to_quit(self) -> None:
         self.overlay.stop()
+        self.gamelog.stop()
+        for job in list(self._history_jobs):
+            job.cancel()
         if self.tray is not None:
             self.tray.hide()
 
@@ -594,7 +646,7 @@ class MainWindow(QMainWindow):
     def _build_overlay_switch(self) -> QWidget:
         box = QFrame(objectName="OverlaySwitchBox")
         box.setToolTip(
-            "Maps, Mining and Salvage in a small window on top of the game "
+            "Missions, session status, Maps, Mining and Salvage in a small window on top of the game "
             "(run Star Citizen in Borderless mode). Hotkeys are set in Settings.")
         row = QHBoxLayout(box)
         row.setContentsMargins(12, 3, 8, 3)
@@ -609,6 +661,24 @@ class MainWindow(QMainWindow):
         self._update_overlay_hint()
         return box
 
+    def _build_gamelog_switch(self) -> QWidget:
+        box = QFrame(objectName="OverlaySwitchBox")
+        box.setToolTip(
+            "Follows Star Citizen's Game.log while you play (from the start of the "
+            "current game session) so tools can react to contracts, payouts and more.")
+        row = QHBoxLayout(box)
+        row.setContentsMargins(12, 3, 8, 3)
+        row.setSpacing(10)
+        row.addWidget(QLabel("LIVE LOG", objectName="OverlaySwitchLabel"))
+        self.gamelog_hint = QLabel("", objectName="OverlaySwitchHint")
+        row.addWidget(self.gamelog_hint)
+        self.gamelog_switch = _Switch()
+        self.gamelog_switch.setChecked(settings.current().gamelog_live_enabled)
+        self.gamelog_switch.toggled.connect(self._set_gamelog_enabled)
+        row.addWidget(self.gamelog_switch)
+        self._update_gamelog_hint()
+        return box
+
     def _build_tools_panel(self) -> QWidget:
         # No panel behind this column: each tile carries its own glass, so the
         # wallpaper shows through around and below them.
@@ -620,6 +690,7 @@ class MainWindow(QMainWindow):
         heading_row.setSpacing(12)
         heading_row.addWidget(QLabel("SC-TOOLKIT TOOLS", objectName="ToolsHeading"))
         heading_row.addStretch(1)
+        heading_row.addWidget(self._build_gamelog_switch())
         heading_row.addWidget(self._build_overlay_switch())
         layout.addLayout(heading_row)
 
@@ -653,11 +724,17 @@ class MainWindow(QMainWindow):
             ),
         )
         maps_tile.clicked.connect(self._show_maps)
+        self.stats_tile = _ToolTile(
+            "stats", "My Stats",
+            "Your missions, blueprints, money, travel, ships and losses from the game's "
+            "logs: all time and your last session.",
+        )
+        self.stats_tile.clicked.connect(self._show_stats)
         self.overlay_tile = _ToolTile("overlay", "In-game Overlay", "")
         self.overlay_tile.clicked.connect(self._open_overlay)
-        for i, tile in enumerate((self.bindings_btn, self.salvage_btn, self.mining_btn, maps_tile)):
+        for i, tile in enumerate((self.bindings_btn, self.salvage_btn, self.mining_btn, maps_tile,
+                                  self.stats_tile, self.overlay_tile)):
             grid.addWidget(tile, i // 2, i % 2)
-        grid.addWidget(self.overlay_tile, 2, 0, 1, 2)
         self._update_overlay_hint()
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
@@ -767,6 +844,20 @@ class MainWindow(QMainWindow):
         self.resize(min(1320, int(screen.width() * 0.9)), min(900, int(screen.height() * 0.9)))
         self.stack.setCurrentWidget(self.salvage_view)
         self.salvage_view.activate()
+
+    # -- My Stats ----------------------------------------------------------------
+    def _show_stats(self) -> None:
+        if self.stats_view is None:
+            from app.ui.stats_view import StatsView
+
+            self.stats_view = StatsView()
+            self.stats_view.back_requested.connect(self._show_main)
+            self.stack.addWidget(self.stats_view)
+        self._main_size = self._normal_size()
+        screen = self.screen().availableGeometry()
+        self.resize(min(1320, int(screen.width() * 0.9)), min(900, int(screen.height() * 0.9)))
+        self.stack.setCurrentWidget(self.stats_view)
+        self.stats_view.activate()
 
     # -- SC Maps viewer ---------------------------------------------------------
     def _show_maps(self) -> None:

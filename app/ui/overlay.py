@@ -20,7 +20,7 @@ import json
 import sys
 
 import psutil
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QIcon, QPainter, QRegion
 from PySide6.QtWidgets import (
     QApplication,
@@ -41,12 +41,20 @@ from app.hotkeys import GlobalHotkeys, label as hotkey_label
 
 STATE_FILE = config.USER_CONFIG_DIR / "overlay.json"
 
-# tool id -> (button label, default panel size)
+# tool id -> (tooltip, icon in assets/icons, default panel size)
 TOOLS = {
-    "maps": ("Maps", QSize(560, 640)),
-    "mining": ("Mining", QSize(480, 640)),
-    "salvage": ("Salvage", QSize(480, 620)),
+    "missions": ("Missions: what you're on, objectives, possible blueprints", "missions", QSize(440, 600)),
+    "session": ("Session: where you are, earnings, recent moments", "session", QSize(400, 600)),
+    "maps": ("Maps", "scmaps", QSize(560, 640)),
+    "mining": ("Mining", "mining", QSize(480, 640)),
+    "salvage": ("Salvage", "salvage", QSize(480, 620)),
 }
+TOOL_ICON = QSize(24, 24)
+# Tools whose panel height follows their content (see fit_height); the
+# user's own resizing only changes their width.
+AUTO_HEIGHT_TOOLS = {"missions"}
+AUTO_HEIGHT_MAX = 0.7        # of the screen's height, then the panel scrolls
+
 MIN_OPACITY, MAX_OPACITY = 30, 100
 
 
@@ -133,11 +141,18 @@ def _set_osd_type(win_id: int) -> None:
 
 
 class _ResizeGrip(QSizeGrip):
-    """Resizes the window itself: KWin doesn't resize OSD windows."""
+    """Resizes the overlay itself: KWin doesn't resize OSD windows, and on
+    layer-shell the overlay is a panel inside the surface, not a window."""
+
+    def _overlay(self) -> QWidget:
+        w = self.parentWidget()
+        while w is not None and not isinstance(w, OverlayWindow):
+            w = w.parentWidget()
+        return w or self.window()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            win = self.window()
+            win = self._overlay()
             self._start = (event.globalPosition().toPoint(), win.size())
             event.accept()
 
@@ -145,7 +160,7 @@ class _ResizeGrip(QSizeGrip):
         start = getattr(self, "_start", None)
         if start is None:
             return
-        win = self.window()
+        win = self._overlay()
         delta = event.globalPosition().toPoint() - start[0]
         minimum = win.minimumSizeHint()
         win.resize(max(minimum.width(), start[1].width() + delta.x()),
@@ -267,18 +282,25 @@ class _InputShield(QWidget):
 
 
 class OverlayWindow(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    """The overlay panel. Its own window (X11 / Windows), or, with `host`, a
+    panel inside a full-screen layer-shell surface (KDE Wayland; see
+    app.ui.layer_overlay), which then does the showing, hiding and input."""
+
+    def __init__(self, parent=None, host=None):
+        super().__init__(host or parent)
+        self._host = host
         self.setWindowTitle("SC-Toolkit overlay")
         self.setWindowIcon(QIcon(str(config.APP_ICON)))
-        # Not Qt.Tool on X11: that makes a "utility" window, which KWin hides
-        # whenever its app isn't active, i.e. as soon as the game has focus.
-        # The taskbar entry is dropped by _skip_taskbar() instead.
-        kind = Qt.Window if sys.platform.startswith("linux") else Qt.Tool
-        self.setWindowFlags(kind | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        # Showing it must not take focus from the game; click it to type.
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        if host is None:
+            # Not Qt.Tool on X11: that makes a "utility" window, which KWin hides
+            # whenever its app isn't active, i.e. as soon as the game has focus.
+            # The taskbar entry is dropped by _skip_taskbar() instead.
+            kind = Qt.Window if sys.platform.startswith("linux") else Qt.Tool
+            self.setWindowFlags(kind | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+            self.setAttribute(Qt.WA_TranslucentBackground)
+            # Showing it must not take focus from the game; click it to type.
+            self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self._opacity_effect = None
         self.state = _load_state()
         self.tool: str | None = None
         self.click_through = False
@@ -289,12 +311,48 @@ class OverlayWindow(QWidget):
         self._panels: dict[str, QWidget] = {}
         self._save_timer = QTimer(self, singleShot=True, interval=400, timeout=self._save_state)
         self._build_ui()
-        self.setWindowOpacity(self.state.get("opacity", 92) / 100)
-        pos = self.state.get("pos")
+        self._apply_opacity(self.state.get("opacity", 92))
+        pos = self.state.get(self._pos_key)
         if pos:
             self._anchor = QPoint(*pos)
             self.move(self._anchor)
         self._collapse()
+
+    @property
+    def _pos_key(self) -> str:
+        # Screen coordinates for the X11 window, surface (screen-local) ones on layer-shell.
+        return "layer_pos" if self._host is not None else "pos"
+
+    def _apply_opacity(self, value: int) -> None:
+        if self._host is None:
+            self.setWindowOpacity(value / 100)
+            return
+        from PySide6.QtWidgets import QGraphicsOpacityEffect
+
+        if self._opacity_effect is None:
+            self._opacity_effect = QGraphicsOpacityEffect(self)
+            self.setGraphicsEffect(self._opacity_effect)
+        self._opacity_effect.setOpacity(value / 100)
+
+    def keep_inside(self) -> None:
+        """Layer-shell: back inside the surface if it's off-screen (e.g. shown
+        on a smaller screen than last time)."""
+        if self._host is None or self._host.width() <= 0:
+            return
+        x = min(max(0, self.x()), max(0, self._host.width() - self.width()))
+        y = min(max(0, self.y()), max(0, self._host.height() - 40))
+        if (x, y) != (self.x(), self.y()):
+            self._anchor = QPoint(x, y)
+            self.move(self._anchor)
+
+    def is_shown(self) -> bool:
+        return (self._host if self._host is not None else self).isVisible()
+
+    def hide_overlay(self) -> None:
+        if self._host is not None:
+            self._host.hide()
+        else:
+            self.hide()
 
     # -- layout -------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -317,8 +375,11 @@ class OverlayWindow(QWidget):
         head.addSpacing(4)
         self.tool_group = QButtonGroup(self)
         self.tool_group.setExclusive(False)
-        for tool, (label, _size) in TOOLS.items():
-            btn = QPushButton(label, objectName="OverlayTool")
+        for tool, (tip, icon, _size) in TOOLS.items():
+            btn = QPushButton(objectName="OverlayTool")
+            btn.setIcon(QIcon(str(config.ICONS_DIR / f"{icon}.png")))
+            btn.setIconSize(TOOL_ICON)
+            btn.setToolTip(tip)
             btn.setCheckable(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.clicked.connect(lambda _c=False, t=tool: self.select_tool(t))
@@ -341,7 +402,7 @@ class OverlayWindow(QWidget):
         hide = QPushButton("✕", objectName="OverlayIcon")
         hide.setToolTip(f"Hide overlay ({hotkey_label('toggle-overlay')})")
         hide.setCursor(Qt.PointingHandCursor)
-        hide.clicked.connect(self.hide)
+        hide.clicked.connect(self.hide_overlay)
         head.addWidget(hide)
         v.addWidget(self.header)
 
@@ -382,7 +443,7 @@ class OverlayWindow(QWidget):
         min_width = max(360, self._bar_width)
         self.setMinimumSize(min_width, 300)
         self.setMaximumSize(16777215, 16777215)
-        size = QSize(*size) if size else TOOLS[tool][1]
+        size = QSize(*size) if size else TOOLS[tool][2]
         self.resize(max(size.width(), min_width), size.height())
         self._resizing = False
         self._sync_buttons()
@@ -390,10 +451,27 @@ class OverlayWindow(QWidget):
         if activate:
             activate()
 
+    def fit_height(self, tool: str, content_height: int) -> None:
+        """Called by auto-height panels after each render: the window grows or
+        shrinks to show all of `content_height`, up to AUTO_HEIGHT_MAX of the
+        screen (the panel scrolls beyond that)."""
+        if tool != self.tool or tool not in AUTO_HEIGHT_TOOLS or tool not in self._panels:
+            return
+        panel = self._panels[tool]
+        chrome = self.height() - panel.height()          # header, margins, grip
+        limit = int(self.screen().availableGeometry().height() * AUTO_HEIGHT_MAX)
+        target = max(self.minimumHeight(), min(chrome + content_height, limit))
+        if abs(target - self.height()) > 2:
+            self._resizing = True
+            self.resize(self.width(), target)
+            self._resizing = False
+
     def _make_panel(self, tool: str) -> QWidget:
-        from app.ui import overlay_panels
+        from app.ui import overlay_live, overlay_panels
 
         return {
+            "missions": overlay_live.MissionsPanel,
+            "session": overlay_live.SessionPanel,
             "maps": overlay_panels.MapsPanel,
             "mining": overlay_panels.MiningPanel,
             "salvage": overlay_panels.SalvagePanel,
@@ -435,8 +513,8 @@ class OverlayWindow(QWidget):
 
     # -- visibility / click-through ------------------------------------------------------
     def toggle(self) -> None:
-        if self.isVisible():
-            self.hide()
+        if self.is_shown():
+            self.hide_overlay()
         else:
             self.show_overlay()
 
@@ -444,9 +522,16 @@ class OverlayWindow(QWidget):
         """Shows it with the mouse and keyboard (the game lets go of the
         pointer once it loses focus); in click-through mode it's shown
         without taking focus, so the game keeps it."""
-        pos = self.state.get("pos")
+        pos = self.state.get(self._pos_key)
         if pos:
             self._anchor = QPoint(*pos)
+        if self._host is not None:
+            self.show()
+            if self._anchor is not None:
+                self.move(self._anchor)
+            self._host.present(passive=self.click_through)
+            self.keep_inside()
+            return
         self.show()
         self.raise_()
         if self._anchor is not None:
@@ -468,8 +553,9 @@ class OverlayWindow(QWidget):
             QTimer.singleShot(0, lambda: _skip_taskbar(int(self.winId())))
 
     def _update_shield(self) -> None:
-        """Shield under the overlay while it takes the mouse; none in click-through."""
-        if self.isVisible() and not self.click_through:
+        """Shield under the overlay while it takes the mouse; none in click-through.
+        (X11 only: the layer-shell surface is its own shield.)"""
+        if self._host is None and self.isVisible() and not self.click_through:
             if self._shield is None:
                 self._shield = _InputShield(
                     f"SC-Toolkit overlay has the mouse  ·  {hotkey_label('toggle-clickthrough')} "
@@ -486,6 +572,16 @@ class OverlayWindow(QWidget):
             self._shield.hide()
 
     def toggle_click_through(self) -> None:
+        if self._host is not None:
+            self.click_through = not self.click_through
+            self.frame.setProperty("clickThrough", self.click_through)
+            self.frame.style().unpolish(self.frame)
+            self.frame.style().polish(self.frame)
+            self.ct_banner.setVisible(self.click_through)
+            if self.tool is None:
+                self._fit_bar()
+            self.show_overlay()        # click-through shows it too, like on X11
+            return
         self.click_through = not self.click_through
         visible = self.isVisible()
         # Changing window flags re-creates the native window; show it again.
@@ -503,13 +599,17 @@ class OverlayWindow(QWidget):
 
     # -- persistence ------------------------------------------------------------------------
     def _on_opacity(self, value: int) -> None:
-        self.setWindowOpacity(value / 100)
+        self._apply_opacity(value)
         self.state["opacity"] = value
         self._save_timer.start()
 
     def _remember_size(self) -> None:
         if self.tool:
-            self.state.setdefault("sizes", {})[self.tool] = [self.width(), self.height()]
+            sizes = self.state.setdefault("sizes", {})
+            height = self.height()
+            if self.tool in AUTO_HEIGHT_TOOLS:   # its height follows the content
+                height = TOOLS[self.tool][2].height()
+            sizes[self.tool] = [self.width(), height]
             self._save_timer.start()
 
     def moveEvent(self, event):
@@ -520,7 +620,7 @@ class OverlayWindow(QWidget):
             self.move(self._anchor)
             return
         self._sync_hole()
-        self.state["pos"] = [self.x(), self.y()]
+        self.state[self._pos_key] = [self.x(), self.y()]
         self._save_timer.start()
 
     def _sync_hole(self) -> None:
@@ -546,13 +646,18 @@ class OverlayWindow(QWidget):
         if event.button() == Qt.LeftButton and self.header.geometry().contains(
                 self.frame.mapFrom(self, event.position().toPoint())):
             self._drag = event.globalPosition().toPoint() - self.pos()
+            if self._host is not None:   # surface coordinates (Wayland has no global ones)
+                self._drag = event.position().toPoint()
             event.accept()
             return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if getattr(self, "_drag", None) is not None:
-            self._anchor = event.globalPosition().toPoint() - self._drag
+            if self._host is not None:
+                self._anchor = self.mapToParent(event.position().toPoint()) - self._drag
+            else:
+                self._anchor = event.globalPosition().toPoint() - self._drag
             self.move(self._anchor)
             event.accept()
             return
@@ -566,7 +671,22 @@ class OverlayWindow(QWidget):
         super().mouseReleaseEvent(event)
 
 
-def run(parent_pid: int | None) -> int:
+class _NoToolTips(QObject):
+    """Swallows every tooltip in the overlay process. Over the game they're
+    in the way, and on the layer-shell surface each one is a popup window
+    that opens and closes (the user saw it as constant flicker)."""
+
+    def eventFilter(self, obj, event):
+        return event.type() == QEvent.ToolTip
+
+
+def _live_feed():
+    from app.ui import overlay_live
+
+    return overlay_live.feed()
+
+
+def run(parent_pid: int | None, layer_shell: bool = False) -> int:
     """Entry point of the overlay process (`sc-toolkit --overlay`)."""
     from app.theme import build_stylesheet
 
@@ -578,7 +698,16 @@ def run(parent_pid: int | None) -> int:
           file=sys.stderr, flush=True)
     app.setQuitOnLastWindowClosed(False)   # hidden overlay keeps running for the hotkeys
     app.setStyleSheet(build_stylesheet())
-    overlay = OverlayWindow()
+    no_tooltips = _NoToolTips(app)
+    app.installEventFilter(no_tooltips)
+    host = None
+    if layer_shell:
+        from app.ui.layer_overlay import LayerHost
+
+        host = LayerHost(f"SC-Toolkit overlay has the mouse  ·  {hotkey_label('toggle-clickthrough')} "
+                         f"gives it back to the game  ·  {hotkey_label('toggle-overlay')} hides the overlay")
+        print("overlay: layer-shell surface (KDE Wayland)", file=sys.stderr, flush=True)
+    overlay = OverlayWindow(host=host)
 
     server = ipc.CommandServer(ipc.OVERLAY)
     if not server.listen():
@@ -587,8 +716,10 @@ def run(parent_pid: int | None) -> int:
         "toggle": overlay.toggle,
         "toggle-overlay": overlay.toggle,
         "show": overlay.show_overlay,
-        "hide": overlay.hide,
+        "hide": overlay.hide_overlay,
         "toggle-clickthrough": overlay.toggle_click_through,
+        "live-log-on": lambda: _live_feed().set_enabled(True),
+        "live-log-off": lambda: _live_feed().set_enabled(False),
         "quit": app.quit,
     }
     server.command.connect(lambda cmd: actions.get(cmd, lambda: None)())

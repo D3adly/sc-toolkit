@@ -11,6 +11,8 @@ Per contract (keys of each record):
   max_players, can_share, once_only
 - rewards: rep, blueprints [{chance, items}], items [{name, amount}] (e.g.
   scrip), payout (fixed amounts only), calculated_payout, partial_payout
+- combat: "ship" and/or "fps" when the mission spawns hostile ships /
+  hostile people on foot (see `_Extractor.combat`)
 - work: stages [{name, kind, starts_active}] and flow (the template's
   mission steps), cargo [{resource, min_scu, max_scu}], salvage_percent,
   est_minutes, deadline_minutes, difficulty and difficulty_detail
@@ -21,6 +23,9 @@ all); the server works it out when the mission is offered.
 The log's marker lines carry `contractDefinitionId` (a contract's `id`) and
 the debug name. Instanced contracts log the debug name with a `_<n>` suffix
 and an id that isn't in the data; they're matched by name instead.
+
+Also the category of every crafting blueprint (`blueprint_category`), keyed
+by the item name the log shows.
 
 Extracted once per game build (Game2.dcb, plus the installed localization)
 and cached as JSON, like app.mining.
@@ -37,7 +42,7 @@ from app.datacore import DataCore
 
 GAME2_ENTRY = "Data\\Game2.dcb"
 CACHE = config.CACHE_DIR / "contracts"
-FORMAT = 4  # bump when the extracted shape changes
+FORMAT = 6  # bump when the extracted shape changes
 # A localization installed next to the game (e.g. StarStrings) overrides the
 # packed one, and the log shows its names ("Received Blueprint: …").
 INSTALLED_INI = ("Data", "Localization", "english", "global.ini")
@@ -118,6 +123,7 @@ class _Extractor:
         self._records: dict[str, dict | None] = {}
         self._items: dict[str, str] = {}
         self._templates: dict[str, dict] = {}
+        self._tag_names: dict[str, str] = {}
 
     def record(self, ref: str | None, depth: int = 3) -> dict | None:
         if not isinstance(ref, str) or not ref.startswith("@"):
@@ -160,7 +166,7 @@ class _Extractor:
             return {}
         if ref in self._templates:
             return self._templates[ref]
-        t = self.dc.record(ref[1:], max_depth=10) or {}
+        t = self.dc.record(ref[1:], max_depth=14) or {}
         display = t.get("contractDisplayInfo") or {}
         cls = t.get("contractClass") or {}
         deadline = ((cls.get("autoFinishSettings") or {}).get("contractDeadline") or {})
@@ -187,9 +193,61 @@ class _Extractor:
             "stages": stages,
             "flow": flow,
             "cargo": self.cargo(t.get("contractProperties") or []),
+            "spawns": self.spawn_properties(t),   # not saved; contracts override them
         }
         self._templates[ref] = summary
         return summary
+
+    # -- combat ------------------------------------------------------------------
+    # The game data has no "combat type". What a mission spawns says it: ship
+    # and NPC spawn properties. NPCs on your side carry missionAlliedMarker,
+    # and the rest are hostile unless tagged unarmed / not to be killed
+    # (civilians, hostages). Ships carry only tags, so a ship group counts as
+    # hostile when it's an
+    # AI-flown combat group (HumanPilot<skill>) or a mission target/criminal,
+    # and isn't marked as civilian, the ship to defend, navy allies, a legal
+    # ship, or a prop that ignores hostility (salvage wreck, cargo hulk).
+    SPAWN_TYPES = ("MissionPropertyValue_ShipSpawnDescriptions", "MissionPropertyValue_NPCSpawnDescriptions")
+    HOSTILE_SHIP_TAGS = {"Target", "Criminal"}
+    FRIENDLY_SHIP_TAGS = {"Civilians", "DefendShip", "UEE_Navy", "Legal", "IgnoreHostility"}
+    HARMLESS_NPC_TAGS = {"Unarmed", "NoKill"}
+
+    def spawn_properties(self, root) -> dict[str, dict]:
+        """Mission property name -> its ship/NPC spawn value."""
+        out = {}
+        for prop in _find_all(root, "MissionProperty"):
+            value = prop.get("value")
+            if isinstance(value, dict) and value.get("_type") in self.SPAWN_TYPES:
+                out[prop.get("missionVariableName") or str(len(out))] = value
+        return out
+
+    def _tags(self, *lists) -> set[str]:
+        names = set()
+        for tag_list in lists:
+            for ref in (tag_list or {}).get("tags") or []:
+                if not isinstance(ref, str) or not ref.startswith("@"):
+                    continue
+                if ref not in self._tag_names:
+                    self._tag_names[ref] = (self.dc.record(ref[1:], max_depth=1) or {}).get("tagName") or ""
+                names.add(self._tag_names[ref])
+        return names
+
+    def combat(self, spawns: dict[str, dict]) -> list[str]:
+        kinds = set()
+        for value in spawns.values():
+            for ship in _find_all(value, "SpawnDescription_Ship"):
+                tags = self._tags(ship.get("tags"), ship.get("entityTags"))
+                hostile = (any(t.startswith("HumanPilot") for t in tags) or tags & self.HOSTILE_SHIP_TAGS)
+                if hostile and not tags & self.FRIENDLY_SHIP_TAGS:
+                    kinds.add("ship")
+            for npc in _find_all(value, "SpawnDescription_NPCOption"):
+                auto = npc.get("autoSpawnSettings") or {}
+                if auto.get("missionAlliedMarker"):
+                    continue
+                tags = self._tags(auto.get("positiveCharacterTags"), npc.get("identifierTags"))
+                if not tags & self.HARMLESS_NPC_TAGS:
+                    kinds.add("fps")
+        return [k for k in ("ship", "fps") if k in kinds]
 
     def mission_type(self, ref) -> str:
         rec = self.record(ref, depth=0) or {}
@@ -272,6 +330,10 @@ class _Extractor:
             "calculated_payout": False,
             "partial_payout": template.get("partial_payout", False),
             "items": [],             # [{name, amount}]
+            # The contract's own spawn settings override the template's.
+            "combat": self.combat({**template.get("spawns", {}),
+                                   **self.spawn_properties(handler.get("contractParams") or {}),
+                                   **self.spawn_properties(c)}),
         }
         for prop in _find_all(c.get("paramOverrides") or {}, "MissionProperty"):
             if prop.get("missionVariableName") == "CompletionPercentage_BP":
@@ -360,7 +422,31 @@ def _extract(channel_root: Path, progress) -> dict:
                 info["id"] = guid
                 contracts[guid] = info
                 by_name.setdefault(debug, guid)
-    return {"format": FORMAT, "contracts": contracts, "by_name": by_name}
+    return {"format": FORMAT, "contracts": contracts, "by_name": by_name,
+            "blueprint_categories": _blueprint_categories(dc, ex)}
+
+
+# StarStrings-style class/size/grade prefix on component names ("Ind/2/B BroadSpec").
+_GRADE_PREFIX_RE = re.compile(r"^[A-Za-z]{3}/\d/[A-D] ")
+
+
+def _blueprint_categories(dc: DataCore, ex: _Extractor) -> dict[str, str]:
+    """Item name -> the game's blueprint category ("FPSArmours",
+    "VehicleComponentS2", …). Names are added with and without a
+    class/size/grade prefix: logs written before such a localization was
+    installed carry the plain names."""
+    out: dict[str, str] = {}
+    for rec_name in dc.record_names("CraftingBlueprintRecord."):
+        bp = (dc.record(rec_name, max_depth=2) or {}).get("blueprint") or {}
+        entity = (bp.get("processSpecificData") or {}).get("entityClass")
+        category = bp.get("category")
+        if not isinstance(entity, str) or not isinstance(category, str):
+            continue
+        name = ex.item_name(entity)
+        category = category.split(".", 1)[-1]
+        out.setdefault(name, category)
+        out.setdefault(_GRADE_PREFIX_RE.sub("", name), category)
+    return out
 
 
 class Contracts:
@@ -369,6 +455,7 @@ class Contracts:
     def __init__(self, data: dict):
         self._contracts: dict[str, dict] = data.get("contracts") or {}
         self._by_name: dict[str, str] = data.get("by_name") or {}
+        self._bp_categories: dict[str, str] = data.get("blueprint_categories") or {}
 
     def __len__(self) -> int:
         return len(self._contracts)
@@ -389,6 +476,11 @@ class Contracts:
             if all(c.get(k) == v for k, v in fields.items()):
                 out.append(c)
         return out
+
+    def blueprint_category(self, name: str) -> str | None:
+        """The game's category of a blueprint, by the name in "Received
+        Blueprint: <name>", e.g. "FPSWeapons" or "VehicleWeaponsS3"."""
+        return self._bp_categories.get(name) or self._bp_categories.get(_GRADE_PREFIX_RE.sub("", name))
 
     def find(self, contract_id: str | None = None, debug_name: str | None = None) -> dict | None:
         """By the log's contractDefinitionId, else by its debug name (with or

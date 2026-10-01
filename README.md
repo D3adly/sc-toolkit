@@ -82,8 +82,9 @@ it adds a few tools that read their data straight from your own game files.
 - **My Stats.** Your statistics from the game's own logs (`Game.log` and the
   `logbackups` folder, as far back as the game keeps them), all time or for your last
   session. It covers play time, missions (completed, failed, reputation, contractors),
-  blueprints received, money (awards, shop and commodity trades), travel, ships
-  flown, and deaths and losses.
+  blueprints received (grouped by type, with a type filter), travel, ships flown,
+  deaths and losses, and refinery work orders completed. Money isn't counted: most
+  mission rewards aren't in the log, so the totals couldn't be right.
 - **Live log reader** (the **LIVE LOG** switch, off by default). While you play, it
   follows the current session's `Game.log`, from the moment the game started, even if
   SC-Toolkit was opened later. It feeds the overlay's Missions and Session tabs. It
@@ -102,13 +103,16 @@ per game patch and cached, so it's always current and works offline.
 
 A small always-on-top bar with five tabs, picked by icon:
 
-- **Missions** (needs LIVE LOG): your active missions with contractor, reputation and
-  objectives. It also lists the blueprints each mission can drop, marking the ones
-  you already have, and the missions you finished this session with what they gave you.
-- **Session** (needs LIVE LOG): your ship, location, jurisdiction, and whether you're in
-  an armistice zone or monitored space. It also shows what you've done this session
-  (time played, missions, reputation, trades, quantum jumps, deaths), blueprints
-  received and recent moments.
+- **Missions** (needs LIVE LOG): every mission shows its contractor, reputation and
+  item rewards, its type (with Ship combat / FPS combat when it spawns enemies), the
+  next objective and how many of its possible blueprints you own. Click one for its
+  objectives, details and blueprint list. The mission whose objective just changed is
+  highlighted and moves to the top. Finished missions follow: completed ones, then
+  failed or abandoned ones in red.
+- **Session** (needs LIVE LOG): your ship, location and whether you're in monitored
+  space. It also shows what you've done this session (time played, missions,
+  reputation, quantum jumps, deaths, refinery orders), blueprints received and recent
+  moments.
 - **Maps**, **Mining** and **Salvage**: compact versions of the launcher tools.
 
 Picking a tab opens its panel underneath; picking it again folds it back to the bar.

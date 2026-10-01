@@ -16,6 +16,7 @@ datas = [
     (str(assets / "background.jpg"), "assets"),
     (str(assets / "app_icon.png"), "assets"),
     (str(assets / "icons" / "*.png"), "assets/icons"),
+    (str(assets / "icons" / "glyphs" / "*.png"), "assets/icons/glyphs"),
 ]
 
 # The app only uses QtCore, QtGui and QtWidgets; keep the rest of Qt out.

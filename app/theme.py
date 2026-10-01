@@ -750,6 +750,36 @@ QInputDialog QLineEdit {{
     color: {text_secondary};
     font-size: 12px;
 }}
+#MoreButton {{
+    background: transparent;
+    border: none;
+    color: {info};
+    font-size: 11px;
+    padding: 2px 0;
+    text-align: left;
+}}
+#MoreButton:hover {{
+    color: {text_primary};
+    text-decoration: underline;
+}}
+#GlyphFilter {{
+    background: {bg_input};
+    border: 1px solid {border};
+    border-radius: 6px;
+    color: {text_muted};
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 9px 5px 7px;
+}}
+#GlyphFilter:hover {{
+    background: {bg_hover};
+    color: {text_primary};
+}}
+#GlyphFilter:checked {{
+    background: {accent_soft};
+    border: 1px solid {accent};
+    color: {text_primary};
+}}
 
 /* -- overlay: live missions / session ------------------------------------ */
 #LiveCard {{
@@ -763,6 +793,18 @@ QInputDialog QLineEdit {{
 #LiveCard[state="reward"] {{
     background: rgba(156, 196, 140, 0.20);
     border: 1px solid {ok};
+}}
+#LiveCard[state="tracked"] {{
+    background: rgba(227, 163, 59, 0.10);
+    border: 1px solid {accent_dim};
+}}
+#LiveCard[state="failed"] {{
+    background: rgba(226, 106, 85, 0.10);
+    border: 1px solid rgba(226, 106, 85, 0.45);
+}}
+#LiveCard[flash="true"] {{
+    background: rgba(227, 163, 59, 0.32);
+    border: 1px solid {accent};
 }}
 #LiveReward {{
     color: #d7ecc9;

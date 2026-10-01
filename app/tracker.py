@@ -19,10 +19,11 @@ from PySide6.QtCore import QObject, Signal
 
 from app.gamelog import Event
 
-# A blueprint (or aUEC award) arriving this soon after a mission completes
-# came from it. The log never links them by id.
+# A blueprint arriving this soon after a mission completes came from it. The log never links them by id.
 BLUEPRINT_WINDOW_SECONDS = 15
-MAX_FINISHED = 6
+# Completed refinery work orders are announced again each time you join a
+# server (about a minute after the join); those repeats aren't completions.
+REFINERY_REMINDER_SECONDS = 120
 MAX_FEED = 12
 
 
@@ -74,8 +75,8 @@ class Mission:
     outcome: str = ""                   # "", Complete, Fail, Abandon, Withdrawn…
     ended: datetime | None = None
     blueprints: list[str] = field(default_factory=list)
-    awarded: int = 0                    # aUEC notifications right after completion
     server_objectives: bool = False     # objective states come from server pushes (exact)
+    objective_changed: datetime | None = None   # last time its shown objectives changed
 
     @property
     def active(self) -> bool:
@@ -106,24 +107,11 @@ class FeedItem:
     text: str
 
 
-@dataclass
-class Payout:
-    """What a completed mission paid, as far as we can tell."""
-    auec: int = 0                # logged "Awarded" right after it, else the contract's fixed reward
-    merits: int = 0
-    items: list[tuple[str, int]] = field(default_factory=list)   # (name, amount), e.g. scrip
-    from_log: bool = False       # the aUEC was in the log (not only the game data)
-    calculated: bool = False     # the contract pays a server-calculated amount we can't see
-
-
 class SessionTracker(QObject):
     changed = Signal()
 
-    def __init__(self, parent=None, lookup=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        # Mission → contract details (app.contracts) or None; used for
-        # payouts. Looked up when asked, so it works once the data loads.
-        self.lookup = lookup or (lambda _m: None)
         self.reset()
 
     def reset(self) -> None:
@@ -137,16 +125,11 @@ class SessionTracker(QObject):
         self._objective_texts: dict[str, tuple[str, bool]] = {}   # objective id → (text, hidden)
         self.ship = ""
         self.location = ""
-        self.jurisdiction = ""
-        self.armistice: bool | None = None
         self.monitored: bool | None = None
         self.comm_down = False
         self.qt_target = ""
-        self.awarded = 0
-        self.shop_spent = 0.0
-        self.shop_sold = 0.0
-        self.commodity_spent = 0.0
-        self.commodity_sold = 0.0
+        self.joined: datetime | None = None   # last server join
+        self.refinery_done = 0
         self.rep_earned = 0
         self.completed = 0
         self.failed = 0
@@ -163,37 +146,7 @@ class SessionTracker(QObject):
     def finished_missions(self) -> list[Mission]:
         done = [m for m in self.missions.values() if not m.active]
         done.sort(key=lambda m: m.ended or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-        return done[:MAX_FINISHED]
-
-    @property
-    def trade_net(self) -> float:
-        return self.commodity_sold - self.commodity_spent
-
-    def payout(self, m: Mission) -> Payout:
-        """A completed mission counts as paid: the aUEC logged right after it
-        if any, else the fixed reward in the contract data; plus its item
-        rewards."""
-        info = self.lookup(m) or {}
-        p = Payout(calculated=bool(info.get("calculated_payout")))
-        fixed = info.get("payout") or {}
-        if m.awarded:
-            p.auec, p.from_log = m.awarded, True
-        elif fixed.get("currency") == "aUEC":
-            p.auec = fixed.get("amount") or 0
-        if fixed.get("currency") == "merits":
-            p.merits = fixed.get("amount") or 0
-        p.items = [(i["name"], i["amount"]) for i in info.get("items") or []]
-        return p
-
-    @property
-    def mission_payouts(self) -> int:
-        """aUEC from completed missions (logged or fixed rewards)."""
-        return sum(self.payout(m).auec for m in self.missions.values() if m.outcome == "Complete")
-
-    @property
-    def other_awards(self) -> int:
-        """Logged aUEC awards that didn't follow a mission completion."""
-        return self.awarded - sum(m.awarded for m in self.missions.values())
+        return done
 
     # -- events -----------------------------------------------------------------
     def new_session(self, session_id: str, channel: str = "") -> None:
@@ -201,14 +154,26 @@ class SessionTracker(QObject):
         self.session, self.channel = session_id, channel
         self.changed.emit()
 
+    OBJECTIVE_KINDS = frozenset({"objective", "objective_upserted", "objective_result", "objective_text",
+                                 "objective_complete", "objective_withdrawn"})
+
     def add(self, event: Event) -> None:
         handler = getattr(self, "_on_" + event.kind, None)
         if event.time is not None:
             self.last_time = event.time
         if handler is None:
             return
+        before = self._objective_state() if event.kind in self.OBJECTIVE_KINDS else None
         handler(event, event.data)
+        if before is not None:
+            # The mission whose objectives just moved on is the one being played.
+            for mid, state in self._objective_state().items():
+                if state != before.get(mid):
+                    self.missions[mid].objective_changed = event.time
         self.changed.emit()
+
+    def _objective_state(self) -> dict[str, tuple]:
+        return {m.id: tuple((o.text, o.state) for o in m.visible_objectives) for m in self.active_missions()}
 
     def _say(self, event: Event, kind: str, text: str) -> None:
         self.feed.appendleft(FeedItem(event.time, kind, text))
@@ -228,6 +193,7 @@ class SessionTracker(QObject):
 
     def _on_join_pu(self, e: Event, d: dict) -> None:
         self.shard = d.get("shard", "")
+        self.joined = e.time
 
     def _on_contract_accepted(self, e: Event, d: dict) -> None:
         m = self._mission(d.get("mission_id"))
@@ -379,40 +345,11 @@ class SessionTracker(QObject):
         self.blueprints.append((e.time, name, source.title if source else ""))
         self._say(e, "good", f"Blueprint: {name}")
 
-    def _on_awarded(self, e: Event, d: dict) -> None:
-        self.awarded += d.get("amount") or 0
-        source = self._just_completed(e.time)
-        if source is not None:
-            source.awarded += d.get("amount") or 0
-        self._say(e, "good", f"Awarded {d.get('amount', 0):,} aUEC")
-
-    def _on_shop_buy(self, e: Event, d: dict) -> None:
-        self.shop_spent += d.get("price") or 0
-
-    def _on_shop_sell(self, e: Event, d: dict) -> None:
-        self.shop_sold += d.get("price") or 0
-
-    def _on_commodity_buy(self, e: Event, d: dict) -> None:
-        self.commodity_spent += d.get("price") or 0
-
-    def _on_commodity_sell(self, e: Event, d: dict) -> None:
-        self.commodity_sold += d.get("price") or 0
-        self._say(e, "good", f"Sold cargo for {d.get('price', 0):,.0f} aUEC")
-
     def _on_ship_boarded(self, e: Event, d: dict) -> None:
         self.ship = d.get("ship", "")
 
     def _on_location(self, e: Event, d: dict) -> None:
         self.location = d.get("location", "")
-
-    def _on_jurisdiction(self, e: Event, d: dict) -> None:
-        self.jurisdiction = d.get("jurisdiction", "")
-
-    def _on_armistice_enter(self, e: Event, d: dict) -> None:
-        self.armistice = True
-
-    def _on_armistice_leave(self, e: Event, d: dict) -> None:
-        self.armistice = False
 
     def _on_monitored_space(self, e: Event, d: dict) -> None:
         self.monitored = d.get("state") == "Entered"
@@ -439,7 +376,8 @@ class SessionTracker(QObject):
         self._say(e, "bad", f"Lost {d.get('ship', 'ship')} in a collision")
 
     def _on_refinery_complete(self, e: Event, d: dict) -> None:
+        if (e.time and self.joined
+                and 0 <= (e.time - self.joined).total_seconds() <= REFINERY_REMINDER_SECONDS):
+            return   # the repeat after joining a server
+        self.refinery_done += 1
         self._say(e, "good", f"Refinery order done at {d.get('location', '?')}")
-
-    def _on_low_fuel(self, e: Event, d: dict) -> None:
-        self._say(e, "bad", "Low fuel")

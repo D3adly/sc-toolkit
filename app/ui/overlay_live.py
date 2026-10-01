@@ -13,6 +13,7 @@ from __future__ import annotations
 import html
 import re
 import threading
+import time
 import traceback
 from datetime import datetime, timezone
 
@@ -22,11 +23,12 @@ from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QPushBut
 
 from app import channel as channel_mod, contracts, gamelog, ipc, settings
 from app.stats import pretty
-from app.tracker import BLUEPRINT_WINDOW_SECONDS, Mission, Payout, SessionTracker
+from app.tracker import BLUEPRINT_WINDOW_SECONDS, Mission, SessionTracker
 from app.ui.overlay_panels import _Clickable, _ScrollPanel, _label, _log
 
 RENDER_DELAY_MS = 250      # coalesces the burst of events when catching up
 CLOCK_MS = 30_000          # refreshes "12 min ago" style times
+RESTORE_SCROLL_MS = 300    # gives up waiting for a rebuilt page to reach the old scroll position
 
 
 class LiveFeed(QObject):
@@ -38,7 +40,7 @@ class LiveFeed(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.reader = gamelog.LiveReader(lambda: settings.current().game_root, self)
-        self.tracker = SessionTracker(self, lookup=lambda m: self.contract(m))
+        self.tracker = SessionTracker(self)
         self.contracts: contracts.Contracts | None = None
         self.owned: set[str] = set()        # blueprint names received before this session
         self.enabled = settings.load().gamelog_live_enabled
@@ -145,10 +147,6 @@ def _chip(text: str, tone: str = "", tip: str = "") -> QLabel:
     return lbl
 
 
-def _money(value: float) -> str:
-    return f"{value:,.0f}"
-
-
 class _LivePanel(_ScrollPanel):
     """Shared plumbing: renders on feed changes (coalesced), shows the
     reader's state when there's nothing to show yet."""
@@ -169,13 +167,30 @@ class _LivePanel(_ScrollPanel):
         if self.isVisible() and not self._render_timer.isActive():
             self._render_timer.start()
 
-    def _new_page(self):
-        # Live updates rebuild the page: keep the reader's scroll position.
+    def _render(self) -> None:
+        """Rebuilds the page (live updates, clicks) and keeps the reader's
+        scroll position. The new page gets its height a little later, so the
+        position goes back once the scroll range has grown enough for it."""
         bar = self.scroll.verticalScrollBar()
         keep = bar.value()
-        page = super()._new_page()
-        QTimer.singleShot(0, lambda: bar.setValue(min(keep, bar.maximum())))
-        return page
+        self._build()
+        if keep <= 0:
+            return
+        if bar.maximum() >= keep:
+            bar.setValue(keep)
+            return
+
+        pending = [True]
+
+        def restore(_low: int = 0, high: int = 0, final: bool = False) -> None:
+            if pending[0] and (high >= keep or final):
+                pending[0] = False
+                bar.setValue(min(keep, bar.maximum()))
+                bar.rangeChanged.disconnect(restore)
+
+        bar.rangeChanged.connect(restore)
+        # If the page ends up shorter than the old position: as far down as it goes.
+        QTimer.singleShot(RESTORE_SCROLL_MS, lambda: restore(final=True))
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -206,14 +221,17 @@ class _LivePanel(_ScrollPanel):
             return True
         return False
 
-    def _render(self) -> None:
+    def _build(self) -> None:
         raise NotImplementedError
 
 
 # -- Missions ------------------------------------------------------------------------
-REWARD_SECONDS = 60        # a completed mission shows its green reward block this long
-CARD_HEIGHT = 100          # every mission block's collapsed height
-OTHER_GROUP = "Other"
+REWARD_SECONDS = 60        # a completed mission stays in the active list (green) this long
+CARD_HEIGHT = 118          # every mission block's collapsed height; expanded is never smaller
+FLASH_RECENT_SECONDS = 20  # an objective change this recent (log time) is new to the player
+FLASH_MS = 700             # the tracked mission's one blink
+COMBAT_TAGS = {"ship": "Ship combat", "fps": "FPS combat"}
+OUTCOMES = {"Complete": "Completed", "Fail": "Failed", "Abandon": "Abandoned"}   # the log's words → ours
 _CLASS_PREFIX_RE = re.compile(r"^[A-Za-z]+/\d+/[A-Za-z]+\s+")
 
 
@@ -250,13 +268,13 @@ def _mission_title(m: Mission, info: dict | None) -> str:
 
 
 def _contractor(m: Mission, info: dict | None) -> str:
-    """Who issued it: the contract's faction/guild from the game data, else
-    the generator's name (e.g. 'Adagio_Generator' → 'Adagio')."""
+    """Who issued it (and whose reputation it pays): the contract's
+    contractor from the game data, else the generator's name."""
     if info and info.get("contractor"):
         return info["contractor"]
     if m.generator:
         return pretty(m.generator.replace("_Generator", "").replace("Generator", ""))
-    return OTHER_GROUP
+    return "Unknown contractor"
 
 
 def _reward_age(m: Mission) -> float | None:
@@ -267,107 +285,151 @@ def _reward_age(m: Mission) -> float | None:
     return age if 0 <= age < REWARD_SECONDS else None
 
 
-def _payout_lines(p: Payout) -> list[str]:
-    lines = []
-    if p.auec:
-        lines.append(f"+{p.auec:,} aUEC")
-    if p.merits:
-        lines.append(f"+{p.merits:,} merits")
-    lines += [f"+{amount} {name}" for name, amount in p.items]
-    return lines
+def _activity(m: Mission) -> datetime:
+    """When the mission last moved: objective change, end, or acceptance."""
+    times = [t for t in (m.objective_changed, m.ended, m.accepted) if t is not None]
+    return max(times) if times else datetime.min.replace(tzinfo=timezone.utc)
 
 
-def _card(state: str = "", clickable: bool = False, fixed: bool = True) -> tuple[QFrame, QVBoxLayout]:
-    card = _Clickable(objectName="LiveCard") if clickable else QFrame(objectName="LiveCard")
+def _rewards(m: Mission, info: dict | None) -> list[QLabel]:
+    """Reputation and non-aUEC rewards (merits, items such as scrip). aUEC
+    isn't shown: most contracts pay a rate the game calculates, which is in
+    neither the game files nor the log."""
+    chips = []
+    rep = m.rep if m.rep is not None else (info or {}).get("rep")
+    if rep:
+        chips.append(_chip(f"+{rep:,} rep", tip="Reputation with the contractor"))
+    fixed = (info or {}).get("payout") or {}
+    if fixed.get("currency") == "merits":
+        chips.append(_chip(f"+{fixed['amount']:,} merits", "good"))
+    for item in (info or {}).get("items") or []:
+        chips.append(_chip(f"+{item['amount']} {item['name']}", "good", "Item reward"))
+    return chips
+
+
+def _tags(info: dict | None) -> list[QLabel]:
+    if not info:
+        return []
+    tags = []
+    if info.get("type"):
+        tags.append(_chip(info["type"], "info", "Mission type"))
+    for kind in info.get("combat") or []:
+        tags.append(_chip(COMBAT_TAGS[kind], "info",
+                          "The mission spawns hostile ships" if kind == "ship"
+                          else "The mission spawns hostile people on foot"))
+    if info.get("illegal"):
+        tags.append(_chip("Illegal", "bad"))
+    return tags
+
+
+def _row(v: QVBoxLayout, widgets: list[QWidget], lead: QWidget | None = None) -> None:
+    row = QHBoxLayout()
+    row.setSpacing(4)
+    if lead is not None:
+        row.addWidget(lead)
+    for w in widgets:
+        row.addWidget(w)
+    row.addStretch(1)
+    v.addLayout(row)
+
+
+def _possible_blueprints(info: dict | None, owned: set[str]) -> list[tuple[str, bool]]:
+    items = sorted({name for pool in (info or {}).get("blueprints") or [] for name in pool["items"]})
+    return [(n, blueprint_key(n) in owned) for n in items]
+
+
+def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: bool, toggle,
+                  state: str = "", flash: bool = False, reward_age: float | None = None) -> QFrame:
+    """Every mission looks the same: title, contractor, rewards, tags, the
+    next objective (or how it ended), blueprints owned out of possible.
+    A click expands it in place (objectives, details, blueprints); it never
+    gets smaller than the collapsed block."""
+    card = _Clickable(objectName="LiveCard")
+    card.clicked.connect(toggle)
     if state:
         card.setProperty("state", state)
-    if fixed:
+    if flash:
+        card.setProperty("flash", "true")
+    if expanded:
+        card.setMinimumHeight(CARD_HEIGHT)
+    else:
         card.setFixedHeight(CARD_HEIGHT)
     v = QVBoxLayout(card)
     v.setContentsMargins(10, 8, 10, 8)
     v.setSpacing(3)
-    return card, v
 
-
-def _title_row(v: QVBoxLayout, title: str, info: dict | None, right: list[QWidget],
-               wrap: bool = False) -> None:
+    # Title, and when / how it ended
     head = QHBoxLayout()
     head.setSpacing(6)
     tip = ""
     if info and info.get("description"):
         tip = "<p style='white-space:pre-wrap'>" + html.escape(info["description"][:1500]) + "</p>"
-    t = _label(title, "LiveTitle", tip, wrap=True) if wrap else _Elided(title, "LiveTitle", tip or title)
-    head.addWidget(t, stretch=1)
-    for w in right:
-        head.addWidget(w, alignment=Qt.AlignTop)
+    title = _mission_title(m, info)
+    head.addWidget(_label(title, "LiveTitle", tip, wrap=True) if expanded else _Elided(title, "LiveTitle", tip or title),
+                   stretch=1)
+    if m.active:
+        head.addWidget(_label(_ago(m.accepted), "LiveMuted", "Time since you accepted it"), alignment=Qt.AlignTop)
+    elif m.outcome == "Complete":
+        head.addWidget(_chip("COMPLETE", "good"), alignment=Qt.AlignTop)
+    else:
+        head.addWidget(_chip(OUTCOMES.get(m.outcome, m.outcome).upper(), "bad"), alignment=Qt.AlignTop)
+    head.addWidget(_label("▾" if expanded else "▸", "LiveMuted"), alignment=Qt.AlignTop)
     v.addLayout(head)
 
+    _row(v, _rewards(m, info), _Elided(_contractor(m, info), "LiveMuted", "Issued by (reputation goes to them)"))
+    _row(v, _tags(info))
 
-def _chips(v: QVBoxLayout, m: Mission, info: dict | None) -> None:
-    row = QHBoxLayout()
-    row.setSpacing(4)
-    rep = m.rep if m.rep is not None else (info or {}).get("rep")
-    if rep:
-        row.addWidget(_chip(f"+{rep:,} rep"))
-    fixed = (info or {}).get("payout")
-    if fixed:
-        row.addWidget(_chip(f"{fixed['amount']:,} {fixed['currency']}", "good", "Fixed reward in the game data"))
-    for item in (info or {}).get("items") or []:
-        row.addWidget(_chip(f"{item['amount']} {item['name']}", "good", "Item reward"))
-    if info and info.get("difficulty"):
-        row.addWidget(_chip(info["difficulty"], "info", "Difficulty profile"))
-    row.addStretch(1)
-    v.addLayout(row)
-
-
-def _blueprints(info: dict | None, owned: set[str]) -> list[tuple[str, bool]]:
-    items = sorted({name for pool in (info or {}).get("blueprints") or [] for name in pool["items"]})
-    return [(n, blueprint_key(n) in owned) for n in items]
-
-
-def _active_card(m: Mission, info: dict | None, owned: set[str], expanded: bool, toggle) -> QFrame:
-    """Collapsed: a fixed-size block (title, rewards, current objective,
-    blueprint count). Click to expand: every objective and blueprint."""
-    card, v = _card(clickable=True, fixed=not expanded)
-    card.clicked.connect(toggle)
-    arrow = _label("▾" if expanded else "▸", "LiveMuted")
-    _title_row(v, _mission_title(m, info), info,
-               [_label(_ago(m.accepted), "LiveMuted", "Time since you accepted it"), arrow], wrap=expanded)
-    _chips(v, m, info)
-    bps = _blueprints(info, owned)
+    # The next objective, or how it ended
     objectives = m.visible_objectives
-    if not expanded:
-        current = m.current_objective
-        done = sum(1 for o in objectives if o.done)
+    current = m.current_objective
+    if m.active:
         if current is not None:
             v.addWidget(_Elided(f"○  {current.text}", "LiveText"))
         elif objectives:
             v.addWidget(_Elided(f"✓  {objectives[-1].text}", "LiveMuted"))
-        summary = []
-        if objectives:
-            summary.append(f"{done}/{len(objectives)} objectives")
-        if bps:
-            summary.append(f"blueprints {sum(1 for _n, o in bps if o)}/{len(bps)} owned")
-        elif m.blueprint_chance:
-            summary.append("blueprint chance")
-        v.addWidget(_Elided(" · ".join(summary) + ("  ·  click for details" if summary else ""), "LiveMuted"))
+    elif m.outcome == "Complete":
+        if m.blueprints:
+            v.addWidget(_Elided("Blueprint: " + ", ".join(m.blueprints), "LiveGood"))
+        elif reward_age is not None and reward_age < BLUEPRINT_WINDOW_SECONDS and (
+                m.blueprint_chance or (info or {}).get("blueprints")):
+            v.addWidget(_label("Blueprint: checking…", "LiveMuted"))   # the notice follows by a few seconds
+        else:
+            v.addWidget(_label(f"Completed {_clock(m.ended)}", "LiveMuted"))
+    else:
+        v.addWidget(_label(f"{OUTCOMES.get(m.outcome, m.outcome)} {_clock(m.ended)}", "LiveBad"))
+
+    possible = _possible_blueprints(info, owned)
+    if possible:
+        have = sum(1 for _n, o in possible if o)
+        v.addWidget(_label(f"Blueprints {have}/{len(possible)} owned", "LiveMuted",
+                           "Blueprints this mission can give, and how many of them you already have"))
+    elif m.blueprint_chance:
+        v.addWidget(_label("Blueprint chance", "LiveMuted"))
+
+    if not expanded:
         v.addStretch(1)
         return card
-    current = m.current_objective
-    for o in objectives:
-        mark = "✓" if o.done else ("▶" if o is current else "○")
-        v.addWidget(_label(f"{mark}  {o.text}", "LiveMuted" if o.done else "LiveText", wrap=True))
+
+    if objectives:
+        v.addWidget(_label("OBJECTIVES", "LiveGroup"))
+        for o in objectives:
+            mark = "✓" if o.done else ("▶" if o is current else "○")
+            v.addWidget(_label(f"{mark}  {o.text}", "LiveMuted" if o.done else "LiveText", wrap=True))
+    if not m.active and m.outcome == "Complete":
+        rewards = [c.text() for c in _rewards(m, info)]
+        v.addWidget(_label("REWARD", "LiveGroup"))
+        v.addWidget(_label("  ·  ".join(rewards) if rewards else "No reputation or item reward", "LiveText", wrap=True))
+        v.addWidget(_label("Blueprint received: " + ", ".join(m.blueprints) if m.blueprints
+                           else "No blueprint received", "LiveGood" if m.blueprints else "LiveMuted", wrap=True))
     _details(v, info)
-    if bps:
+    if possible:
         chance = max((pool.get("chance") or 0) for pool in info["blueprints"])
-        v.addWidget(_label(f"POSSIBLE BLUEPRINTS · {sum(1 for _n, o in bps if o)}/{len(bps)} OWNED", "LiveMuted",
-                           f"The mission can give one of these on completion ({chance:.0%} chance in the game "
-                           "data). ✓ = you already received it (from your logs)."))
-        for name, have in bps:
+        v.addWidget(_label(f"POSSIBLE BLUEPRINTS · {sum(1 for _n, o in possible if o)}/{len(possible)} OWNED",
+                           "LiveGroup", f"The mission can give one of these on completion ({chance:.0%} chance in "
+                           "the game data). ✓ = you already received it (from your logs)."))
+        for name, have in possible:
             v.addWidget(_label(f"✓  {name}" if have else f"•  {name}",
                                "LiveBlueprintOwned" if have else "LiveText", wrap=True))
-    elif m.blueprint_chance:
-        v.addWidget(_label("Blueprint chance on completion", "LiveMuted"))
     return card
 
 
@@ -383,8 +445,6 @@ def _details(v: QVBoxLayout, info: dict | None) -> None:
     if not info:
         return
     rows = []
-    if info.get("type"):
-        rows.append(("Type", info["type"] + (" · illegal" if info.get("illegal") else "")))
     where = info.get("systems", []) + info.get("locations", [])
     if where:
         rows.append(("Where", ", ".join(dict.fromkeys(where))))
@@ -405,8 +465,6 @@ def _details(v: QVBoxLayout, info: dict | None) -> None:
         rows.append(("Time", " · ".join(times)))
     if info.get("max_players") and info["max_players"] > 1:
         rows.append(("Players", f"up to {info['max_players']}"))
-    if (info.get("calculated_payout") and not info.get("payout")):
-        rows.append(("Payout", "calculated by the game when offered (see mobiGlas)"))
     detail = info.get("difficulty_detail") or {}
     if detail:
         tip = "<br>".join(f"<b>{html.escape(k.capitalize())}</b>: level {d['level']}, {html.escape(d['text'])}"
@@ -414,6 +472,7 @@ def _details(v: QVBoxLayout, info: dict | None) -> None:
         rows.append(("Difficulty", " · ".join(f"{k.split()[0]} {d['level']}" for k, d in detail.items()), tip))
     if not rows:
         return
+    v.addWidget(_label("DETAILS", "LiveGroup"))
     grid = QGridLayout()
     grid.setHorizontalSpacing(8)
     grid.setVerticalSpacing(1)
@@ -424,56 +483,38 @@ def _details(v: QVBoxLayout, info: dict | None) -> None:
     v.addLayout(grid)
 
 
-def _reward_card(m: Mission, info: dict | None, age: float, payout: Payout) -> QFrame:
-    """Replaces a mission's block for REWARD_SECONDS after it completes: the
-    mission counts as paid even when the game logs no payout."""
-    card, v = _card("reward")
-    _title_row(v, _mission_title(m, info), info, [_chip("COMPLETE", "good")])
-    rep = m.rep if m.rep is not None else (info or {}).get("rep")
-    rewards = _payout_lines(payout) + ([f"+{rep:,} rep"] if rep else [])
-    if not payout.auec and payout.calculated:
-        rewards.insert(0, "Paid (listed rate)")
-    v.addWidget(_Elided("  ·  ".join(rewards) or "Complete", "LiveReward",
-                        "Paid on completion. Most contracts pay a rate the game calculates when you accept; "
-                        "the amount isn't in the game files or the log, so it's shown only when known."))
-    if m.blueprints:
-        v.addWidget(_Elided("Blueprint: " + ", ".join(m.blueprints), "LiveReward"))
-    elif m.blueprint_chance or (info and info.get("blueprints")):
-        # The blueprint notification follows the completion by a few seconds.
-        waiting = age < BLUEPRINT_WINDOW_SECONDS
-        v.addWidget(_label("Blueprint: checking…" if waiting else "No blueprint this time", "LiveMuted"))
-    v.addStretch(1)
-    return card
-
-
-def _finished_card(m: Mission, info: dict | None, payout: Payout | None) -> QFrame:
-    card, v = _card("done", fixed=False)
-    tone = "good" if m.outcome == "Complete" else "bad"
-    _title_row(v, _mission_title(m, info), info, [_chip(m.outcome.upper(), tone)])
-    bits = [_contractor(m, info)]
-    if payout is not None:
-        rep = m.rep if m.rep is not None else (info or {}).get("rep")
-        bits += _payout_lines(payout) or (["paid (listed rate)"] if payout.calculated else [])
-        if rep:
-            bits.append(f"+{rep:,} rep")
-    v.addWidget(_Elided(" · ".join(bits), "LiveMuted"))
-    if m.blueprints:
-        v.addWidget(_Elided("Blueprint: " + ", ".join(m.blueprints), "LiveGood"))
-    return card
-
-
 class MissionsPanel(_LivePanel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._expanded: set[str] = set()     # mission ids opened by a click
-        # Re-renders when a reward block's time is up (or its blueprint window ends).
+        self._flashed: dict[str, datetime] = {}   # mission id -> objective change already blinked for
+        self._flash_until: dict[str, float] = {}  # mission id -> monotonic end of its blink
+        # Re-renders when a reward block's time is up (or its blueprint window ends), and to end a blink.
         self._expire = QTimer(self, singleShot=True, timeout=self._render)
 
     def _toggle(self, mission_id: str) -> None:
         self._expanded ^= {mission_id}
         self._render()
 
-    def _render(self) -> None:
+    def _tracked(self, active: list[Mission]) -> Mission | None:
+        """The mission you're playing: the one whose objectives changed last
+        (the game doesn't log which mission is tracked)."""
+        moved = [m for m in active if m.objective_changed is not None]
+        return max(moved, key=lambda m: m.objective_changed) if moved else None
+
+    def _update_flash(self, tracked: Mission | None) -> None:
+        """One blink when the tracked mission's objective changes while you
+        play (not for changes replayed from earlier in the log)."""
+        now = time.monotonic()
+        self._flash_until = {k: t for k, t in self._flash_until.items() if t > now}
+        if tracked is None or self._flashed.get(tracked.id) == tracked.objective_changed:
+            return
+        self._flashed[tracked.id] = tracked.objective_changed
+        age = (datetime.now(timezone.utc) - tracked.objective_changed).total_seconds()
+        if 0 <= age < FLASH_RECENT_SECONDS:
+            self._flash_until[tracked.id] = now + FLASH_MS / 1000
+
+    def _build(self) -> None:
         if self._state_message():
             return
         f = feed()
@@ -481,54 +522,53 @@ class MissionsPanel(_LivePanel):
         owned = {blueprint_key(n) for n in f.owned} | {blueprint_key(n) for _t, n, _m in tr.blueprints}
         v = self._new_page()
 
-        # Active missions plus the ones still showing their reward block,
-        # grouped by who issued them (in the order you took them on).
+        # Active missions, plus the ones still in their reward window; the
+        # tracked one first, then the rest by when they last moved.
         rewards = {m.id: age for m in tr.missions.values() if (age := _reward_age(m)) is not None}
+        active = tr.active_missions()
+        tracked = self._tracked(active)
+        self._update_flash(tracked)
         shown = [m for m in tr.missions.values() if m.active or m.id in rewards]
-        groups: dict[str, list[Mission]] = {}
-        for m in shown:
-            groups.setdefault(_contractor(m, f.contract(m)), []).append(m)
-        v.addWidget(_label(f"ACTIVE MISSIONS · {len(tr.active_missions())}", "SectionLabel"))
+        shown.sort(key=lambda m: (m is not tracked, -_activity(m).timestamp()))
+        v.addWidget(_label(f"ACTIVE MISSIONS · {len(active)}", "SectionLabel"))
         self._fit_anchor = None      # the last active block: the window fits down to it
         if not shown:
             self._fit_anchor = _label("No active missions this session. Accept a contract and it shows up here.",
                                       "InspectorHint", wrap=True)
             v.addWidget(self._fit_anchor)
-        for name in sorted(groups, key=lambda g: (g == OTHER_GROUP, g.lower())):
-            missions = groups[name]
-            count = sum(1 for m in missions if m.active)
-            v.addWidget(_label(f"{name.upper()} · {count}", "LiveGroup"))
-            for m in missions:
-                info = f.contract(m)
-                if m.id in rewards:
-                    self._fit_anchor = _reward_card(m, info, rewards[m.id], tr.payout(m))
-                else:
-                    self._fit_anchor = _active_card(m, info, owned, m.id in self._expanded,
-                                                    lambda mid=m.id: self._toggle(mid))
-                v.addWidget(self._fit_anchor)
+        for m in shown:
+            state = "reward" if m.id in rewards else ("tracked" if m is tracked else "")
+            self._fit_anchor = self._card(m, state, owned, reward_age=rewards.get(m.id))
+            v.addWidget(self._fit_anchor)
 
+        # Finished: completed first, then failed / abandoned (newest first in each).
         finished = [m for m in tr.finished_missions() if m.id not in rewards]
         if finished:
             v.addWidget(_label("FINISHED THIS SESSION", "SectionLabel"))
-            for m in finished:
-                paid = tr.payout(m) if m.outcome == "Complete" else None
-                v.addWidget(_finished_card(m, f.contract(m), paid))
+            for m in sorted(finished, key=lambda m: m.outcome != "Complete"):
+                v.addWidget(self._card(m, "done" if m.outcome == "Complete" else "failed", owned))
         if f.contracts is None:
             v.addWidget(_label("Loading contract details…", "LiveMuted"))
         v.addStretch(1)
 
-        # Wake up when the next reward block changes (blueprint window ends) or expires.
+        # Wake up when a reward block changes (blueprint window ends) or expires, or a blink ends.
         waits = []
         for age in rewards.values():
             if age < BLUEPRINT_WINDOW_SECONDS:
                 waits.append(BLUEPRINT_WINDOW_SECONDS - age)
             waits.append(REWARD_SECONDS - age)
+        waits += [t - time.monotonic() for t in self._flash_until.values()]
         if waits:
-            self._expire.start(int(min(waits) * 1000) + 200)
+            self._expire.start(max(50, int(min(waits) * 1000) + 50))
 
         # The window fits the collapsed list; opening a card scrolls instead.
         if not self._expanded:
             QTimer.singleShot(0, self._fit)
+
+    def _card(self, m: Mission, state: str, owned: set[str], reward_age: float | None = None) -> QFrame:
+        return _mission_card(m, feed().contract(m), owned, expanded=m.id in self._expanded,
+                             toggle=lambda mid=m.id: self._toggle(mid), state=state,
+                             flash=m.id in self._flash_until, reward_age=reward_age)
 
     def _fit(self) -> None:
         """Active missions (collapsed) fit without scrolling; the finished
@@ -562,7 +602,7 @@ def _status_row(grid: QGridLayout, row: int, name: str, value: QWidget | str) ->
 
 
 class SessionPanel(_LivePanel):
-    def _render(self) -> None:
+    def _build(self) -> None:
         if self._state_message():
             return
         tr = feed().tracker
@@ -576,23 +616,22 @@ class SessionPanel(_LivePanel):
         status.setColumnStretch(1, 1)
         _status_row(status, 0, "Ship", tr.ship or "—")
         _status_row(status, 1, "Location", pretty(tr.location) if tr.location else "—")
-        zone = QHBoxLayout()
-        zone.setSpacing(4)
-        zone.addWidget(_label(tr.jurisdiction or "—", "LiveText"))
-        if tr.armistice is not None:
-            zone.addWidget(_chip("ARMISTICE", "info") if tr.armistice else _chip("NO ARMISTICE", "bad"))
-        if tr.comm_down:
-            zone.addWidget(_chip("COMMS DOWN", "bad", "Monitored space is down (comm array offline)"))
-        elif tr.monitored is not None:
-            zone.addWidget(_chip("MONITORED" if tr.monitored else "UNMONITORED",
-                                 "info" if tr.monitored else "bad"))
-        zone.addStretch(1)
-        zone_w = QWidget()
-        zone_w.setLayout(zone)
-        zone.setContentsMargins(0, 0, 0, 0)
-        _status_row(status, 2, "Jurisdiction", zone_w)
+        row = 2
+        if tr.comm_down or tr.monitored is not None:
+            space = QHBoxLayout()
+            space.setContentsMargins(0, 0, 0, 0)
+            if tr.comm_down:
+                space.addWidget(_chip("COMMS DOWN", "bad", "Monitored space is down (comm array offline)"))
+            else:
+                space.addWidget(_chip("MONITORED" if tr.monitored else "UNMONITORED",
+                                      "info" if tr.monitored else "bad"))
+            space.addStretch(1)
+            space_w = QWidget()
+            space_w.setLayout(space)
+            _status_row(status, row, "Space", space_w)
+            row += 1
         if tr.qt_target:
-            _status_row(status, 3, "Quantum to", pretty(tr.qt_target))
+            _status_row(status, row, "Quantum to", pretty(tr.qt_target))
         v.addLayout(status)
 
         v.addWidget(_label("THIS SESSION", "SectionLabel"))
@@ -605,12 +644,9 @@ class SessionPanel(_LivePanel):
              if playing else "—"),
             ("Missions done", f"{tr.completed}" + (f" · {tr.failed} failed" if tr.failed else "")),
             ("Rep earned", f"{tr.rep_earned:,}"),
-            ("Mission payouts", _money(tr.mission_payouts)),
-            ("Other awards", _money(tr.other_awards)),
-            ("Trade balance", _money(tr.trade_net)),
-            ("Shop spend", _money(tr.shop_spent)),
             ("Quantum jumps", str(tr.qt_jumps)),
             ("Deaths", str(tr.deaths) + (f" · {tr.incapacitated} downed" if tr.incapacitated else "")),
+            ("Refinery orders done", str(tr.refinery_done)),
         ]
         for i, (name, value) in enumerate(tiles):
             box = QVBoxLayout()

@@ -4,8 +4,14 @@ the My Stats view: all time, and the last play session.
 `compute()` returns display-ready sections, so the view only lays them out:
     {"sessions": n, "first": datetime, "last": datetime,
      "scopes": {"all": [Section…], "last": [Section…]}, "last_label": str}
-    Section = {"title", "tiles": [(label, value, hint)],
-               "lists": [{"title", "rows": [(name, value)], "more": n}], "note"}
+    Section = {"title", "tiles": [(label, value, hint)], "lists": [List…],
+               "filter": bool, "note"}
+    List = {"title", "rows": [(name, value)] (all of them),
+            "limit": rows shown before "…and n more" (None: all),
+            "columns": flow the rows into as many columns as fit,
+            "key": filter key and glyph name (filter sections)}
+A "filter" section shows its lists one at a time, or all, from a row of
+glyph buttons (Blueprints: one list per blueprint type).
 Missions are rebuilt per session with app.tracker, so a mission's title,
 contract, outcome and blueprints are joined the same way as in the overlay.
 """
@@ -18,12 +24,27 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app import gamelog
-from app.tracker import Mission, SessionTracker
+from app.tracker import REFINERY_REMINDER_SECONDS, Mission, SessionTracker
 
 # Everything except the catch-all notification kind (big, and covered by
 # the specific ones).
 KINDS = [k for k in gamelog.EVENT_TYPES if k != "notification"]
 LIST_ROWS = 12
+BLUEPRINT_ROWS = 8   # per type, before "…and n more"
+
+# Blueprint types: (key = glyph name, title, game categories by prefix). The
+# game's categories (BlueprintCategoryRecord) have no display names.
+BLUEPRINT_TYPES = [
+    ("weapons", "Personal weapons", ("FPSWeapons",)),
+    ("armour", "Armour", ("FPSArmours",)),
+    ("components", "Ship components", ("VehicleComponent",)),
+    ("ship_weapons", "Ship weapons", ("VehicleWeapons",)),
+    ("utility", "Utility", ("Utility",)),
+    ("medical", "Medical", ("Medical",)),
+    ("power", "Fuses & batteries", ("FuseBattery",)),
+    ("mission", "Mission items", ("MissionItem",)),
+    ("other", "Other", ()),
+]
 
 
 def load(game_root: Path | None, contracts=None, progress=None, cancel=None) -> dict:
@@ -37,10 +58,6 @@ def load(game_root: Path | None, contracts=None, progress=None, cancel=None) -> 
 # -- formatting ----------------------------------------------------------------
 def _n(value) -> str:
     return f"{value:,.0f}"
-
-
-def _money(value) -> str:
-    return f"{value:,.0f} aUEC"
 
 
 def _duration(td: timedelta) -> str:
@@ -82,21 +99,25 @@ def pretty(name: str) -> str:
     return " ".join(w[:1].upper() + w[1:] for w in words) or name
 
 
-def _top(counter: Counter, fmt=_n, limit: int = LIST_ROWS) -> tuple[list, int]:
-    rows = [(name, fmt(value)) for name, value in counter.most_common(limit) if name]
-    return rows, max(0, len([k for k in counter if k]) - limit)
+def _list(title: str, counter: Counter, fmt=_n, limit: int | None = LIST_ROWS, columns: bool = False) -> dict:
+    rows = [(name, fmt(value)) for name, value in counter.most_common() if name]
+    return {"title": title, "rows": rows, "limit": limit, "columns": columns}
 
 
-def _list(title: str, counter: Counter, fmt=_n, limit: int = LIST_ROWS) -> dict:
-    rows, more = _top(counter, fmt, limit)
-    return {"title": title, "rows": rows, "more": more}
+# The name already says the size: "Singe Cannon (S2)", "Ind/0/B Defiant".
+_HAS_SIZE_RE = re.compile(r"\(S\d\)|^[A-Za-z]{3}/\d/")
+
+
+def blueprint_type(category: str | None) -> tuple[str, str]:
+    """Game category -> (type key, size label or "")."""
+    for key, _title, prefixes in BLUEPRINT_TYPES:
+        if category and category.startswith(prefixes):
+            size = re.search(r"S(\d)$", category)
+            return key, f"S{size.group(1)}" if size else ""
+    return "other", ""
 
 
 # -- computing -----------------------------------------------------------------
-def _lookup(contracts):
-    if contracts is None:
-        return lambda _m: None
-    return lambda m: contracts.find(m.contract_id, m.contract) if (m.contract_id or m.contract) else None
 
 
 def _missions(events: list[gamelog.Event]) -> list[Mission]:
@@ -114,6 +135,7 @@ def _missions(events: list[gamelog.Event]) -> list[Mission]:
 
 
 def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], contracts) -> list[dict]:
+    single = len(sessions) == 1
     by_kind: dict[str, list[gamelog.Event]] = {}
     for e in events:
         by_kind.setdefault(e.kind, []).append(e)
@@ -136,19 +158,19 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
             longest.append((s.started, end - s.started))
     longest.sort(key=lambda pair: pair[1], reverse=True)
     total = sum(spans, timedelta())
+    tiles = [("Time played", _duration(total), "From game start to the log's last line, summed")]
+    if not single:
+        tiles = [("Sessions", _n(len(sessions)), "Game launches with a log on disk"), *tiles,
+                 ("Average session", _duration(total / len(spans)) if spans else "—", ""),
+                 ("Longest session", _duration(max(spans)) if spans else "—", "")]
     sections.append({
         "title": "Play time",
-        "tiles": [
-            ("Sessions", _n(len(sessions)), "Game launches with a log on disk"),
-            ("Time played", _duration(total), "From game start to the log's last line, summed"),
-            ("Average session", _duration(total / len(spans)) if spans else "—", ""),
-            ("Longest session", _duration(max(spans)) if spans else "—", ""),
-        ],
+        "tiles": tiles,
         "lists": [{
             "title": "Longest sessions",
-            "rows": [(_datetime(start), _duration(span)) for start, span in longest[:5]],
-            "more": 0,
-        }] if len(sessions) > 1 else [],
+            "rows": [(_datetime(start), _duration(span)) for start, span in longest],
+            "limit": 5,
+        }] if not single else [],
     })
 
     # Missions
@@ -186,10 +208,24 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
         ],
     })
 
-    # Blueprints
+    # Blueprints, grouped by the game's blueprint categories
     blueprints = kind("blueprint")
     names = Counter(e.data.get("name", "") for e in blueprints)
-    recent = sorted(blueprints, key=lambda e: e.time or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    latest: dict[str, datetime | None] = {}
+    for e in sorted(blueprints, key=lambda e: e.time or datetime.min.replace(tzinfo=timezone.utc)):
+        latest[e.data.get("name", "")] = e.time
+    by_type: dict[str, list[tuple[str, str]]] = {}
+    for name in sorted(latest, key=lambda n: latest[n] or datetime.min.replace(tzinfo=timezone.utc),
+                       reverse=True):
+        if not name:
+            continue
+        key, size = blueprint_type(contracts.blueprint_category(name) if contracts is not None else None)
+        value = _datetime(latest[name])
+        if names[name] > 1:
+            value = f"×{names[name]} · {value}"
+        if size and not _HAS_SIZE_RE.search(name):
+            name = f"{name}  ({size})"
+        by_type.setdefault(key, []).append((name, value))
     sections.append({
         "title": "Blueprints",
         "tiles": [
@@ -198,53 +234,12 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
             ("From missions", _n(sum(len(m.blueprints) for m in completed)),
              "Received within seconds of completing a mission"),
         ],
-        "lists": [{
-            "title": "Latest",
-            "rows": [(e.data.get("name", ""), _datetime(e.time)) for e in recent[:LIST_ROWS * 2]],
-            "more": max(0, len(recent) - LIST_ROWS * 2),
-        }],
-    })
-
-    # Money
-    def total(k: str) -> float:
-        return sum(e.data.get("price") or 0 for e in kind(k))
-
-    awarded = sum(e.data.get("amount") or 0 for e in kind("awarded"))
-    payer = SessionTracker(lookup=_lookup(contracts))
-    paid = [payer.payout(m) for m in completed]
-    mission_auec = sum(p.auec for p in paid)
-    other_awards = awarded - sum(m.awarded for m in completed)
-    scrip: Counter = Counter()
-    for p in paid:
-        for name, amount in p.items:
-            scrip[name] += amount
-    spent_items = Counter()
-    for e in kind("shop_buy"):
-        spent_items[pretty(e.data.get("item", ""))] += e.data.get("price") or 0
-    shops = Counter()
-    for e in kind("commodity_sell"):
-        shops[pretty(e.data.get("shop", "").removeprefix("SCShop_"))] += e.data.get("price") or 0
-    trade = total("commodity_sell") - total("commodity_buy")
-    sections.append({
-        "title": "Money",
-        "tiles": [
-            ("Mission payouts (known)", _money(mission_auec),
-             "Fixed contract rewards and aUEC logged right after a completion. Most contracts pay a "
-             "rate the game calculates, which isn't in the game files or the log."),
-            ("Other awards", _money(other_awards), "\"Awarded n aUEC\" notifications not tied to a mission"),
-            ("Shop purchases", _money(total("shop_buy")), ""),
-            ("Shop sales", _money(total("shop_sell")), ""),
-            ("Commodities bought", _money(total("commodity_buy")), ""),
-            ("Commodities sold", _money(total("commodity_sell")), ""),
-            ("Trade balance", _money(trade), "Commodities sold minus bought"),
-        ],
-        "lists": [
-            _list("Biggest purchases", spent_items, _money),
-            _list("Where you sold cargo", shops, _money),
-            _list("Item rewards from missions", scrip),
-        ],
-        "note": "From the game's purchase and sale requests; a transaction that failed may still count. "
-                "Mission payouts and your balance aren't in the log.",
+        "filter": True,
+        "lists": [{"title": title, "key": key, "rows": by_type[key], "limit": BLUEPRINT_ROWS,
+                   "columns": True}
+                  for key, title, _prefixes in BLUEPRINT_TYPES if by_type.get(key)],
+        "note": "" if contracts is not None else
+                "Blueprint types come from the game files, which couldn't be read; all are under Other.",
     })
 
     # Travel
@@ -254,13 +249,10 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
         "tiles": [
             ("Quantum jumps", _n(len(kind("qt_arrived"))), "Arrivals at a quantum destination"),
             ("Places visited", _n(len([k for k in locations if k])), "Stations and cities where you opened your inventory"),
-            ("Armistice zones entered", _n(len(kind("armistice_enter"))), ""),
-            ("Jurisdictions entered", _n(len(kind("jurisdiction"))), ""),
         ],
         "lists": [
             _list("Top quantum destinations", count("qt_target", "target", pretty)),
             _list("Top places", locations),
-            _list("Jurisdictions", count("jurisdiction", "jurisdiction")),
         ],
     })
 
@@ -273,7 +265,7 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
             ("Boardings", _n(len(kind("ship_boarded"))), ""),
             ("Hangar requests", _n(len(kind("hangar_request"))), ""),
         ],
-        "lists": [_list("Most boarded", ships)],
+        "lists": [_list("Boardings per ship", ships, limit=None, columns=True)],
     })
 
     # Health and losses
@@ -287,19 +279,29 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
             ("Incapacitated", _n(len(kind("incapacitated"))), ""),
             ("Med bed treatments", _n(len(kind("med_bed"))), ""),
             ("Ships lost to collisions", _n(len(kind("fatal_collision"))), ""),
-            ("Low fuel warnings", _n(len(kind("low_fuel"))), ""),
         ],
         "lists": [_list("Collisions (ship → what it hit)", collisions)],
     })
 
-    # Industry
+    # Refining: completion notices, minus the repeats after joining a server
+    joins: dict[str, list[datetime]] = {}
+    for e in kind("join_pu"):
+        if e.time:
+            joins.setdefault(e.session, []).append(e.time)
+
+    def reminder(e: gamelog.Event) -> bool:
+        return bool(e.time) and any(0 <= (e.time - t).total_seconds() <= REFINERY_REMINDER_SECONDS
+                                    for t in joins.get(e.session, []))
+
+    done = [e for e in kind("refinery_complete") if not reminder(e)]
     sections.append({
-        "title": "Mining & refining",
+        "title": "Refining",
         "tiles": [
-            ("Refinery jobs started", _n(len(kind("refinery_request"))), ""),
-            ("Refinery jobs completed", _n(len(kind("refinery_complete"))), ""),
+            ("Work orders completed", _n(len(done)),
+             "Completion notices while you played. The game repeats them each time you join a "
+             "server; those aren't counted."),
         ],
-        "lists": [_list("Refinery orders completed at", count("refinery_complete", "location"))],
+        "lists": [_list("Completed at", Counter(e.data.get("location") or "" for e in done))],
     })
     return sections
 

@@ -2,8 +2,16 @@
 click-through (default F8), configurable in Settings. They must work while
 the game has focus, so they're registered with the OS, not Qt:
 
-- **Windows:** `RegisterHotKey` on the GUI thread; WM_HOTKEY arrives through
-  a Qt native event filter.
+- **Windows:** `RegisterHotKey`, plus a Raw Input keyboard sink
+  (`RIDEV_INPUTSINK`), both on the GUI thread through a Qt native event
+  filter. Games that read the keyboard as raw input with `RIDEV_NOHOTKEYS`
+  switch registered hotkeys off while they're in front, so F7/F8 only
+  worked while the overlay itself was active (#17). The sink is the
+  documented way for a background program to receive keyboard input, and
+  that flag doesn't affect it. RegisterHotKey stays: it reports a combo
+  another program holds, keeps the key from the focused window where
+  Windows lets it, and still fires over elevated windows, which UIPI hides
+  from the sink. A press seen by both counts once.
 - **KDE Plasma (Wayland or X11):** a global shortcut registered with
   KGlobalAccel over D-Bus. KWin catches the key whatever window is focused
   (Star Citizen under Wine's Wayland driver is a native Wayland window) and
@@ -23,6 +31,7 @@ import ctypes.util
 import select
 import sys
 import threading
+import time
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QCoreApplication, QObject, Signal
 
@@ -142,6 +151,13 @@ class _WindowsHotkeys(QAbstractNativeEventFilter):
     MODS = {"Alt": 0x0001, "Ctrl": 0x0002, "Shift": 0x0004, "Meta": 0x0008}
     MOD_NOREPEAT = 0x4000
     WM_HOTKEY = 0x0312
+    WM_INPUT = 0x00FF
+    WM_KEYDOWN, WM_SYSKEYDOWN = 0x0100, 0x0104
+    RIDEV_INPUTSINK, RIDEV_REMOVE = 0x0100, 0x0001
+    RID_INPUT, RIM_TYPEKEYBOARD, RI_KEY_BREAK = 0x10000003, 1, 0x0001
+    # Modifier -> its virtual keys, for GetAsyncKeyState.
+    MOD_VKS = {"Shift": (0x10,), "Ctrl": (0x11,), "Alt": (0x12,), "Meta": (0x5B, 0x5C)}
+    SAME_PRESS = 0.3   # s: WM_HOTKEY and WM_INPUT of one key press
 
     def __init__(self, emit, combos):
         super().__init__()
@@ -149,9 +165,22 @@ class _WindowsHotkeys(QAbstractNativeEventFilter):
 
         self._wintypes = wintypes
         self._user32 = ctypes.windll.user32
+        u = self._user32
+        u.GetAsyncKeyState.restype = ctypes.c_short
+        u.GetRawInputData.restype = wintypes.UINT
+        u.GetRawInputData.argtypes = [wintypes.HANDLE, wintypes.UINT, ctypes.c_void_p,
+                                      ctypes.POINTER(wintypes.UINT), wintypes.UINT]
         self._emit = emit
         self._combos = combos
         self._ids: dict[int, str] = {}
+        # virtual key -> [(modifiers, action)], for raw input
+        self._by_vk: dict[int, list[tuple[frozenset[str], str]]] = {}
+        for action, (mods, key) in combos.items():
+            self._by_vk.setdefault(self._vk(key), []).append((frozenset(mods), action))
+        self._held: set[int] = set()        # hotkey keys down now (raw input repeats them)
+        self._fired: dict[str, float] = {}  # action -> when it last fired
+        self._sink = None                   # hidden QWindow that receives WM_INPUT
+        self._hwnd = 0
 
     NAV_VK = {"Ins": 0x2D, "Home": 0x24, "End": 0x23, "PgUp": 0x21, "PgDown": 0x22,
               "Pause": 0x13, "ScrollLock": 0x91}
@@ -172,24 +201,122 @@ class _WindowsHotkeys(QAbstractNativeEventFilter):
                 raise OSError(f"{format_combo(mods, key)} is already used by another program")
             self._ids[i] = action
         QCoreApplication.instance().installNativeEventFilter(self)
+        try:
+            self._start_sink()
+        except OSError as exc:
+            # RegisterHotKey still works while the game doesn't block it.
+            print(f"overlay: raw keyboard input unavailable: {exc}", file=sys.stderr)
 
     def stop(self) -> None:
         QCoreApplication.instance().removeNativeEventFilter(self)
+        self._stop_sink()
         for i in self._ids:
             self._user32.UnregisterHotKey(None, i)
         self._ids.clear()
 
+    # -- Raw Input --
+
+    def _devices(self, flags: int, hwnd: int):
+        wt = self._wintypes
+
+        class RAWINPUTDEVICE(ctypes.Structure):
+            _fields_ = [("usUsagePage", wt.USHORT), ("usUsage", wt.USHORT),
+                        ("dwFlags", wt.DWORD), ("hwndTarget", wt.HWND)]
+
+        # Generic desktop page (1), keyboard (6).
+        return RAWINPUTDEVICE(1, 6, flags, hwnd), ctypes.sizeof(RAWINPUTDEVICE)
+
+    def _start_sink(self) -> None:
+        from PySide6.QtGui import QWindow
+
+        # A window of our own: the overlay's HWND is recreated whenever its
+        # flags change (click-through), which would drop the registration.
+        self._sink = QWindow()
+        self._sink.create()
+        self._hwnd = int(self._sink.winId())
+        device, size = self._devices(self.RIDEV_INPUTSINK, self._hwnd)
+        if not self._user32.RegisterRawInputDevices(ctypes.byref(device), 1, size):
+            err = ctypes.windll.kernel32.GetLastError()
+            self._stop_sink()
+            raise OSError(f"RegisterRawInputDevices failed (error {err})")
+
+    def _stop_sink(self) -> None:
+        if self._sink is None:
+            return
+        if self._hwnd:
+            device, size = self._devices(self.RIDEV_REMOVE, 0)
+            self._user32.RegisterRawInputDevices(ctypes.byref(device), 1, size)
+        self._sink.destroy()
+        self._sink = None
+        self._hwnd = 0
+
+    def _read_key(self, handle: int) -> tuple[int, bool] | None:
+        """(virtual key, pressed) from a WM_INPUT, or None if it's not a key."""
+        wt = self._wintypes
+
+        class RAWINPUTHEADER(ctypes.Structure):
+            _fields_ = [("dwType", wt.DWORD), ("dwSize", wt.DWORD),
+                        ("hDevice", wt.HANDLE), ("wParam", wt.WPARAM)]
+
+        class RAWKEYBOARD(ctypes.Structure):
+            _fields_ = [("MakeCode", wt.USHORT), ("Flags", wt.USHORT), ("Reserved", wt.USHORT),
+                        ("VKey", wt.USHORT), ("Message", wt.UINT), ("ExtraInformation", wt.ULONG)]
+
+        class RAWINPUT(ctypes.Structure):
+            _fields_ = [("header", RAWINPUTHEADER), ("keyboard", RAWKEYBOARD),
+                        ("pad", ctypes.c_byte * 16)]   # mouse/HID members are larger
+
+        data = RAWINPUT()
+        size = wt.UINT(ctypes.sizeof(data))
+        got = self._user32.GetRawInputData(handle, self.RID_INPUT, ctypes.byref(data),
+                                           ctypes.byref(size), ctypes.sizeof(RAWINPUTHEADER))
+        if got in (0, 0xFFFFFFFF) or data.header.dwType != self.RIM_TYPEKEYBOARD:
+            return None
+        kb = data.keyboard
+        if kb.VKey == 0xFF:   # filler of an escape sequence
+            return None
+        return kb.VKey, not kb.Flags & self.RI_KEY_BREAK
+
+    def _modifier_down(self, mod: str) -> bool:
+        return any(self._user32.GetAsyncKeyState(vk) & 0x8000 for vk in self.MOD_VKS[mod])
+
+    def _on_raw_key(self, vk: int, down: bool) -> None:
+        if not down:
+            self._held.discard(vk)
+            return
+        if vk in self._held:   # auto-repeat
+            return
+        for mods, action in self._by_vk.get(vk, ()):
+            # Exactly these modifiers, like RegisterHotKey.
+            if all(self._modifier_down(m) == (m in mods) for m in self.MOD_VKS):
+                self._held.add(vk)
+                self._fire(action)
+                return
+
+    def _fire(self, action: str) -> None:
+        now = time.monotonic()
+        if now - self._fired.get(action, -1e9) >= self.SAME_PRESS:
+            self._fired[action] = now
+            self._emit(action)
+
     # RegisterHotKey without a window posts WM_HOTKEY to the thread's queue;
-    # Qt passes those thread messages as "windows_dispatcher_MSG" (window
-    # messages are "windows_generic_MSG").
+    # Qt passes those thread messages as "windows_dispatcher_MSG". WM_INPUT
+    # goes to the sink window and is seen as "windows_generic_MSG" from its
+    # window procedure; it's not swallowed, so DefWindowProc cleans it up.
     EVENT_TYPES = (b"windows_dispatcher_MSG", b"windows_generic_MSG")
 
     def nativeEventFilter(self, event_type, message):
-        if bytes(event_type) in self.EVENT_TYPES:
+        kind = bytes(event_type)
+        if kind in self.EVENT_TYPES:
             msg = self._wintypes.MSG.from_address(int(message))
             if msg.message == self.WM_HOTKEY and msg.wParam in self._ids:
-                self._emit(self._ids[msg.wParam])
+                self._fire(self._ids[msg.wParam])
                 return True, 0
+            if (kind == b"windows_generic_MSG" and msg.message == self.WM_INPUT
+                    and self._hwnd and msg.hWnd == self._hwnd):
+                key = self._read_key(msg.lParam)
+                if key is not None:
+                    self._on_raw_key(*key)
         return False, 0
 
 

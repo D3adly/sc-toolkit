@@ -65,6 +65,7 @@ def display_markdown(text: str | None = None) -> str:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")      # Windows consoles default to cp1252 ("→" etc.)
     found = section(sys.argv[1]) if len(sys.argv) == 2 else None
     if found is None or not found.body:
         sys.exit(f"CHANGELOG.md has no section for {sys.argv[1:]}")

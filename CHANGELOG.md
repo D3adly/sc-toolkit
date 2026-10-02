@@ -2,7 +2,7 @@
 
 What changed in each SC-Toolkit release. The newest version is at the top.
 
-## Unreleased
+## 0.1.1 (2026-10-02)
 
 - **Updates from inside SC-Toolkit.** It checks GitHub for a new version once a day; when there is
   one, an *Update* button shows next to the version at the top. One click downloads the new version,

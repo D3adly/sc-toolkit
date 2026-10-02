@@ -73,7 +73,10 @@ def main():
     from app import backup, config, ipc, settings
     from app.theme import build_stylesheet
 
+    from app import updater
+
     smoke_test = "--smoke-test" in sys.argv
+    updater.after_update(sys.argv)     # started by an update: let the old version exit first
     app = QApplication(sys.argv)
 
     # Single instance: a second launch brings the running one forward.
@@ -85,6 +88,7 @@ def main():
         server.listen()
 
     config.migrate_legacy_dirs()
+    updater.clean_leftovers()
     backup.cleanup_backups(settings.current().backup_root)
 
     from app.ui.main_window import MainWindow
@@ -109,11 +113,15 @@ def main():
         from PySide6.QtCore import QTimer
 
         for view in ("bindings_view", "maps_view", "mining_view", "salvage_view", "settings_view",
-                     "overlay", "overlay_panels", "overlay_live", "stats_view"):
+                     "overlay", "overlay_panels", "overlay_live", "stats_view", "whats_new_view"):
             importlib.import_module(f"app.ui.{view}")
         for module in ("mining", "salvage", "datacore", "socpak", "joyinput", "hotkeys", "gamelog",
                        "contracts", "tracker", "stats"):
             importlib.import_module(f"app.{module}")
+        from app import changelog
+
+        if not changelog.sections():
+            sys.exit("smoke test: CHANGELOG.md is missing or empty")
         from app.joyinput import JoystickInput
 
         if not JoystickInput.supported():

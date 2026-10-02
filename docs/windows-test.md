@@ -76,6 +76,17 @@ exclusive fullscreen.
 - [ ] With the game running, closing (✕) keeps SC-Toolkit in the tray, so the backup on
       game exit still happens.
 
+## Updates
+To test, run an older version (or one the developer built with a lower version
+number) from a folder you can write to, e.g. Downloads.
+- [ ] A few seconds after start, *Update to v…* appears next to the version at the top.
+- [ ] Clicking it shows the new version's notes and **Install and restart**.
+- [ ] Install: the progress bar fills, SC-Toolkit closes and starts again with the new
+      version number at the top.
+- [ ] The folder then has only `SC-Toolkit-windows.exe` (a `SC-Toolkit-windows.old.exe`
+      may stay until the next start, then it's gone).
+- [ ] Clicking the version at the top opens What's new (the changelog).
+
 ## General
 - [ ] Window moves by dragging the title bar; minimise and close work.
 - [ ] Settings survive closing and reopening the app

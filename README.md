@@ -159,6 +159,13 @@ Get the latest build for your platform from the
 
 Nothing else needs to be installed: Python, Qt and every library are bundled.
 
+**Updates:** SC-Toolkit checks for a new version once a day. When there is one, an
+*Update* button appears next to the version at the top; it shows what's new and
+installs the update with one click (it downloads the whole file, checks it against
+GitHub's checksum, replaces the old one and restarts). Nothing is installed unless
+you click it. Switch the check off, or opt into beta versions, in Settings. Click the
+version at the top any time to see the [changelog](CHANGELOG.md).
+
 ### Windows
 
 1. Download `SC-Toolkit-windows.exe` and put it wherever you like.
@@ -228,9 +235,15 @@ python3 -m venv .venv
 Builds are made by GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml))
 on Windows and Ubuntu 22.04, smoke-tested, and attached to a GitHub Release:
 
-1. Bump `__version__` in [`app/__init__.py`](app/__init__.py) and commit.
+1. Bump `__version__` in [`app/__init__.py`](app/__init__.py), rename the
+   `## Unreleased` section of [`CHANGELOG.md`](CHANGELOG.md) to `## 0.2.0 (YYYY-MM-DD)`
+   and commit. That section becomes the release notes (shown in the app before it
+   updates); the build fails if it's missing.
 2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
-   Tags with a suffix (e.g. `v0.2.0-beta.1`) become pre-releases.
+   Tags with a suffix (e.g. `v0.2.0-beta.1`) become pre-releases, which the app only
+   offers to people who opted into beta versions.
+3. Keep the file names (`SC-Toolkit-windows.exe`, `SC-Toolkit-linux.AppImage`): the
+   in-app updater looks for exactly these.
 
 For a test build without a release, run the workflow manually (**Actions → Build &
 release → Run workflow**) and download the files from the run's artifacts.

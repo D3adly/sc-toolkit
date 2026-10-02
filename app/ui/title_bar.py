@@ -20,9 +20,12 @@ def _shadow(widget: QWidget) -> QWidget:
 class TitleBar(QWidget):
     """Frameless-window title bar (transparent over the wallpaper): app name
     and version + drag-to-move + settings / minimize / maximize / close.
+    The version opens What's new; an Update button appears next to it when
+    a new version is out.
     """
 
     settings_requested = Signal()
+    whats_new_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -37,7 +40,16 @@ class TitleBar(QWidget):
 
         layout.addWidget(_shadow(QLabel("SC-TOOLKIT")))
         layout.addSpacing(6)
-        layout.addWidget(_shadow(QLabel(f"v{__version__}", objectName="TitleVersion")))
+        self.version_btn = QPushButton(objectName="TitleVersion")
+        self.version_btn.setCursor(Qt.PointingHandCursor)
+        self.version_btn.clicked.connect(self.whats_new_requested.emit)
+        layout.addWidget(_shadow(self.version_btn))
+        self.update_btn = QPushButton(objectName="TitleUpdate")
+        self.update_btn.setCursor(Qt.PointingHandCursor)
+        self.update_btn.clicked.connect(self.whats_new_requested.emit)
+        self.update_btn.hide()
+        layout.addWidget(_shadow(self.update_btn))
+        self.set_changelog_unseen(False)
         layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         self.settings_btn = QPushButton("⚙")
@@ -67,6 +79,19 @@ class TitleBar(QWidget):
         self.close_btn.setFixedSize(28, 28)
         self.close_btn.clicked.connect(self._close)
         layout.addWidget(_shadow(self.close_btn))
+
+    def set_changelog_unseen(self, unseen: bool) -> None:
+        """After an update: a quiet hint until What's new has been opened."""
+        self.version_btn.setText(f"v{__version__} · what's new" if unseen else f"v{__version__}")
+        self.version_btn.setProperty("unseen", unseen)
+        self.version_btn.style().polish(self.version_btn)
+        self.version_btn.setToolTip("What's new in SC-Toolkit")
+
+    def set_update(self, version: str | None) -> None:
+        self.update_btn.setVisible(version is not None)
+        if version:
+            self.update_btn.setText(f"Update to v{version}")
+            self.update_btn.setToolTip(f"SC-Toolkit {version} is available: see what's new and install it")
 
     def _minimize(self):
         window = self.window()

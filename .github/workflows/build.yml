@@ -45,6 +45,8 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME doesn't match app/__init__.py __version__ ($version)"
             exit 1
           fi
+          # Its CHANGELOG.md section becomes the release notes (see the release job).
+          python -m app.changelog "$version" > /dev/null
 
       - name: Install Linux libraries (bundled into the AppImage)
         if: runner.os == 'Linux'
@@ -112,6 +114,13 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+
+      # The release notes are the version's CHANGELOG.md section: the app
+      # shows them before it installs an update.
+      - name: Release notes from CHANGELOG.md
+        run: python3 -m app.changelog "${GITHUB_REF_NAME#v}" > release-notes.md
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -120,6 +129,6 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
-          generate_release_notes: true
+          body_path: release-notes.md
           # Tags like v0.2.0-beta.1 are published as pre-releases.
           prerelease: ${{ contains(github.ref_name, '-') }}

@@ -3,7 +3,6 @@ import subprocess
 from PySide6.QtCore import QEvent, Qt, QRectF, QSize, QTimer, Signal
 from PySide6.QtGui import QAction, QPixmap, QPainter, QPainterPath, QColor, QIcon
 from PySide6.QtWidgets import (
-    QAbstractButton,
     QApplication,
     QMenu,
     QSystemTrayIcon,
@@ -24,14 +23,16 @@ from PySide6.QtWidgets import (
 
 from dataclasses import replace
 
-from app import backup, channel as channel_mod, config, gamelog, ipc, links, osutil, settings
+from app import __version__, backup, channel as channel_mod, config, gamelog, ipc, links, osutil, settings, updater
 from app.backup import BackupInfo
 from app import hotkeys
 from app.launch import LaunchController
 from app.overlay_host import OverlayHost
 from app.starstrings_controller import StarStringsController
+from app.update_controller import UpdateController
 from app.theme import PALETTE
 from app.ui.title_bar import TitleBar
+from app.ui.widgets import Switch
 
 ICON_SIZE = QSize(20, 20)
 
@@ -53,40 +54,6 @@ def _section_label(text: str) -> QLabel:
     lbl = QLabel(text)
     lbl.setObjectName("SectionLabel")
     return lbl
-
-
-class _Switch(QAbstractButton):
-    """An on/off slider switch."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setCheckable(True)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(38, 20)
-
-    def paintEvent(self, _event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        on = self.isChecked()
-        track = QColor(PALETTE["accent"] if on else "#3a3f45")
-        if self.underMouse():
-            track = track.lighter(115)
-        p.setPen(Qt.NoPen)
-        p.setBrush(track)
-        r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        p.drawRoundedRect(r, r.height() / 2, r.height() / 2)
-        d = r.height() - 6
-        x = r.right() - 3 - d if on else r.left() + 3
-        p.setBrush(QColor("#15181c" if on else PALETTE["text_secondary"]))
-        p.drawEllipse(QRectF(x, r.top() + 3, d, d))
-
-    def enterEvent(self, event):
-        super().enterEvent(event)
-        self.update()
-
-    def leaveEvent(self, event):
-        super().leaveEvent(event)
-        self.update()
 
 
 class _ToolTile(QFrame):
@@ -206,6 +173,7 @@ class MainWindow(QMainWindow):
 
         self.title_bar = title_bar = TitleBar()
         title_bar.settings_requested.connect(self._show_settings)
+        title_bar.whats_new_requested.connect(self._show_whats_new)
         outer.addWidget(title_bar)
 
         # Main view and the joystick bindings view share the window; the
@@ -232,6 +200,7 @@ class MainWindow(QMainWindow):
         self.settings_view = None
         self.maps_view = None
         self.stats_view = None
+        self.whats_new_view = None
         self._main_size = None
 
         body = QWidget()
@@ -263,6 +232,98 @@ class MainWindow(QMainWindow):
         self._history_jobs: set[gamelog.HistoryJob] = set()
         if start_overlay and settings.current().gamelog_live_enabled:
             self.gamelog.start()
+        self._setup_updates(live=start_overlay)
+
+    # -- updates and What's new -------------------------------------------------
+    def _setup_updates(self, live: bool) -> None:
+        """live: a real run (not the smoke test), which checks for updates
+        and remembers the What's new state."""
+        self.updates = UpdateController(self)
+        self.updates.checked.connect(self._on_update_checked)
+        self.updates.check_failed.connect(self._on_update_check_failed)
+        self.updates.progress.connect(self._on_update_progress)
+        self.updates.install_failed.connect(self._on_update_install_failed)
+        self.updates.installed.connect(self._on_update_installed)
+        if not live:
+            return
+        # A quiet hint on the version after an update; nothing on a first run.
+        seen = settings.current().changelog_seen
+        if not seen:
+            settings.apply(replace(settings.current(), changelog_seen=__version__))
+        elif seen != __version__:
+            self.title_bar.set_changelog_unseen(True)
+        # At startup, then every few hours while it runs (the tray keeps it
+        # alive for days); app.updater asks GitHub at most once a day.
+        QTimer.singleShot(5000, self._auto_check_updates)
+        self._update_timer = QTimer(self, interval=6 * 3600 * 1000)
+        self._update_timer.timeout.connect(self._auto_check_updates)
+        self._update_timer.start()
+
+    def _auto_check_updates(self) -> None:
+        if settings.current().update_check:
+            self.updates.check()
+
+    def _on_update_checked(self, release) -> None:
+        self.title_bar.set_update(release.version if release else None)
+        if self.whats_new_view is not None:
+            self.whats_new_view.show_release(release)
+            self.whats_new_view.show_check_result(
+                "" if release else f"v{__version__} is the latest version")
+
+    def _on_update_check_failed(self, message: str) -> None:
+        if self.whats_new_view is not None:
+            self.whats_new_view.show_check_result(message)
+
+    def _show_whats_new(self) -> None:
+        if self.whats_new_view is None:
+            from app.ui.whats_new_view import WhatsNewView
+
+            self.whats_new_view = WhatsNewView()
+            self.whats_new_view.back_requested.connect(self._show_main)
+            self.whats_new_view.check_requested.connect(lambda: self.updates.check(force=True))
+            self.whats_new_view.install_requested.connect(self._install_update)
+            self.stack.addWidget(self.whats_new_view)
+        current = self.stack.currentWidget()
+        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view):
+            current.deactivate()
+            if self._main_size is not None:
+                self.resize(self._main_size)
+        if not self.updates.installing:
+            self.whats_new_view.show_release(self.updates.release)
+        self.stack.setCurrentWidget(self.whats_new_view)
+        if settings.current().changelog_seen != __version__:
+            settings.apply(replace(settings.current(), changelog_seen=__version__))
+        self.title_bar.set_changelog_unseen(False)
+
+    def _install_update(self) -> None:
+        view = self.whats_new_view
+        if self.controller.busy:
+            view.set_install_state("Finish the game session first: SC-Toolkit backs up your keybinds "
+                                   "when the game closes.", False)
+            return
+        if osutil.is_game_running():
+            view.set_install_state("Close Star Citizen and the RSI Launcher first.", False)
+            return
+        view.set_install_state("Downloading…", True)
+        self.updates.install()
+
+    def _on_update_progress(self, done: int, total: int) -> None:
+        if self.whats_new_view is not None:
+            self.whats_new_view.set_progress(done, total)
+
+    def _on_update_install_failed(self, message: str) -> None:
+        if self.whats_new_view is not None:
+            self.whats_new_view.set_install_state(message, False)
+
+    def _on_update_installed(self, target) -> None:
+        try:
+            updater.restart(target)
+        except OSError as exc:
+            self.whats_new_view.set_install_state(
+                f"Installed. Couldn't restart it ({exc}): close SC-Toolkit and start it again.", False)
+            return
+        self.whats_new_view.set_install_state("Installed. Restarting…", True)
+        QTimer.singleShot(300, QApplication.instance().quit)
 
     # -- tray, overlay, commands from other processes -------------------------
     def _build_tray(self) -> None:
@@ -654,7 +715,7 @@ class MainWindow(QMainWindow):
         row.addWidget(QLabel("IN-GAME OVERLAY", objectName="OverlaySwitchLabel"))
         self.overlay_hint = QLabel("", objectName="OverlaySwitchHint")
         row.addWidget(self.overlay_hint)
-        self.overlay_switch = _Switch()
+        self.overlay_switch = Switch()
         self.overlay_switch.setChecked(settings.current().overlay_enabled)
         self.overlay_switch.toggled.connect(self._set_overlay_enabled)
         row.addWidget(self.overlay_switch)
@@ -672,7 +733,7 @@ class MainWindow(QMainWindow):
         row.addWidget(QLabel("LIVE LOG", objectName="OverlaySwitchLabel"))
         self.gamelog_hint = QLabel("", objectName="OverlaySwitchHint")
         row.addWidget(self.gamelog_hint)
-        self.gamelog_switch = _Switch()
+        self.gamelog_switch = Switch()
         self.gamelog_switch.setChecked(settings.current().gamelog_live_enabled)
         self.gamelog_switch.toggled.connect(self._set_gamelog_enabled)
         row.addWidget(self.gamelog_switch)
@@ -918,6 +979,10 @@ class MainWindow(QMainWindow):
         self._refresh_config_combo()
         self._apply_channel_state()
         self._update_overlay_hint()
+        if not settings.current().update_check:
+            self.title_bar.set_update(None)
+        elif self._start_overlay:
+            self.updates.check()        # asks GitHub again only if "beta versions" changed
         if self._start_overlay and settings.current().overlay_enabled:
             # New hotkeys / game folder: the overlay reads them at start.
             self.overlay.stop()

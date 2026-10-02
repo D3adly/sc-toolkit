@@ -53,11 +53,49 @@ QWidget {{
     background: transparent;
 }}
 
-#TitleBar QLabel#TitleVersion {{
+#TitleVersion, #TitleUpdate {{
+    background: transparent;
+    border: none;
     color: {text_secondary};
     font-weight: 600;
     letter-spacing: 1px;
     font-size: 11px;
+    padding: 2px 4px;
+}}
+#TitleVersion:hover {{
+    color: {text_primary};
+    text-decoration: underline;
+}}
+#TitleVersion[unseen="true"] {{
+    color: {accent};
+}}
+#TitleUpdate {{
+    color: {accent};
+    border: 1px solid {accent_dim};
+    border-radius: 4px;
+    margin-left: 6px;
+    padding: 2px 8px;
+}}
+#TitleUpdate:hover {{
+    background: {accent_soft};
+    border: 1px solid {accent};
+}}
+
+#UpdateProgress {{
+    background: {bg_input};
+    border: none;
+    border-radius: 3px;
+}}
+#UpdateProgress::chunk {{
+    background: {accent};
+    border-radius: 3px;
+}}
+
+#ChangelogText {{
+    background: transparent;
+    color: {text_primary};
+    font-size: 12px;
+    selection-background-color: {accent_soft};
 }}
 
 #TitleBarButton {{

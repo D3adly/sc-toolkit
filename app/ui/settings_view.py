@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from app import __version__, channel as channel_mod, hotkeys, settings
 from app.settings import Settings
 from app.theme import PALETTE
+from app.ui.widgets import Switch
 
 WINDOWS = sys.platform.startswith("win")
 
@@ -240,6 +241,30 @@ class SettingsView(QWidget):
         for i, (action, (field, title)) in enumerate(hotkeys.ACTIONS.items()):
             self.hotkey_rows[field] = _HotkeyRow(ogrid, 2 + i, title, defaults[field], self._validate)
         sections.addWidget(overlay_panel)
+
+        updates_panel = QFrame(objectName="SidePanel")
+        ugrid = QGridLayout(updates_panel)
+        ugrid.setContentsMargins(20, 18, 20, 18)
+        ugrid.setHorizontalSpacing(18)
+        ugrid.setVerticalSpacing(12)
+        ugrid.setColumnMinimumWidth(0, 190)
+        ugrid.setColumnStretch(2, 1)
+        ugrid.addWidget(QLabel("UPDATES", objectName="SectionLabel"), 0, 0, 1, 3)
+        self.update_check = Switch()
+        self.update_prereleases = Switch()
+        for row, (title, switch, hint) in enumerate((
+            ("Check for updates", self.update_check,
+             "Once a day, SC-Toolkit asks GitHub whether there's a new version. When there is, an "
+             "Update button shows next to the version at the top; nothing is installed until you click it."),
+            ("Include beta versions", self.update_prereleases,
+             "Also offer test versions (pre-releases), which get new features first but may have bugs."),
+        ), start=1):
+            ugrid.addWidget(QLabel(title, objectName="InspectorText"), row, 0)
+            ugrid.addWidget(switch, row, 1, Qt.AlignVCenter)
+            label = QLabel(hint, objectName="InspectorHint")
+            label.setWordWrap(True)
+            ugrid.addWidget(label, row, 2)
+        sections.addWidget(updates_panel)
         sections.addStretch(1)
         outer.addWidget(scroll, stretch=1)
 
@@ -260,6 +285,8 @@ class SettingsView(QWidget):
             row.set_value(value)
         for field, row in self.hotkey_rows.items():
             row.set_value(getattr(s, field))
+        self.update_check.setChecked(s.update_check)
+        self.update_prereleases.setChecked(s.update_prereleases)
         self.back_btn.setVisible(not first_run)
         self.intro.setVisible(first_run)
         self.intro.setText(
@@ -338,6 +365,8 @@ class SettingsView(QWidget):
             launch_path=self.launch.value,
             gameglass_path=self.gameglass.value,
             backup_dir=self.backups.value,
+            update_check=self.update_check.isChecked(),
+            update_prereleases=self.update_prereleases.isChecked(),
             **{field: hotkeys.format_combo(*hotkeys.parse(row.value))
                for field, row in self.hotkey_rows.items()},
         ))

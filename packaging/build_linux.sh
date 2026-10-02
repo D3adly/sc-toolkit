@@ -8,6 +8,15 @@ APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/1.9
 TOOLS="build/tools"
 APPDIR="build/SC-Toolkit.AppDir"
 
+# LayerShellQt for the KDE Wayland overlay; without it the build only has the X11 overlay.
+if [ ! -f build/layershellqt/lib/libLayerShellQtInterface.so.6 ]; then
+    if [ -n "${CI:-}" ]; then
+        echo "build/layershellqt is missing: run packaging/build_layershellqt.sh first" >&2
+        exit 1
+    fi
+    echo "WARNING: no build/layershellqt (packaging/build_layershellqt.sh): the overlay will be X11-only" >&2
+fi
+
 pyinstaller --noconfirm --clean --distpath build/pyinstaller --workpath build/work packaging/sc-toolkit.spec
 
 rm -rf "$APPDIR"

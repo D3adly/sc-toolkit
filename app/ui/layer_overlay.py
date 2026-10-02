@@ -14,14 +14,16 @@ drawn and everything goes to the game.
 
 Needs Qt's layer-shell integration (LayerShellQt, part of Plasma), loaded
 with QT_WAYLAND_SHELL_INTEGRATION=layer-shell. Its plugin only loads into
-the Qt it was built against, i.e. the system's: app.overlay_host starts the
-overlay with the system Python and PySide6 when they fit (see
-layer_shell_command there), else with the X11 overlay.
+the Qt it was built against: app.overlay_host starts the overlay with our
+own build of it (made for our PySide6's Qt, packaging/build_layershellqt.sh)
+or, in a source checkout without that, with the system Python, PySide6 and
+LayerShellQt; else with the X11 overlay. See _layer_shell_mode there.
 """
 
 from __future__ import annotations
 
 import ctypes
+import os
 
 import shiboken6
 from PySide6.QtCore import QObject, Qt
@@ -37,7 +39,8 @@ DIM = QColor(0, 0, 0, 70)
 def _layer_window(window) -> QObject:
     """LayerShellQt::Window for a QWindow: a QObject whose Q_PROPERTYs
     (layer, anchors, keyboardInteractivity, …) configure the surface."""
-    lib = ctypes.CDLL("libLayerShellQtInterface.so.6")
+    # Our bundled build by path (the loader would find the system's first), or the system's.
+    lib = ctypes.CDLL(os.environ.get("SCT_LAYER_SHELL_LIB", "libLayerShellQtInterface.so.6"))
     get = lib._ZN12LayerShellQt6Window3getEP7QWindow    # static Window *get(QWindow *)
     get.restype = ctypes.c_void_p
     get.argtypes = [ctypes.c_void_p]

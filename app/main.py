@@ -21,8 +21,8 @@ def _arg_value(name: str) -> str | None:
 def _run_overlay() -> int:
     layer_shell = "--layer-shell" in sys.argv
     if layer_shell:
-        # Started with the system Python (see overlay_host.layer_shell_command):
-        # its PySide6 comes first; the app's other libraries after it.
+        # With the system Python (overlay_host._layer_shell_mode "system"), its
+        # PySide6 comes first and the app's other libraries after it.
         extra = os.environ.get("SCT_EXTRA_SITE", "")
         sys.path.extend(p for p in extra.split(os.pathsep) if p and p not in sys.path)
         os.environ["QT_QPA_PLATFORM"] = "wayland"

@@ -137,8 +137,11 @@ position, size and opacity are remembered.
   game process (no injection, no hooks), so Easy Anti-Cheat has nothing to object to.
 - **Linux, KDE Plasma:** the hotkeys are KDE global shortcuts (listed under *SC-Toolkit*
   in System Settings → Shortcuts), so they work whether the game runs through Wine's
-  Wayland driver or XWayland. The overlay window itself runs through XWayland so it can
-  stay on top.
+  Wayland driver or XWayland. On Wayland the overlay is a layer-shell surface (the
+  AppImage brings its own LayerShellQt): KWin keeps it above the game, and clicking it
+  doesn't hand the focus back to the game. On Plasma X11 it's an ordinary X11 window.
+- **Wayland desktops without layer-shell (e.g. GNOME):** the overlay runs through
+  XWayland. Set `SCT_OVERLAY_BACKEND=x11` to force that on any desktop.
 - **Other Linux desktops:** the hotkeys use an X11 key grab, which only sees keys while
   an X11/XWayland window has focus. **Steam Deck Game Mode / gamescope is not supported**: gamescope only
   shows the game itself. If the hotkeys don't react, bind a desktop shortcut to

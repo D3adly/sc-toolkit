@@ -32,17 +32,28 @@ QtWebEngineCore QtWebEngineQuick QtWebEngineWidgets QtWebSockets QtWebView QtXml
 """.split()
 excludes = [f"PySide6.{m}" for m in UNUSED_QT] + ["tkinter", "unittest", "pydoc"]
 
+binaries = collect_dynamic_libs("sdl2dll")   # SDL2 shipped inside pysdl2-dll (joystick input)
+# LayerShellQt built for our PySide6's Qt (packaging/build_layershellqt.sh):
+# the layer-shell overlay on KDE Wayland (see app.overlay_host).
+layershellqt = ROOT / "build" / "layershellqt"
+if not WINDOWS and (layershellqt / "lib").is_dir():
+    binaries += [
+        (str(layershellqt / "lib" / "libLayerShellQtInterface.so.6"), "PySide6/Qt/lib"),
+        (str(layershellqt / "plugins" / "wayland-shell-integration" / "liblayer-shell.so"),
+         "PySide6/Qt/plugins/wayland-shell-integration"),
+    ]
+
 a = Analysis(
     [str(ROOT / "packaging" / "entry.py")],
     pathex=[str(ROOT)],
     datas=datas,
-    # SDL2 shared library shipped inside pysdl2-dll (joystick input).
-    binaries=collect_dynamic_libs("sdl2dll"),
+    binaries=binaries,
     excludes=excludes,
     # Tool views and the overlay are imported lazily (and by name in --smoke-test).
     hiddenimports=[
         "app.ui.bindings_view", "app.ui.maps_view", "app.ui.mining_view", "app.ui.salvage_view",
-        "app.ui.settings_view", "app.ui.overlay", "app.ui.overlay_panels", "app.hotkeys",
+        "app.ui.settings_view", "app.ui.overlay", "app.ui.overlay_panels", "app.ui.layer_overlay",
+        "app.hotkeys",
         "jeepney", "jeepney.io.blocking", "jeepney.bus_messages",
         "sdl2", "sdl2dll",
     ],

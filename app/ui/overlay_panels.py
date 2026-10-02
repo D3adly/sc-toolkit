@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 import traceback
 
 from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, Signal
@@ -27,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import channel as channel_mod, maps, mining, salvage, settings
+from app import channel as channel_mod, datahub, maps, mining, salvage, settings
 from app.theme import PALETTE
 from app.ui.maps_view import ZOOM_STEP, ZoomView, _cache_path, _ImageLoader
 from app.ui.mining_view import _QualityHist, _pct, _quality_tip, _signature_line
@@ -131,6 +132,18 @@ def _channel_root():
     found = channel_mod.resolve_channel_paths(root, ch).channel_root if ch else None
     _log(f"game folder {root} → channel {ch} → {found}")
     return found
+
+
+def _cached_game(name: str, root):
+    """Game data from the launcher's cache (app.datahub). After a patch the
+    launcher may still be building it: wait for it rather than read the game
+    files a second time in this process."""
+    for _attempt in range(40):
+        data = datahub.read_game(name, root)
+        if data is not None:
+            return data
+        time.sleep(30)
+    raise RuntimeError("SC-Toolkit hasn't finished reading the game files yet. Keep it open and try again.")
 
 
 class _Task(QObject):
@@ -364,7 +377,7 @@ class MiningPanel(_ScrollPanel):
             if root is None:
                 self._message("Set up your Star Citizen folder in the launcher first.")
                 return
-            self._task.run(lambda: mining.load(root), "mining data")
+            self._task.run(lambda: _cached_game("mining", root), "mining data")
 
     def _on_loaded(self, data: dict) -> None:
         self.data = data
@@ -626,7 +639,7 @@ class SalvagePanel(_ScrollPanel):
             if root is None:
                 self._message("Set up your Star Citizen folder in the launcher first.")
                 return
-            self._task.run(lambda: salvage.load_game_data(root), "salvage data")
+            self._task.run(lambda: _cached_game("salvage", root), "salvage data")
 
     def _on_loaded(self, game: dict) -> None:
         self.game = game

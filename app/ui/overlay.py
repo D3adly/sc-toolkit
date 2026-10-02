@@ -451,6 +451,16 @@ class OverlayWindow(QWidget):
         if activate:
             activate()
 
+    def reload_game_data(self) -> None:
+        """The launcher has read a new game version: panels built on game
+        data load it again (now, if showing; else when next opened)."""
+        for tool, attr in (("mining", "data"), ("salvage", "game")):
+            panel = self._panels.get(tool)
+            if panel is not None and hasattr(panel, attr):
+                setattr(panel, attr, None)
+                if self.tool == tool and self.stack.isVisible():
+                    panel.activate()
+
     def fit_height(self, tool: str, content_height: int) -> None:
         """Called by auto-height panels after each render: the window grows or
         shrinks to show all of `content_height`, up to AUTO_HEIGHT_MAX of the
@@ -720,6 +730,7 @@ def run(parent_pid: int | None, layer_shell: bool = False) -> int:
         "toggle-clickthrough": overlay.toggle_click_through,
         "live-log-on": lambda: _live_feed().set_enabled(True),
         "live-log-off": lambda: _live_feed().set_enabled(False),
+        "game-data-updated": lambda: (overlay.reload_game_data(), _live_feed().reload_lookups()),
         "quit": app.quit,
     }
     server.command.connect(lambda cmd: actions.get(cmd, lambda: None)())

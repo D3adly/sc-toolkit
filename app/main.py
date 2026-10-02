@@ -113,15 +113,20 @@ def main():
         from PySide6.QtCore import QTimer
 
         for view in ("bindings_view", "maps_view", "mining_view", "salvage_view", "settings_view",
-                     "overlay", "overlay_panels", "overlay_live", "stats_view", "whats_new_view"):
+                     "overlay", "overlay_panels", "overlay_live", "stats_view", "whats_new_view",
+                     "hangar_view"):
             importlib.import_module(f"app.ui.{view}")
         for module in ("mining", "salvage", "datacore", "socpak", "joyinput", "hotkeys", "gamelog",
-                       "contracts", "tracker", "stats"):
+                       "contracts", "tracker", "stats", "ships", "hangar", "shipdata", "datahub"):
             importlib.import_module(f"app.{module}")
         from app import changelog
 
         if not changelog.sections():
             sys.exit("smoke test: CHANGELOG.md is missing or empty")
+        from app import ships
+
+        if len(ships.load()) < 100:
+            sys.exit("smoke test: the bundled ship catalogue (assets/ships.json) is missing")
         from app.joyinput import JoystickInput
 
         if not JoystickInput.supported():

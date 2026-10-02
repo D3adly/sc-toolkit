@@ -27,20 +27,18 @@ and an id that isn't in the data; they're matched by name instead.
 Also the category of every crafting blueprint (`blueprint_category`), keyed
 by the item name the log shows.
 
-Extracted once per game build (Game2.dcb, plus the installed localization)
-and cached as JSON, like app.mining.
+Built once per game build (Game2.dcb, plus the installed localization) by
+app.datahub, which caches it; read it with datahub.read_game("contracts", …).
 """
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
-from app import bindings, config, p4k
+from app import config
 from app.datacore import DataCore
 
-GAME2_ENTRY = "Data\\Game2.dcb"
 CACHE = config.CACHE_DIR / "contracts"
 FORMAT = 7  # bump when the extracted shape changes
 # A localization installed next to the game (e.g. StarStrings) overrides the
@@ -379,29 +377,24 @@ class _Extractor:
         return info
 
 
-def _installed_ini(channel_root: Path) -> Path:
+def installed_ini(channel_root: Path) -> Path:
     return channel_root.joinpath(*INSTALLED_INI)
 
 
-def _localizations(channel_root: Path) -> tuple[dict[str, str], dict[str, str]]:
-    """(the game's packed global.ini, the installed one or {})."""
-    loc_raw = bindings._load_from_p4k_cached(channel_root, bindings.GLOBAL_INI_ENTRY, "global.ini")
-    packed = bindings._parse_ini(loc_raw) if loc_raw else {}
+def localization_key(channel_root: Path) -> str:
+    """Part of the cache key: installing or updating a localization changes
+    the names the log shows, so the database is rebuilt."""
     try:
-        installed = bindings._parse_ini(_installed_ini(channel_root).read_bytes())
+        return f"-{int(installed_ini(channel_root).stat().st_mtime)}"
     except OSError:
-        installed = {}
-    return packed, installed
+        return ""
 
 
-def _extract(channel_root: Path, progress) -> dict:
-    progress("Reading Star Citizen contract data (once per patch)…")
-    raw = p4k.extract(channel_root / "Data.p4k", [GAME2_ENTRY]).get(GAME2_ENTRY)
-    if raw is None:
-        raise RuntimeError("Game2.dcb not found in Data.p4k")
-    dc = DataCore(raw)
-    del raw
-    packed, installed = _localizations(channel_root)
+def build(game, progress) -> dict:
+    """The database from the game files (app.datahub.GameFiles); the hub
+    caches it per patch."""
+    dc = game.dc
+    packed, installed = game.loc, game.installed_loc
     ex = _Extractor(dc, {**packed, **installed})
 
     contracts: dict[str, dict] = {}
@@ -510,31 +503,3 @@ class Contracts:
                 if name in self._by_name:
                     return self._contracts[self._by_name[name]]
         return None
-
-
-def load(channel_root: Path, progress=lambda _msg: None) -> Contracts:
-    """Slow the first time after a game patch; cached afterwards. Call off
-    the UI thread."""
-    p4k_path = channel_root / "Data.p4k"
-    if not p4k_path.is_file():
-        raise RuntimeError(f"Data.p4k not found in {channel_root}")
-    key = bindings._cache_key(p4k_path)
-    try:
-        key += f"-{int(_installed_ini(channel_root).stat().st_mtime)}"
-    except OSError:
-        pass
-    cache_file = CACHE / f"contracts-{key}.json"
-    try:
-        cached = json.loads(cache_file.read_text())
-        if cached.get("format") == FORMAT:
-            return Contracts(cached)
-    except (OSError, ValueError):
-        pass
-    data = _extract(channel_root, progress)
-    CACHE.mkdir(parents=True, exist_ok=True)
-    for stale in CACHE.glob("contracts-*.json"):
-        stale.unlink(missing_ok=True)
-    tmp = cache_file.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data))
-    tmp.replace(cache_file)
-    return Contracts(data)

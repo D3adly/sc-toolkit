@@ -432,6 +432,94 @@ QFrame#Divider {{
     color: {text_secondary};
     font-size: 11px;
 }}
+#ShipCard {{
+    background: {bg_panel_strong};
+    border: 2px solid {border};
+    border-radius: 10px;
+}}
+#ShipCard[acquired="pledge"] {{
+    border: 2px solid {accent_dim};
+}}
+#ShipCard[acquired="ingame"] {{
+    border: 2px solid {info_dim};
+}}
+#ShipCard[acquired="pledge"]:hover {{
+    border: 2px solid {accent};
+}}
+#ShipCard[acquired="ingame"]:hover {{
+    border: 2px solid {info};
+}}
+#ShipImage {{
+    background: rgba(0, 0, 0, 0.35);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    color: {text_muted};
+    font-size: 11px;
+}}
+#ShipName {{
+    color: {text_primary};
+    font-size: 14px;
+    font-weight: 700;
+}}
+#AcquiredTag, #ConceptTag {{
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border-radius: 3px;
+    padding: 1px 6px;
+}}
+#ShipCard[acquired="pledge"] #AcquiredTag {{
+    color: {accent};
+    background: {accent_soft};
+}}
+#ShipCard[acquired="ingame"] #AcquiredTag {{
+    color: {info};
+    background: rgba(141, 180, 207, 0.16);
+}}
+#ConceptTag {{
+    color: {danger};
+    background: rgba(226, 106, 85, 0.16);
+}}
+#LoanerLine {{
+    color: {text_secondary};
+    font-size: 11px;
+    font-style: italic;
+}}
+
+#CargoTag {{
+    color: {text_secondary};
+    font-size: 11px;
+    font-weight: 600;
+}}
+#ShipTitle {{
+    color: {text_primary};
+    font-size: 22px;
+    font-weight: 700;
+}}
+#StatLine {{
+    color: {text_primary};
+    font-size: 12px;
+}}
+#LoadoutGroup {{
+    color: {info};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}}
+#LoadoutCount, #LoadoutSize {{
+    color: {accent};
+    font-size: 12px;
+    font-weight: 700;
+}}
+#AcquiredTag[acquired="pledge"] {{
+    color: {accent};
+    background: {accent_soft};
+}}
+#AcquiredTag[acquired="ingame"] {{
+    color: {info};
+    background: rgba(141, 180, 207, 0.16);
+}}
+
 #StatsNotice {{
     color: {text_primary};
     font-size: 12px;

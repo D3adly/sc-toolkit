@@ -9,9 +9,8 @@ All data is extracted from the game files once per build (app.mining).
 from __future__ import annotations
 
 import html
-import threading
 
-from PySide6.QtCore import QObject, QRectF, Qt, Signal
+from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -29,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import channel as channel_mod, mining, settings
+from app import channel as channel_mod, datahub, mining, settings
 from app.theme import PALETTE
 
 KIND_LABELS = {"planet": "Planet", "moon": "Moon", "lagrange": "Lagrange point",
@@ -155,20 +154,6 @@ def _signature_line(rock: dict, item: dict, method: str) -> tuple[str, str]:
     return text, tip
 
 
-class _Loader(QObject):
-    loaded = Signal(object)
-    progress = Signal(str)
-    failed = Signal(str)
-
-    def run(self, channel_root) -> None:
-        def work():
-            try:
-                self.loaded.emit(mining.load(channel_root, self.progress.emit))
-            except Exception as exc:  # shown in the view, not fatal
-                self.failed.emit(str(exc))
-        threading.Thread(target=work, daemon=True).start()
-
-
 # -- one location --------------------------------------------------------------
 
 class LocationCard(QFrame):
@@ -284,8 +269,8 @@ class MiningView(QWidget):
         self.method = "ship"
         self.picked: list[str] = []
 
-        self._loader = _Loader(self)
-        self._loader.loaded.connect(self._on_loaded)
+        self._loader = datahub.GameDataWaiter("mining", self)
+        self._loader.ready.connect(self._on_loaded)
         self._loader.progress.connect(self._show_message)
         self._loader.failed.connect(
             lambda msg: self._show_message(f"Couldn't read Star Citizen's game data:\n\n{msg}"))
@@ -394,13 +379,20 @@ class MiningView(QWidget):
     # -- lifecycle -------------------------------------------------------------------
     def activate(self) -> None:
         if self.data is None:
-            self._loader.run(self.paths.channel_root)
+            self._loader.request(self.paths.channel_root)
 
     def deactivate(self) -> None:
         pass
 
     def _on_loaded(self, data: dict) -> None:
         self.data = data
+        # Delivered again when a new game version's data is ready: rebuild.
+        for btn in self.system_group.buttons():
+            self.system_group.removeButton(btn)
+            self.system_bar.removeWidget(btn)
+            btn.deleteLater()
+        if self.system is not None and all(s["id"] != self.system for s in data["systems"]):
+            self.system = None
         options = [(None, "All")] + [(s["id"], s["name"]) for s in data["systems"]]
         for i, (key, label) in enumerate(options):
             btn = self._segment(label, i, len(options))

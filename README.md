@@ -37,6 +37,8 @@ data and tools goes to them:
 | [UEX Corp](https://uexcorp.space/) | Commodity prices for salvage cargo (via the public UEX API) | The UEX Corp team |
 | [LUG Helper](https://github.com/starcitizen-lug/lug-helper) | Its `sc-launch.sh` starts the game on Linux | [Star Citizen Linux Users Group](https://github.com/starcitizen-lug) |
 | [VKB-Sim](https://www.vkb-sim.pro/) | Joystick photos in the bindings view (downloaded from VKB, not bundled) | VKB-Sim |
+| [Star Citizen Wiki](https://starcitizen.tools/) ([API](https://api.star-citizen.wiki/)) | **My Ships**: the ship list (including ships in concept and their loaners), game ids and ship pictures (CC BY-SA 4.0) | The Star Citizen Wiki community |
+| [Erkul](https://www.erkul.games/) | The Erkul button on each ship in My Ships opens the ship there | Erkul |
 
 Quick links in the launcher also point to [SCMDB](https://scmdb.net/),
 [Erkul](https://erkul.games/), [UEX Corp](https://uexcorp.space/) and
@@ -85,7 +87,15 @@ it adds a few tools that read their data straight from your own game files.
   blueprints received (grouped by type, with a type filter), travel, ships flown,
   deaths and losses, and refinery work orders completed. Money isn't counted: most
   mission rewards aren't in the log, so the totals couldn't be right.
-- **Live log reader** (the **LIVE LOG** switch, off by default). While you play, it
+- **My Ships.** A hangar tracker: add the ships you own, pledged on the store or
+  bought in game (gold or steel-blue outline), as a grid of cards with pictures.
+  Filter by role, size, purchase and status, sort, give a ship your own name, note
+  its insurance. Ships still in concept show their loaners; each released ship has an
+  **Erkul** button. Click a ship for its details: the default loadout and stats (speeds,
+  shields, hull, power balance, cooling, quantum, fuel, cargo, crew), read from your game
+  files once per patch. The ship list comes from the Star Citizen Wiki (updated weekly);
+  your hangar stays on your PC (`hangar.json` in the app's data folder).
+- **Live log reader** (the **LIVE LOG** switch in the left panel, off by default). While you play, it
   follows the current session's `Game.log`, from the moment the game started, even if
   SC-Toolkit was opened later. It feeds the overlay's Missions and Session tabs. It
   only reads the log: nothing is sent anywhere.
@@ -117,7 +127,7 @@ A small always-on-top bar with five tabs, picked by icon:
 
 Picking a tab opens its panel underneath; picking it again folds it back to the bar.
 
-Switch it on with **IN-GAME OVERLAY** next to *SC-TOOLKIT TOOLS* in the launcher. While
+Switch it on with **IN-GAME OVERLAY** under *IN GAME* in the launcher's left panel. While
 it's off, nothing runs and the hotkeys do nothing. Then:
 
 | Default key | Action |
@@ -127,7 +137,7 @@ it's off, nothing runs and the hotkeys do nothing. Then:
 
 Change the keys in **Settings → In-game overlay hotkeys**: an F-key, Insert, Home, End,
 Page Up/Down, Pause or Scroll Lock on its own, or a letter/digit with Ctrl, Alt or Meta.
-The **In-game Overlay** tile opens it too. The tray menu has the same actions. Drag the overlay by its
+**Settings → In-game overlay → Open the overlay** opens it too. The tray menu has the same actions. Drag the overlay by its
 bar, resize it from its bottom-right corner, and set its opacity with the slider; its
 position, size and opacity are remembered.
 
@@ -192,6 +202,12 @@ install locations. Otherwise set:
 | **Launch script** | Windows: `RSI Launcher.exe`. Linux: the script that starts the RSI Launcher, i.e. `sc-launch.sh` in your Wine prefix for LUG Helper installs. |
 | **GameGlass** *(optional)* | The GameGlass executable, if you use it. |
 | **Backup folder** *(optional)* | Where backups and binding profiles go. The default is the app's data folder. |
+| **RSI Launcher log** *(optional, auto-detected)* | The RSI Launcher's `logs/log.log`: `%APPDATA%\rsilauncher\logs\log.log` on Windows, `…/drive_c/users/<you>/AppData/Roaming/rsilauncher/logs/log.log` in the Wine prefix on Linux. SC-Toolkit watches it to notice game updates as they happen. |
+
+**Game updates:** SC-Toolkit reads the game files once per game version, in the
+background, and its tools only use that cached data. While the RSI Launcher installs
+an update, the tools keep the previous version's data; when the update is done, SC-Toolkit
+reads the new files (about 20 seconds) and the tools switch over. No restart needed.
 
 Your settings, backups and cached data live in your user profile, not next to the
 program, so replacing the exe or AppImage with a newer version keeps everything:
@@ -244,6 +260,8 @@ on Windows and Ubuntu 22.04, smoke-tested, and attached to a GitHub Release:
    offers to people who opted into beta versions.
 3. Keep the file names (`SC-Toolkit-windows.exe`, `SC-Toolkit-linux.AppImage`): the
    in-app updater looks for exactly these.
+4. Optionally refresh the bundled ship list first (used until the app's first
+   download): `.venv/bin/python -m tools.update_ship_snapshot`.
 
 For a test build without a release, run the workflow manually (**Actions → Build &
 release → Run workflow**) and download the files from the run's artifacts.

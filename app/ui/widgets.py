@@ -2,7 +2,7 @@
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QAbstractButton
+from PySide6.QtWidgets import QAbstractButton, QLabel
 
 from app.theme import PALETTE
 
@@ -39,3 +39,24 @@ class Switch(QAbstractButton):
     def leaveEvent(self, event):
         super().leaveEvent(event)
         self.update()
+
+
+class Elided(QLabel):
+    """One line that ends in "…" when it doesn't fit (full text in the tooltip)."""
+
+    def __init__(self, text: str, name: str, tip: str = ""):
+        super().__init__(text, objectName=name)
+        self.setToolTip(tip or text)
+        self.setMinimumWidth(40)
+
+    def minimumSizeHint(self):
+        hint = super().minimumSizeHint()
+        hint.setWidth(40)
+        return hint
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.setPen(self.palette().color(self.foregroundRole()))
+        p.setFont(self.font())
+        text = self.fontMetrics().elidedText(self.text(), Qt.ElideRight, self.width())
+        p.drawText(self.rect(), int(self.alignment() | Qt.AlignVCenter), text)

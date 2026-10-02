@@ -205,6 +205,18 @@ GLYPHS = {
 <circle cx="86" cy="40" r="4" fill="#e26a55"/>
 <circle cx="40" cy="84" r="3.5" fill="url(#steel)" fill-opacity="0.8"/>
 """,
+    # Hangar arch with a ship parked inside (My Ships).
+    "hangar": f"""
+<path d="M12 106 V60 Q64 8 116 60 V106 Z" fill="url(#goldDark)"/>
+<path d="M12 106 V60 Q64 8 116 60" fill="none" stroke="url(#gold)" stroke-width="5" stroke-linejoin="round"/>
+<path d="M26 106 V66 Q64 28 102 66 V106 Z" fill="{INK}"/>
+<path d="M26 66 Q64 28 102 66" fill="none" stroke="url(#gold)" stroke-width="2" stroke-opacity="0.45"/>
+<path d="M64 46 L92 92 L64 84 L36 92 Z" fill="url(#steel)"/>
+<path d="M64 46 L92 92 L64 84 Z" fill="#4d6a80" fill-opacity="0.55"/>
+<path d="M64 58 L69 72 L64 76 L59 72 Z" fill="url(#gold)"/>
+<path d="M30 100 H98" stroke="url(#gold)" stroke-width="3" stroke-linecap="round" stroke-dasharray="8 6"/>
+<path d="M19 106 H109" stroke="url(#gold)" stroke-width="4" stroke-linecap="round"/>
+""",
     # Globe with an update arrow (Star Strings localisation).
     "starstrings": f"""
 <circle cx="56" cy="58" r="38" fill="url(#gold)"/>

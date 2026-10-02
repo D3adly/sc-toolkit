@@ -8,13 +8,14 @@ or the 157 GB archive:
   pools, and each ship's default loadout. Claims pick a ship by tag — every
   tier's spawn option lists a size tag (a distinct Tag record per tier)
   plus AvailableToSalvage; the matching entities are the dedicated
-  `*_Unmanned_Salvage` ship variants. Re-extracted automatically once per
-  game build (keyed like bindings' p4k cache).
+  `*_Unmanned_Salvage` ship variants. Built once per game build by
+  app.datahub (build_game_data), which caches it.
 - **Community spreadsheet** (Google Sheets, public CSV export): which
   components come off which ship, their sell/dismantle prices, the claim
-  fee per ship, and the cargo observed aboard. Refreshed on demand.
+  fee per ship, and the cargo observed aboard. Refreshed at most daily
+  (app.datahub).
 - **UEX** (api.uexcorp.space): average commodity sell prices, used to
-  price that cargo. Refreshed on demand.
+  price that cargo. Refreshed at most daily (app.datahub).
 
 Item and ship names come from the *vanilla* global.ini in Data.p4k: a
 loose StarStrings copy prefixes item names ("Ind/1/C Thermax"), which
@@ -32,10 +33,9 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app import bindings, config, p4k
+from app import config
 from app.datacore import DataCore
 
-GAME2_ENTRY = "Data\\Game2.dcb"
 GENERATOR_RECORD = "ContractGenerator.Adagio_Generator"
 CLAIM_TEMPLATE_PREFIX = "@ContractTemplate.Salvage_Lawful"
 SALVAGE_VARIANT_SUFFIX = "_Unmanned_Salvage"
@@ -277,16 +277,10 @@ def _walk_loadout(dc, loc, loadout, memo, counts: dict[str, int], depth=0) -> No
         _walk_loadout(dc, loc, entry.get("loadout"), memo, counts, depth + 1)
 
 
-def _extract_game_data(channel_root: Path, progress) -> dict:
-    progress("Reading Star Citizen game data (once per patch)…")
-    raw = p4k.extract(channel_root / "Data.p4k", [GAME2_ENTRY]).get(GAME2_ENTRY)
-    if raw is None:
-        raise SalvageError("Game2.dcb not found in Data.p4k")
-    dc = DataCore(raw)
-    del raw
-
-    loc_raw = bindings._load_from_p4k_cached(channel_root, bindings.GLOBAL_INI_ENTRY, "global.ini")
-    loc = bindings._parse_ini(loc_raw) if loc_raw else {}
+def build_game_data(game, progress) -> dict:
+    """Claim tiers and ship loadouts from the game files
+    (app.datahub.GameFiles); the hub caches them per patch."""
+    dc, loc = game.dc, game.loc
 
     progress("Finding salvage claim ship pools…")
     generator = dc.record(GENERATOR_RECORD)
@@ -357,24 +351,6 @@ def _extract_game_data(channel_root: Path, progress) -> dict:
             "components": comps,
         }
     return {"format": GAME_FORMAT, "tiers": tiers, "ships": ships_out}
-
-
-def load_game_data(channel_root: Path, progress=lambda _msg: None) -> dict:
-    """Slow the first time after a game patch (decodes Game2.dcb, ~1 min);
-    read from the local cache afterwards. Call off the UI thread.
-    """
-    p4k_path = channel_root / "Data.p4k"
-    if not p4k_path.is_file():
-        raise SalvageError(f"Data.p4k not found in {channel_root}")
-    cache_file = CACHE / f"game-{bindings._cache_key(p4k_path)}.json"
-    cached = _read_json(cache_file)
-    if cached and cached.get("format") == GAME_FORMAT:
-        return cached
-    data = _extract_game_data(channel_root, progress)
-    for stale in CACHE.glob("game-*.json"):
-        stale.unlink(missing_ok=True)
-    _write_json(cache_file, data)
-    return data
 
 
 # -- spreadsheet ------------------------------------------------------------------
@@ -560,6 +536,14 @@ def load_sheet() -> Sheet | None:
         fetched=stored.get("fetched", 0), components=components, ships=ships,
         where_to_sell=sell_info, unmatched=sorted(set(unmatched)),
     )
+
+
+def sheet_fetched() -> float:
+    return float((_read_json(CACHE / "sheet.json") or {}).get("fetched") or 0)
+
+
+def uex_fetched() -> float:
+    return float((_read_json(CACHE / "uex.json") or {}).get("fetched") or 0)
 
 
 def load_uex() -> tuple[float, dict[str, dict]] | None:

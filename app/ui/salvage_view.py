@@ -11,10 +11,9 @@ works from the local copies.
 
 from __future__ import annotations
 
-import threading
 import time
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -29,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import channel as channel_mod, osutil, salvage, settings
+from app import channel as channel_mod, datahub, osutil, salvage, settings
 from app.salvage import ComponentRow, ShipRow
 
 ALL_TIERS = "__all__"
@@ -65,34 +64,6 @@ def _better_option(c: ComponentRow) -> str | None:
     if c.sell is None or c.dismantle is None or not (c.sell or c.dismantle):
         return None
     return "sell" if c.sell >= c.dismantle else "dismantle"
-
-
-# -- background work -----------------------------------------------------------
-
-class _Worker(QObject):
-    game_loaded = Signal(object)
-    progress = Signal(str)
-    refreshed = Signal(str)          # "sheet" | "uex"
-    failed = Signal(str, str)        # what, message
-
-    def load_game(self, channel_root) -> None:
-        def work():
-            try:
-                self.game_loaded.emit(salvage.load_game_data(channel_root, self.progress.emit))
-            except Exception as exc:  # shown in the view, not fatal
-                self.failed.emit("game", str(exc))
-        threading.Thread(target=work, daemon=True).start()
-
-    def refresh(self, what: str) -> None:
-        fetch = salvage.refresh_sheet if what == "sheet" else salvage.refresh_uex
-
-        def work():
-            try:
-                fetch()
-                self.refreshed.emit(what)
-            except Exception as exc:
-                self.failed.emit(what, str(exc))
-        threading.Thread(target=work, daemon=True).start()
 
 
 # -- one ship ---------------------------------------------------------------------
@@ -274,13 +245,16 @@ class SalvageView(QWidget):
         self.sheet: salvage.Sheet | None = None
         self.uex: tuple[float, dict] | None = None
         self.expanded: set[str] = set()
-        self._busy: set[str] = set()
 
-        self._worker = _Worker(self)
-        self._worker.game_loaded.connect(self._on_game_loaded)
-        self._worker.progress.connect(self._show_message)
-        self._worker.refreshed.connect(self._on_refreshed)
-        self._worker.failed.connect(self._on_failed)
+        # Game data and the two web sources come from app.datahub: the game
+        # files are read once per patch, the sheet and prices at most daily.
+        self._game = datahub.GameDataWaiter("salvage", self)
+        self._game.ready.connect(self._on_game_loaded)
+        self._game.progress.connect(self._show_message)
+        self._game.failed.connect(
+            lambda msg: self._show_message(f"Couldn't read Star Citizen's game data:\n\n{msg}"))
+        datahub.hub().updated.connect(self._on_hub_updated)
+        datahub.hub().failed.connect(self._on_hub_failed)
 
         self._build_ui()
 
@@ -372,13 +346,13 @@ class SalvageView(QWidget):
         self.sheet = salvage.load_sheet()
         self.uex = salvage.load_uex()
         self._update_sources()
-        # First visit: fetch what has never been fetched; afterwards only on request.
-        if self.sheet is None:
-            self._refresh("sheet")
-        if self.uex is None:
-            self._refresh("uex")
+        # Never downloaded (e.g. offline at startup): try now; the hub won't
+        # download more than once a day either way.
+        for what, data in (("sheet", self.sheet), ("uex", self.uex)):
+            if data is None:
+                self._refresh(what)
         if self.game is None:
-            self._worker.load_game(self.paths.channel_root)
+            self._game.request(self.paths.channel_root)
         else:
             self._render()
 
@@ -429,43 +403,52 @@ class SalvageView(QWidget):
                           and (size is None or c.size == size))
 
     # -- refresh buttons ------------------------------------------------------------
+    _SOURCES = {"sheet": "salvage_sheet", "uex": "uex"}
+
     def _refresh(self, what: str) -> None:
-        if what in self._busy:
-            return
-        self._busy.add(what)
         btn = self.sheet_btn if what == "sheet" else self.uex_btn
-        btn.setEnabled(False)
-        btn.setText("Refreshing…")
-        self._worker.refresh(what)
+        if datahub.hub().refresh_web(self._SOURCES[what]):
+            btn.setEnabled(False)
+            btn.setText("Refreshing…")
+        self._update_sources()
 
-    def _done(self, what: str) -> None:
-        self._busy.discard(what)
-        btn = self.sheet_btn if what == "sheet" else self.uex_btn
-        btn.setEnabled(True)
-        btn.setText("Refresh sheet" if what == "sheet" else "Refresh prices")
-
-    def _on_refreshed(self, what: str) -> None:
-        self._done(what)
-        if what == "sheet":
+    def _on_hub_updated(self, name: str) -> None:
+        if name == "salvage_sheet":
             self.sheet = salvage.load_sheet()
-        else:
+        elif name == "uex":
             self.uex = salvage.load_uex()
+        else:
+            return
         self._update_sources()
         self._render()
 
-    def _on_failed(self, what: str, message: str) -> None:
-        if what == "game":
-            self._show_message(f"Couldn't read Star Citizen's game data:\n\n{message}")
+    def _on_hub_failed(self, name: str, message: str) -> None:
+        if name not in self._SOURCES.values():
             return
-        self._done(what)
-        title = "Salvage — spreadsheet" if what == "sheet" else "Salvage — UEX prices"
-        QMessageBox.warning(self, title, message + "\n\nThe previous local copy is still used.")
+        self._update_sources()
+        title = "Salvage — spreadsheet" if name == "salvage_sheet" else "Salvage — UEX prices"
+        if self.isVisible():
+            QMessageBox.warning(self, title, message + "\n\nThe previous local copy is still used.")
 
     def _update_sources(self) -> None:
         self.sources_label.setText(
             f"Sheet: {_when(self.sheet.fetched if self.sheet else None)}    "
             f"Prices: {_when(self.uex[0] if self.uex else None)}"
         )
+        # Each source is downloaded at most once a day: the buttons say when
+        # the next refresh is possible.
+        h = datahub.hub()
+        for what, btn, label in (("sheet", self.sheet_btn, "Refresh sheet"), ("uex", self.uex_btn, "Refresh prices")):
+            source = self._SOURCES[what]
+            busy = h.pending(source)
+            fresh = datahub.WEB_SOURCES[source].fresh()
+            btn.setEnabled(not busy and not fresh)
+            btn.setText("Refreshing…" if busy else label)
+            if fresh:
+                hours = max(1, round((datahub.WEB_SOURCES[source].max_age - h.web_age(source)) / 3600))
+                btn.setToolTip(f"Updated less than a day ago; it can be refreshed again in about {hours} h.")
+            else:
+                btn.setToolTip("Download it again (at most once a day)")
 
     # -- rendering ----------------------------------------------------------------------
     def _show_message(self, text: str) -> None:

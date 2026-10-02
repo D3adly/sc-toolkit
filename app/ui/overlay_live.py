@@ -18,13 +18,13 @@ import traceback
 from datetime import datetime, timezone
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from app import channel as channel_mod, contracts, gamelog, ipc, settings
+from app import channel as channel_mod, contracts, datahub, gamelog, ipc, settings
 from app.stats import pretty
 from app.tracker import BLUEPRINT_WINDOW_SECONDS, Mission, SessionTracker
 from app.ui.overlay_panels import _Clickable, _ScrollPanel, _label, _log
+from app.ui.widgets import Elided as _Elided
 
 RENDER_DELAY_MS = 250      # coalesces the burst of events when catching up
 CLOCK_MS = 30_000          # refreshes "12 min ago" style times
@@ -100,14 +100,28 @@ class LiveFeed(QObject):
                     self.owned_by_channel.setdefault(e.channel.upper(), set()).add(e.data.get("name", ""))
             except Exception:
                 _log(f"reading blueprint history failed:\n{traceback.format_exc()}")
-            try:
-                ch = channel_mod.pick_default_channel(root)
-                if ch:
-                    self.contracts = contracts.load(channel_mod.resolve_channel_paths(root, ch).channel_root)
-            except Exception:
-                _log(f"loading contract data failed:\n{traceback.format_exc()}")
+            self.changed.emit()
+            # The mission database is built by the launcher (app.datahub, once
+            # per patch); after a patch it may still be at it: check back.
+            ch = channel_mod.pick_default_channel(root)
+            for _attempt in range(60):
+                try:
+                    self.contracts = datahub.read_game(
+                        "contracts", channel_mod.resolve_channel_paths(root, ch).channel_root) if ch else None
+                except Exception:
+                    _log(f"loading contract data failed:\n{traceback.format_exc()}")
+                    return
+                if self.contracts is not None or not ch:
+                    break
+                time.sleep(60)
             self.changed.emit()
         threading.Thread(target=work, daemon=True).start()
+
+    def reload_lookups(self) -> None:
+        """New game data from the launcher: read the mission database again."""
+        if self._lookups_started:
+            self._lookups_started = False
+            self._load_lookups()
 
     def contract(self, m: Mission) -> dict | None:
         if self.contracts is None or not (m.contract_id or m.contract):
@@ -236,27 +250,6 @@ FLASH_MS = 700             # the tracked mission's one blink
 COMBAT_TAGS = {"ship": "Ship combat", "fps": "FPS combat"}
 OUTCOMES = {"Complete": "Completed", "Fail": "Failed", "Abandon": "Abandoned"}   # the log's words → ours
 blueprint_key = contracts.blueprint_key     # "already owned" matching
-
-
-class _Elided(QLabel):
-    """One line that ends in "…" when it doesn't fit (full text in the tooltip)."""
-
-    def __init__(self, text: str, name: str, tip: str = ""):
-        super().__init__(text, objectName=name)
-        self.setToolTip(tip or text)
-        self.setMinimumWidth(40)
-
-    def minimumSizeHint(self):
-        hint = super().minimumSizeHint()
-        hint.setWidth(40)
-        return hint
-
-    def paintEvent(self, _event):
-        p = QPainter(self)
-        p.setPen(self.palette().color(self.foregroundRole()))
-        p.setFont(self.font())
-        text = self.fontMetrics().elidedText(self.text(), Qt.ElideRight, self.width())
-        p.drawText(self.rect(), int(self.alignment() | Qt.AlignVCenter), text)
 
 
 def _mission_title(m: Mission, info: dict | None) -> str:

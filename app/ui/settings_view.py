@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import __version__, channel as channel_mod, hotkeys, settings
+from app import __version__, channel as channel_mod, datahub, hotkeys, settings
 from app.settings import Settings
 from app.theme import PALETTE
 from app.ui.widgets import Switch
@@ -134,6 +134,7 @@ class _HotkeyRow:
 class SettingsView(QWidget):
     saved = Signal()
     back_requested = Signal()
+    open_overlay_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -216,6 +217,17 @@ class SettingsView(QWidget):
             "Where keybind backups and saved binding profiles are kept. Leave empty for the default.",
             folder=True, placeholder=str(settings.DEFAULT_BACKUP_DIR), on_change=self._validate,
         )
+        self.rsi_log = _PathRow(
+            grid, 4, "RSI Launcher log (optional)",
+            "The RSI Launcher's logs\\log.log (in %APPDATA%\\rsilauncher on Windows, in the Wine prefix's "
+            "user folder on Linux). SC-Toolkit watches it to notice game updates: while one runs, the "
+            "tools keep the previous version's data; when it's done, they switch to the new one."
+            if WINDOWS else
+            "The RSI Launcher's logs/log.log, in the Wine prefix: drive_c/users/<you>/AppData/Roaming/"
+            "rsilauncher. SC-Toolkit watches it to notice game updates: while one runs, the tools keep the "
+            "previous version's data; when it's done, they switch to the new one.",
+            folder=False, file_filter="Log (*.log);;All files (*)", on_change=self._validate,
+        )
         sections.addWidget(panel)
 
         overlay_panel = QFrame(objectName="SidePanel")
@@ -225,21 +237,34 @@ class SettingsView(QWidget):
         ogrid.setVerticalSpacing(12)
         ogrid.setColumnMinimumWidth(0, 190)
         ogrid.setColumnStretch(1, 1)
-        ogrid.addWidget(QLabel("IN-GAME OVERLAY HOTKEYS", objectName="SectionLabel"), 0, 0, 1, 2)
+        ogrid.addWidget(QLabel("IN-GAME OVERLAY", objectName="SectionLabel"), 0, 0, 1, 2)
+        about = QLabel(
+            "Missions, session status, Maps, Mining and Salvage in a small window on top of the game "
+            "(run Star Citizen in Borderless mode). It never touches the game itself. Switch it on "
+            "with IN-GAME OVERLAY in the launcher's left panel.",
+            objectName="InspectorText",
+        )
+        about.setWordWrap(True)
+        ogrid.addWidget(about, 1, 0, 1, 2)
+        open_btn = QPushButton("Open the overlay", objectName="MiniButton")
+        open_btn.setCursor(Qt.PointingHandCursor)
+        open_btn.setToolTip("Switches the overlay on if it's off, and shows it")
+        open_btn.clicked.connect(self.open_overlay_requested.emit)
+        ogrid.addWidget(open_btn, 2, 0, 1, 2, Qt.AlignLeft)
         note = QLabel(
-            "They work while Star Citizen has focus, as long as the overlay is switched on "
-            "(the switch next to SC-TOOLKIT TOOLS). Click a field and press the new key: an "
+            "Hotkeys: they work while Star Citizen has focus, as long as the overlay is switched on. "
+            "Click a field and press the new key: an "
             "F-key, Insert, Home, End, Page Up/Down, Pause or Scroll Lock on its own, or a letter "
             "or digit with Ctrl, Alt or Meta. Modifier keys still reach the game when pressed, so "
             "a single key the game doesn't use (like F7) works best.",
             objectName="InspectorHint",
         )
         note.setWordWrap(True)
-        ogrid.addWidget(note, 1, 0, 1, 2)
+        ogrid.addWidget(note, 3, 0, 1, 2)
         defaults = {f.name: f.default for f in fields(Settings)}
         self.hotkey_rows: dict[str, _HotkeyRow] = {}
         for i, (action, (field, title)) in enumerate(hotkeys.ACTIONS.items()):
-            self.hotkey_rows[field] = _HotkeyRow(ogrid, 2 + i, title, defaults[field], self._validate)
+            self.hotkey_rows[field] = _HotkeyRow(ogrid, 4 + i, title, defaults[field], self._validate)
         sections.addWidget(overlay_panel)
 
         updates_panel = QFrame(objectName="SidePanel")
@@ -265,6 +290,34 @@ class SettingsView(QWidget):
             label.setWordWrap(True)
             ugrid.addWidget(label, row, 2)
         sections.addWidget(updates_panel)
+
+        data_panel = QFrame(objectName="SidePanel")
+        dv = QVBoxLayout(data_panel)
+        dv.setContentsMargins(20, 18, 20, 18)
+        dv.setSpacing(8)
+        dv.addWidget(QLabel("GAME & WEB DATA", objectName="SectionLabel"))
+        data_note = QLabel(
+            "SC-Toolkit reads the game files once per game version and keeps what the tools need; "
+            "it downloads the ship list weekly and the salvage spreadsheet and UEX prices at most "
+            "once a day. All of this happens by itself. If something looks wrong or failed, "
+            "Refresh data reads the game files again now and downloads whatever is due.",
+            objectName="InspectorHint",
+        )
+        data_note.setWordWrap(True)
+        dv.addWidget(data_note)
+        data_row = QHBoxLayout()
+        self.refresh_data_btn = QPushButton("Refresh data", objectName="MiniButton")
+        self.refresh_data_btn.setCursor(Qt.PointingHandCursor)
+        self.refresh_data_btn.clicked.connect(self._refresh_data)
+        data_row.addWidget(self.refresh_data_btn)
+        self.data_result = QLabel("", objectName="InspectorNote")
+        self.data_result.setWordWrap(True)
+        data_row.addWidget(self.data_result, stretch=1)
+        dv.addLayout(data_row)
+        sections.addWidget(data_panel)
+        hub = datahub.hub()
+        hub.status.connect(self._on_data_status)
+        hub.refreshed.connect(self._on_data_refreshed)
         sections.addStretch(1)
         outer.addWidget(scroll, stretch=1)
 
@@ -281,7 +334,8 @@ class SettingsView(QWidget):
     def activate(self, first_run: bool = False) -> None:
         s = settings.current()
         for row, value in ((self.live, s.live_dir), (self.launch, s.launch_path),
-                           (self.gameglass, s.gameglass_path), (self.backups, s.backup_dir)):
+                           (self.gameglass, s.gameglass_path), (self.backups, s.backup_dir),
+                           (self.rsi_log, s.rsi_log_path)):
             row.set_value(value)
         for field, row in self.hotkey_rows.items():
             row.set_value(getattr(s, field))
@@ -305,9 +359,31 @@ class SettingsView(QWidget):
                            (self.gameglass, found.gameglass_path)):
             if value and not row.value:
                 row.set_value(value)
+        # The log is found from the game / launch script paths, also when they
+        # were filled in by hand.
+        log = settings.find_rsi_log(self.live.value, self.launch.value)
+        if log and not self.rsi_log.value:
+            self.rsi_log.set_value(log)
         if not (found.live_dir or found.launch_path or found.gameglass_path):
             self.intro.setVisible(True)
             self.intro.setText("Nothing found in the usual places — use Browse to pick the folders.")
+
+    def _refresh_data(self) -> None:
+        root = settings.current().game_root
+        channel = channel_mod.pick_default_channel(root)
+        self._refreshing = True
+        self.refresh_data_btn.setEnabled(False)
+        self.data_result.setText("Refreshing…")
+        datahub.hub().refresh_all(channel_mod.resolve_channel_paths(root, channel).channel_root if channel else None)
+
+    def _on_data_status(self, text: str) -> None:
+        if getattr(self, "_refreshing", False) and text:
+            self.data_result.setText(text)
+
+    def _on_data_refreshed(self, summary: str) -> None:
+        self._refreshing = False
+        self.refresh_data_btn.setEnabled(True)
+        self.data_result.setText(summary)
 
     def _validate(self) -> None:
         live_err = settings.validate_live_dir(self.live.value)
@@ -326,6 +402,17 @@ class SettingsView(QWidget):
         else:
             err = settings.validate_file(self.gameglass.value)
             self.gameglass.set_status(False if err else True, err or "Found")
+
+        if not self.rsi_log.value:
+            # Empty = auto-detect at runtime (app.patchwatch): say what that finds.
+            found = settings.find_rsi_log(self.live.value, self.launch.value)
+            self.rsi_log.edit.setPlaceholderText(found)
+            self.rsi_log.set_status(True if found else None,
+                                    "Found automatically (leave empty to keep detecting it)" if found else
+                                    "Not found: game updates are noticed when SC-Toolkit or the game starts")
+        else:
+            err = settings.validate_file(self.rsi_log.value)
+            self.rsi_log.set_status(False if err else True, err or "Found: game updates are noticed as they happen")
 
         if not self.backups.value:
             self.backups.set_status(None, f"Using the default: {settings.DEFAULT_BACKUP_DIR}")
@@ -365,6 +452,7 @@ class SettingsView(QWidget):
             launch_path=self.launch.value,
             gameglass_path=self.gameglass.value,
             backup_dir=self.backups.value,
+            rsi_log_path=self.rsi_log.value,
             update_check=self.update_check.isChecked(),
             update_prereleases=self.update_prereleases.isChecked(),
             **{field: hotkeys.format_combo(*hotkeys.parse(row.value))

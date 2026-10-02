@@ -4,6 +4,26 @@ What changed in each SC-Toolkit release. The newest version is at the top.
 
 ## Unreleased
 
+- **My Ships** (new tool): your hangar as a grid of ship cards. Add the ships you own from a list
+  of every ship, including ships still in concept and ones you can only get in game, and mark
+  each as pledged (gold outline) or bought in game (blue outline). Filter by role, size, purchase
+  and status; give a ship your own name and note its insurance. Ships in concept show their
+  loaners, and released ships have an **Erkul** button that opens them on erkul.games. Each card
+  shows the ship's cargo; click it for the ship's details: its default loadout (weapons, turrets,
+  missiles, systems) and stats (speeds, shields and hull, power and cooling, quantum and fuel),
+  read from your game files. Ship list and pictures: Star Citizen Wiki.
+- **Game updates handled for you:** SC-Toolkit reads the game files once per game version, in the
+  background, for every tool at once (before, each tool read them again the first time you opened
+  it). It notices game updates from the RSI Launcher's log (new setting, found automatically): while
+  an update installs, the tools and the overlay keep the previous version's data, and as soon as it's
+  done they switch to the new one, without a restart.
+- **Settings → Refresh data:** reads the game files again and downloads whatever is due, if
+  something ever looks wrong.
+- **Layout:** the IN-GAME OVERLAY and LIVE LOG switches moved to the left panel (under IN GAME); the
+  In-game Overlay tile moved to Settings (with an *Open the overlay* button).
+- **Downloads only when needed:** the ship list is refreshed weekly, the salvage spreadsheet and UEX
+  prices at most once a day, all at startup. A small line under the launch status shows what
+  SC-Toolkit is doing.
 - **My Stats → Blueprints:** a clear note that this is a log of the blueprints you received (since your
   oldest game log), not your blueprint collection. Only LIVE counts now: blueprints received on PTU,
   EPTU or Tech Preview were mixed in before. Blueprints are sorted into the right types more reliably

@@ -23,11 +23,14 @@ from PySide6.QtWidgets import (
 
 from dataclasses import replace
 
-from app import __version__, backup, channel as channel_mod, config, gamelog, ipc, links, osutil, settings, updater
+from app import (
+    __version__, backup, channel as channel_mod, config, datahub, gamelog, ipc, links, osutil, settings, updater,
+)
 from app.backup import BackupInfo
 from app import hotkeys
 from app.launch import LaunchController
 from app.overlay_host import OverlayHost
+from app.patchwatch import PatchWatcher
 from app.starstrings_controller import StarStringsController
 from app.update_controller import UpdateController
 from app.theme import PALETTE
@@ -201,6 +204,7 @@ class MainWindow(QMainWindow):
         self.maps_view = None
         self.stats_view = None
         self.whats_new_view = None
+        self.hangar_view = None
         self._main_size = None
 
         body = QWidget()
@@ -233,6 +237,67 @@ class MainWindow(QMainWindow):
         if start_overlay and settings.current().gamelog_live_enabled:
             self.gamelog.start()
         self._setup_updates(live=start_overlay)
+        self._setup_data(live=start_overlay)
+
+    # -- game files and web data (app.datahub) -----------------------------------
+    def _setup_data(self, live: bool) -> None:
+        hub = datahub.hub()
+        hub.status.connect(self._on_data_status)
+        hub.failed.connect(lambda name, msg: self._on_data_status(
+            f"Couldn't update the {datahub.label(name)}: {msg.splitlines()[0] if msg else 'error'}", sticky=True))
+        self._overlay_notify = QTimer(self, singleShot=True, interval=2000)
+        self._overlay_notify.timeout.connect(lambda: ipc.send(ipc.OVERLAY, "game-data-updated"))
+        hub.updated.connect(lambda name: name in datahub.GAME_SOURCES and self._overlay_notify.start())
+        # Game updates, from the RSI Launcher's log (no polling).
+        self.patches = PatchWatcher(self)
+        self.patches.started.connect(self._on_game_update_started)
+        self.patches.completed.connect(self._on_game_update_completed)
+        self.patches.stopped.connect(self._on_game_update_stopped)
+        self.controller.game_started.connect(self._on_game_started_data)
+        if live:
+            self.patches.start()
+            for channel, version in self.patches.updating.items():   # one already running
+                self._on_game_update_started(channel, version)
+            # Shortly after start: catch up after a game patch and refresh web
+            # data that's older than its limit; everything else reads caches.
+            QTimer.singleShot(1500, self._refresh_data)
+
+    def _channel_root(self, channel: str | None):
+        root = settings.current().game_root
+        return channel_mod.resolve_channel_paths(root, channel).channel_root if channel and root else None
+
+    def _refresh_data(self) -> None:
+        datahub.hub().startup(self._channel_root(self.channel))
+
+    def _on_game_update_started(self, channel: str, version: str) -> None:
+        datahub.hub().set_updating(channel, version)
+        self._on_data_status(f"Star Citizen {channel} {version.split('-')[0]} is being installed: the tools use the "
+                             "previous version's data until it's done.", sticky=True)
+
+    def _on_game_update_completed(self, channel: str, version: str) -> None:
+        datahub.hub().set_updating(channel, None)
+        self._data_sticky = False
+        datahub.hub().startup(self._channel_root(channel))     # reads the new files in one pass
+
+    def _on_game_update_stopped(self, channel: str) -> None:
+        # Cancelled or paused: the files may be half updated, so keep the
+        # previous data; the next start of SC-Toolkit or the game checks again.
+        datahub.hub().set_updating(channel, None)
+        self._on_data_status(f"The {channel} update stopped: the tools keep the previous version's data.",
+                             sticky=True)
+
+    def _on_game_started_data(self) -> None:
+        """Safety net for updates the log didn't show: one look at Data.p4k's
+        size and date, and a rebuild only if the game version changed."""
+        self.patches.game_started()
+        self._refresh_data()
+
+    def _on_data_status(self, text: str, sticky: bool = False) -> None:
+        if not text and getattr(self, "_data_sticky", False):
+            return                      # keep an error or update notice visible until the next run
+        self._data_sticky = sticky
+        self.data_status.setText(text)
+        self.data_status.setVisible(bool(text))
 
     # -- updates and What's new -------------------------------------------------
     def _setup_updates(self, live: bool) -> None:
@@ -284,7 +349,8 @@ class MainWindow(QMainWindow):
             self.whats_new_view.install_requested.connect(self._install_update)
             self.stack.addWidget(self.whats_new_view)
         current = self.stack.currentWidget()
-        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view):
+        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view,
+                       self.hangar_view):
             current.deactivate()
             if self._main_size is not None:
                 self.resize(self._main_size)
@@ -411,12 +477,7 @@ class MainWindow(QMainWindow):
     def _update_overlay_hint(self) -> None:
         on = settings.current().overlay_enabled
         show, click = hotkeys.label("toggle-overlay"), hotkeys.label("toggle-clickthrough")
-        self.overlay_hint.setText(f"{show} to show" if on else "off")
-        if hasattr(self, "overlay_tile"):
-            self.overlay_tile.body.setText(
-                f"Missions, session status, Maps, Mining and Salvage in a small window on top of the "
-                f"game (Borderless mode). "
-                f"{show} shows or hides it, {click} lets clicks through to the game.")
+        self.overlay_hint.setText(f"{show} shows it, {click} click-through" if on else "off")
 
     def _set_gamelog_enabled(self, on: bool) -> None:
         if on != settings.current().gamelog_live_enabled:
@@ -457,7 +518,7 @@ class MainWindow(QMainWindow):
         return job
 
     def _open_overlay(self) -> None:
-        """The tile: switches the overlay on if needed and shows it."""
+        """Settings' "Open the overlay": switches it on if needed and shows it."""
         if not settings.current().overlay_enabled:
             self.overlay_switch.setChecked(True)
         if self._start_overlay:
@@ -549,11 +610,21 @@ class MainWindow(QMainWindow):
         self.config_combo.currentIndexChanged.connect(self._update_config_help)
         self._refresh_config_combo()
 
+        layout.addSpacing(14)
+        layout.addWidget(_section_label("IN GAME"))
+        layout.addWidget(self._build_overlay_switch())
+        layout.addWidget(self._build_gamelog_switch())
+
         layout.addSpacing(10)
         self.status_label = QLabel("")
         self.status_label.setObjectName("SectionLabel")
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
+        # What app.datahub is fetching or reading (after a patch, once a day…).
+        self.data_status = QLabel("", objectName="InspectorHint")
+        self.data_status.setWordWrap(True)
+        self.data_status.hide()
+        layout.addWidget(self.data_status)
         layout.addStretch(1)
 
         return panel
@@ -703,43 +774,45 @@ class MainWindow(QMainWindow):
         self._set_status("Error — see dialog")
         QMessageBox.warning(self, config.DISPLAY_NAME, message)
 
-    # -- middle: SC-Toolkit's own tools ---------------------------------------
-    def _build_overlay_switch(self) -> QWidget:
+    # -- left panel: in-game switches ------------------------------------------
+    def _switch_box(self, title: str, tip: str, checked: bool, on_toggle) -> tuple[QFrame, QLabel, Switch]:
+        """A labelled on/off switch with a status line under the label."""
         box = QFrame(objectName="OverlaySwitchBox")
-        box.setToolTip(
-            "Missions, session status, Maps, Mining and Salvage in a small window on top of the game "
-            "(run Star Citizen in Borderless mode). Hotkeys are set in Settings.")
+        box.setToolTip(tip)
         row = QHBoxLayout(box)
-        row.setContentsMargins(12, 3, 8, 3)
-        row.setSpacing(10)
-        row.addWidget(QLabel("IN-GAME OVERLAY", objectName="OverlaySwitchLabel"))
-        self.overlay_hint = QLabel("", objectName="OverlaySwitchHint")
-        row.addWidget(self.overlay_hint)
-        self.overlay_switch = Switch()
-        self.overlay_switch.setChecked(settings.current().overlay_enabled)
-        self.overlay_switch.toggled.connect(self._set_overlay_enabled)
-        row.addWidget(self.overlay_switch)
+        row.setContentsMargins(12, 6, 10, 6)
+        row.setSpacing(8)
+        text = QVBoxLayout()
+        text.setSpacing(1)
+        text.addWidget(QLabel(title, objectName="OverlaySwitchLabel"))
+        hint = QLabel("", objectName="OverlaySwitchHint")
+        text.addWidget(hint)
+        row.addLayout(text, stretch=1)
+        switch = Switch()
+        switch.setChecked(checked)
+        switch.toggled.connect(on_toggle)
+        row.addWidget(switch, alignment=Qt.AlignVCenter)
+        return box, hint, switch
+
+    def _build_overlay_switch(self) -> QWidget:
+        box, self.overlay_hint, self.overlay_switch = self._switch_box(
+            "IN-GAME OVERLAY",
+            "Missions, session status, Maps, Mining and Salvage in a small window on top of the game "
+            "(run Star Citizen in Borderless mode). Hotkeys and more in Settings.",
+            settings.current().overlay_enabled, self._set_overlay_enabled)
         self._update_overlay_hint()
         return box
 
     def _build_gamelog_switch(self) -> QWidget:
-        box = QFrame(objectName="OverlaySwitchBox")
-        box.setToolTip(
+        box, self.gamelog_hint, self.gamelog_switch = self._switch_box(
+            "LIVE LOG",
             "Follows Star Citizen's Game.log while you play (from the start of the "
-            "current game session) so tools can react to contracts, payouts and more.")
-        row = QHBoxLayout(box)
-        row.setContentsMargins(12, 3, 8, 3)
-        row.setSpacing(10)
-        row.addWidget(QLabel("LIVE LOG", objectName="OverlaySwitchLabel"))
-        self.gamelog_hint = QLabel("", objectName="OverlaySwitchHint")
-        row.addWidget(self.gamelog_hint)
-        self.gamelog_switch = Switch()
-        self.gamelog_switch.setChecked(settings.current().gamelog_live_enabled)
-        self.gamelog_switch.toggled.connect(self._set_gamelog_enabled)
-        row.addWidget(self.gamelog_switch)
+            "current game session) so tools can react to contracts, payouts and more.",
+            settings.current().gamelog_live_enabled, self._set_gamelog_enabled)
         self._update_gamelog_hint()
         return box
 
+    # -- middle: SC-Toolkit's own tools ---------------------------------------
     def _build_tools_panel(self) -> QWidget:
         # No panel behind this column: each tile carries its own glass, so the
         # wallpaper shows through around and below them.
@@ -751,8 +824,6 @@ class MainWindow(QMainWindow):
         heading_row.setSpacing(12)
         heading_row.addWidget(QLabel("SC-TOOLKIT TOOLS", objectName="ToolsHeading"))
         heading_row.addStretch(1)
-        heading_row.addWidget(self._build_gamelog_switch())
-        heading_row.addWidget(self._build_overlay_switch())
         layout.addLayout(heading_row)
 
         grid = QGridLayout()
@@ -791,12 +862,15 @@ class MainWindow(QMainWindow):
             "logs: all time and your last session.",
         )
         self.stats_tile.clicked.connect(self._show_stats)
-        self.overlay_tile = _ToolTile("overlay", "In-game Overlay", "")
-        self.overlay_tile.clicked.connect(self._open_overlay)
+        hangar_tile = _ToolTile(
+            "hangar", "My Ships",
+            "Your hangar: the ships you pledged or bought in game, ships in concept with their "
+            "loaners, and a link to each on Erkul.",
+        )
+        hangar_tile.clicked.connect(self._show_hangar)
         for i, tile in enumerate((self.bindings_btn, self.salvage_btn, self.mining_btn, maps_tile,
-                                  self.stats_tile, self.overlay_tile)):
+                                  self.stats_tile, hangar_tile)):
             grid.addWidget(tile, i // 2, i % 2)
-        self._update_overlay_hint()
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         layout.addLayout(grid)
@@ -920,6 +994,20 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.stats_view)
         self.stats_view.activate()
 
+    # -- My Ships -------------------------------------------------------------------
+    def _show_hangar(self) -> None:
+        if self.hangar_view is None:
+            from app.ui.hangar_view import HangarView
+
+            self.hangar_view = HangarView()
+            self.hangar_view.back_requested.connect(self._show_main)
+            self.stack.addWidget(self.hangar_view)
+        self._main_size = self._normal_size()
+        screen = self.screen().availableGeometry()
+        self.resize(min(1400, int(screen.width() * 0.92)), min(920, int(screen.height() * 0.9)))
+        self.stack.setCurrentWidget(self.hangar_view)
+        self.hangar_view.activate()
+
     # -- SC Maps viewer ---------------------------------------------------------
     def _show_maps(self) -> None:
         if self.maps_view is None:
@@ -958,9 +1046,11 @@ class MainWindow(QMainWindow):
             self.settings_view = SettingsView()
             self.settings_view.back_requested.connect(self._show_main)
             self.settings_view.saved.connect(self._on_settings_saved)
+            self.settings_view.open_overlay_requested.connect(self._open_overlay)
             self.stack.addWidget(self.settings_view)
         current = self.stack.currentWidget()
-        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view):
+        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view,
+                       self.hangar_view):
             current.deactivate()
             if self._main_size is not None:
                 self.resize(self._main_size)
@@ -976,6 +1066,9 @@ class MainWindow(QMainWindow):
                 view.deleteLater()
                 setattr(self, attr, None)
         self.channel = channel_mod.pick_default_channel(settings.current().game_root)
+        if self._start_overlay:
+            self.patches.start()        # the RSI Launcher log setting may have changed
+            self._refresh_data()        # a new game folder may need its game data read
         self._refresh_config_combo()
         self._apply_channel_state()
         self._update_overlay_hint()
@@ -991,7 +1084,8 @@ class MainWindow(QMainWindow):
 
     def _show_main(self) -> None:
         current = self.stack.currentWidget()
-        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view):
+        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view,
+                       self.hangar_view):
             current.deactivate()
         self.stack.setCurrentIndex(0)
         if self._main_size is not None:

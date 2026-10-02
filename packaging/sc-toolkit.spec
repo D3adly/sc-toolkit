@@ -18,6 +18,7 @@ datas = [
     (str(assets / "icons" / "*.png"), "assets/icons"),
     (str(assets / "icons" / "glyphs" / "*.png"), "assets/icons/glyphs"),
     (str(ROOT / "CHANGELOG.md"), "."),     # What's new (app.changelog)
+    (str(assets / "ships.json"), "assets"),  # ship catalogue snapshot (app.ships)
 ]
 
 # The app only uses QtCore, QtGui and QtWidgets; keep the rest of Qt out.
@@ -54,7 +55,7 @@ a = Analysis(
     hiddenimports=[
         "app.ui.bindings_view", "app.ui.maps_view", "app.ui.mining_view", "app.ui.salvage_view",
         "app.ui.settings_view", "app.ui.overlay", "app.ui.overlay_panels", "app.ui.layer_overlay",
-        "app.ui.whats_new_view",
+        "app.ui.whats_new_view", "app.ui.hangar_view",
         "app.hotkeys",
         "jeepney", "jeepney.io.blocking", "jeepney.bus_messages",
         "sdl2", "sdl2dll",
@@ -64,11 +65,12 @@ a = Analysis(
 # Qt plugins drag in libraries a plain-widgets app never uses (Quick/QML,
 # the virtual keyboard, PDF, GTK 3 and its whole stack, EGLFS/VNC/framebuffer
 # backends, TLS for QtNetwork). Dropping them roughly halves the bundle.
+# (qwebp stays: ship pictures from the Star Citizen Wiki are WebP.)
 import re
 
 _DROP = re.compile(
     r"(plugins[/\\](egldeviceintegrations|generic|networkinformation|tls|iconengines)[/\\])"
-    r"|(q(gtk3|tvirtualkeyboard\w*|pdf|tiff|webp|gif|icns|tga|wbmp|svg|eglfs\w*|linuxfb|minimalegl|vnc"
+    r"|(q(gtk3|tvirtualkeyboard\w*|pdf|tiff|gif|icns|tga|wbmp|svg|eglfs\w*|linuxfb|minimalegl|vnc"
     r"|vkkhrdisplay|minimal|direct2d)\.(so|dll))"
     r"|(qt6(pdf|quick|qml|virtualkeyboard|eglfs|svg)\w*\.(so|dll))"
     r"|(^|[/\\])lib(gtk-3|gdk-3|atk|atspi|cairo|pango|glycin|gdk_pixbuf|tinysparql|cloudproviders"

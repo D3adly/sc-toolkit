@@ -1,8 +1,8 @@
 """Mining resource finder data: where each mineable rock type spawns, how
 likely it is, what it contains and at what quality.
 
-Everything comes from the game files and is re-extracted once per game
-build (cached like the salvage data):
+Everything comes from the game files, built once per game build by
+app.datahub (build), which caches it:
 
 - **Locations.** Each planet/moon pivot entity, Lagrange-point gas cloud,
   belt and cluster carries a HarvestableProviderPreset by GUID inside its
@@ -30,10 +30,9 @@ import math
 import re
 from pathlib import Path
 
-from app import bindings, config, p4k, socpak
+from app import config, p4k, socpak
 from app.datacore import DataCore
 
-GAME2_ENTRY = "Data\\Game2.dcb"
 CACHE = config.CACHE_DIR / "mining"
 FORMAT = 4  # bump when the extracted shape changes
 
@@ -226,16 +225,11 @@ def quality_distribution(dist: dict, scale: float, bands: list) -> list[tuple[in
 
 # -- extraction ---------------------------------------------------------------------------
 
-def _extract(channel_root: Path, progress) -> dict:
-    p4k_path = channel_root / "Data.p4k"
-    progress("Reading Star Citizen game data (once per patch)…")
-    raw = p4k.extract(p4k_path, [GAME2_ENTRY]).get(GAME2_ENTRY)
-    if raw is None:
-        raise RuntimeError("Game2.dcb not found in Data.p4k")
-    dc = DataCore(raw)
-    del raw
-    loc_raw = bindings._load_from_p4k_cached(channel_root, bindings.GLOBAL_INI_ENTRY, "global.ini")
-    loc = bindings._parse_ini(loc_raw) if loc_raw else {}
+def build(game, progress) -> dict:
+    """The mining data from the game files (app.datahub.GameFiles); the hub
+    caches it per patch."""
+    p4k_path = game.p4k_path
+    dc, loc = game.dc, game.loc
 
     providers = {guid_text(g): n.split(".", 1)[1]
                  for n, _si, _ii, g in dc.records() if n.startswith("HarvestableProviderPreset.")}
@@ -388,27 +382,3 @@ def _extract(channel_root: Path, progress) -> dict:
         "resources": {k: v for k, v in resources.items() if k in used},
         "quality": quality,
     }
-
-
-def load(channel_root: Path, progress=lambda _msg: None) -> dict:
-    """Slow the first time after a game patch; cached afterwards. Call off
-    the UI thread.
-    """
-    import json
-
-    p4k_path = channel_root / "Data.p4k"
-    cache_file = CACHE / f"mining-{bindings._cache_key(p4k_path)}.json"
-    try:
-        cached = json.loads(cache_file.read_text())
-        if cached.get("format") == FORMAT:
-            return cached
-    except (OSError, ValueError):
-        pass
-    data = _extract(channel_root, progress)
-    CACHE.mkdir(parents=True, exist_ok=True)
-    for stale in CACHE.glob("mining-*.json"):
-        stale.unlink(missing_ok=True)
-    tmp = cache_file.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data))
-    tmp.replace(cache_file)
-    return data

@@ -26,6 +26,7 @@ class Settings:
     launch_path: str = ""     # LUG sc-launch.sh (Linux) or RSI Launcher.exe
     gameglass_path: str = ""  # optional
     backup_dir: str = ""      # "" = DEFAULT_BACKUP_DIR
+    rsi_log_path: str = ""    # RSI Launcher's logs/log.log: game updates (app.patchwatch)
     overlay_enabled: bool = False                # in-game overlay (and its hotkeys) on/off
     hotkey_overlay: str = "F7"                   # show / hide the overlay
     hotkey_clickthrough: str = "F8"              # overlay click-through on/off
@@ -110,6 +111,37 @@ def apply(settings: Settings) -> None:
     _current = settings
 
 
+def find_rsi_log(live_dir: str = "", launch_path: str = "") -> str:
+    """The RSI Launcher's log (…/AppData/Roaming/rsilauncher/logs/log.log).
+    It lives in the Windows user profile, not next to the launcher: %APPDATA%
+    on Windows; on Linux the Wine prefix's user folder (the prefix is found
+    from the game or launch script path)."""
+    tail = Path("AppData") / "Roaming" / "rsilauncher" / "logs" / "log.log"
+    candidates: list[Path] = []
+    if sys.platform.startswith("win"):
+        import os
+
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            candidates.append(Path(appdata) / "rsilauncher" / "logs" / "log.log")
+    else:
+        prefixes: list[Path] = []
+        for path in (live_dir, launch_path):
+            parts = Path(path).parts if path else ()
+            if "drive_c" in parts:
+                prefixes.append(Path(*parts[:parts.index("drive_c")]))
+            elif path:
+                prefixes.append(Path(path).parent)      # sc-launch.sh sits in the prefix
+        home = Path.home()
+        prefixes += [home / "Games" / "star-citizen", home / "Games" / "star-citizen-prefix", home / ".wine",
+                     home / "Games" / "lutris" / "star-citizen"]
+        for prefix in prefixes:
+            users = prefix / "drive_c" / "users"
+            if users.is_dir():
+                candidates += [user / tail for user in sorted(users.iterdir())]
+    return next((str(c) for c in candidates if c.is_file()), "")
+
+
 def autodetect() -> Settings:
     """Best guesses from standard install locations; empty fields where
     nothing was found.
@@ -134,6 +166,7 @@ def autodetect() -> Settings:
             if launch is not None and launch.is_file():
                 found.launch_path = str(launch)
             break
+    found.rsi_log_path = find_rsi_log(found.live_dir, found.launch_path)
     names = ["GameGlass.exe"] if sys.platform.startswith("win") else ["GameGlass.AppImage", "GameGlass*.AppImage"]
     for folder in (home / "Downloads", home / "Applications", home / "Desktop"):
         for pattern in names:

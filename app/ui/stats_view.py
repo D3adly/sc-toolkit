@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import channel as channel_mod, config, contracts, settings, stats
+from app import channel as channel_mod, config, datahub, settings, stats
 from app.theme import PALETTE
 
 TILE_COLUMNS = 4
@@ -45,6 +45,10 @@ class _Loader(QObject):
     progress = Signal(str)
     failed = Signal(str)
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.without_contracts = False      # the last load had no mission database
+
     def run(self) -> None:
         def work():
             try:
@@ -52,11 +56,17 @@ class _Loader(QObject):
                 ch = channel_mod.pick_default_channel(root)
                 lookup = None
                 if ch:
-                    try:   # mission details are a bonus; stats work without them
-                        lookup = contracts.load(channel_mod.resolve_channel_paths(root, ch).channel_root,
-                                                self.progress.emit)
+                    # Mission details are a bonus: stats work without them. The
+                    # database is built by app.datahub (once per patch); if it
+                    # isn't there yet, ask for it and reload when it is.
+                    channel_root = channel_mod.resolve_channel_paths(root, ch).channel_root
+                    try:
+                        lookup = datahub.read_game("contracts", channel_root)
                     except Exception:
                         traceback.print_exc()
+                    if lookup is None:
+                        datahub.hub().ensure_game(["contracts"], channel_root)
+                self.without_contracts = lookup is None
                 self.progress.emit("Reading your game logs…")
                 self.loaded.emit(stats.load(
                     root, lookup,
@@ -259,6 +269,7 @@ class StatsView(QWidget):
         self._loading = False
         self._columns = 2
         self._loader = _Loader(self)
+        datahub.hub().updated.connect(self._on_hub_updated)
         self._loader.loaded.connect(self._on_loaded)
         self._loader.progress.connect(self._message)
         self._loader.failed.connect(lambda msg: self._on_failed(f"Couldn't read your game logs:\n\n{msg}"))
@@ -316,6 +327,10 @@ class StatsView(QWidget):
         self.refresh_btn.setEnabled(False)
         self._message("Reading your game logs…")
         self._loader.run()
+
+    def _on_hub_updated(self, name: str) -> None:
+        if name == "contracts" and self.data is not None and self._loader.without_contracts and not self._loading:
+            self._load()
 
     def _on_loaded(self, data: dict) -> None:
         self._loading = False

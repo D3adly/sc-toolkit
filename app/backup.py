@@ -10,7 +10,8 @@ Layout on disk:
 
 A backup is only kept if its content hash differs from the most recent
 backup for the same channel — this is checked *before* copying anything,
-so a no-op session never touches disk.
+so a no-op session never touches disk. Attributes the game rewrites on its
+own while you play (VOLATILE_ATTRIBUTES) don't count as a change.
 
 Named profiles (made in the joystick bindings editor) live beside the
 rotating backups but are never deduplicated or rotated away:
@@ -37,6 +38,14 @@ KEEP_LATEST = 3
 MAX_AGE_MONTHS = 2
 
 _PROFILE_FILES = ("actionmaps.xml", "attributes.xml")
+
+# attributes.xml entries the game saves from play, not from the settings:
+# the speed limiter's last value (changed in flight with the throttle wheel).
+VOLATILE_ATTRIBUTES = ("SpeedThrottleDefaultFixedSpeed",)
+_VOLATILE_RE = re.compile(
+    rb'[ \t]*<Attr name="(?:' + b"|".join(re.escape(a.encode()) for a in VOLATILE_ATTRIBUTES)
+    + rb')"[^>]*/>[ \t]*\r?\n?'
+)
 
 # Fixed English month abbreviations — strftime's "%b" follows the system
 # locale (e.g. renders "Sep" as "rugs." under lt_LT), but backup names
@@ -79,8 +88,8 @@ def _months_ago(n: int, now: datetime | None = None) -> datetime:
 def _hash_snapshot(mappings_dir: Path, profile_dir: Path) -> str | None:
     """Hashes every mapping file plus the two profile files, in a stable
     order, so the same on-disk content always produces the same digest
-    regardless of filesystem iteration order or mtimes. Returns None if
-    there is nothing to back up yet.
+    regardless of filesystem iteration order or mtimes. VOLATILE_ATTRIBUTES
+    are left out. Returns None if there is nothing to back up yet.
     """
     hasher = hashlib.sha256()
     found_anything = False
@@ -95,8 +104,11 @@ def _hash_snapshot(mappings_dir: Path, profile_dir: Path) -> str | None:
         f = profile_dir / name
         if f.is_file():
             found_anything = True
+            data = f.read_bytes()
+            if name == "attributes.xml":
+                data = _VOLATILE_RE.sub(b"", data)
             hasher.update(name.encode())
-            hasher.update(f.read_bytes())
+            hasher.update(data)
 
     return hasher.hexdigest() if found_anything else None
 
@@ -209,7 +221,11 @@ def create_backup(backup_root: Path, channel: str, mappings_dir: Path, profile_d
         return None
 
     latest = list_backups(backup_root, channel)
-    if latest and latest[0].content_hash == content_hash:
+    # Re-hash the newest backup's files rather than trusting its stored hash,
+    # so backups made before a change to the hashing rules still match.
+    if latest and content_hash in (
+        latest[0].content_hash, _hash_snapshot(latest[0].path / "Mappings", latest[0].path / "Profile")
+    ):
         return None
 
     channel_root = _channel_root(backup_root, channel)

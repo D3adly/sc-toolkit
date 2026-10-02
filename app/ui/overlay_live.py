@@ -42,7 +42,9 @@ class LiveFeed(QObject):
         self.reader = gamelog.LiveReader(lambda: settings.current().game_root, self)
         self.tracker = SessionTracker(self)
         self.contracts: contracts.Contracts | None = None
-        self.owned: set[str] = set()        # blueprint names received before this session
+        # Blueprints received before this session, per channel (LIVE, PTU…):
+        # each channel is its own game universe.
+        self.owned_by_channel: dict[str, set[str]] = {}
         self.enabled = settings.load().gamelog_live_enabled
         self._wanted = False                # a live tab has been opened
         self._lookups_started = False
@@ -94,7 +96,8 @@ class LiveFeed(QObject):
             root = settings.current().game_root
             try:
                 history = gamelog.read_history(root, ["blueprint"])
-                self.owned = {e.data.get("name", "") for e in history}
+                for e in history:
+                    self.owned_by_channel.setdefault(e.channel.upper(), set()).add(e.data.get("name", ""))
             except Exception:
                 _log(f"reading blueprint history failed:\n{traceback.format_exc()}")
             try:
@@ -232,14 +235,7 @@ FLASH_RECENT_SECONDS = 20  # an objective change this recent (log time) is new t
 FLASH_MS = 700             # the tracked mission's one blink
 COMBAT_TAGS = {"ship": "Ship combat", "fps": "FPS combat"}
 OUTCOMES = {"Complete": "Completed", "Fail": "Failed", "Abandon": "Abandoned"}   # the log's words → ours
-_CLASS_PREFIX_RE = re.compile(r"^[A-Za-z]+/\d+/[A-Za-z]+\s+")
-
-
-def blueprint_key(name: str) -> str:
-    """For "already owned" matching: StarStrings versions differ in whether
-    they prefix a class code ("Ind/0/A FullSpec-Go" vs "FullSpec-Go"), and the
-    log keeps whatever the version installed at the time showed."""
-    return _CLASS_PREFIX_RE.sub("", name).strip().lower()
+blueprint_key = contracts.blueprint_key     # "already owned" matching
 
 
 class _Elided(QLabel):
@@ -519,7 +515,8 @@ class MissionsPanel(_LivePanel):
             return
         f = feed()
         tr = f.tracker
-        owned = {blueprint_key(n) for n in f.owned} | {blueprint_key(n) for _t, n, _m in tr.blueprints}
+        before = f.owned_by_channel.get((tr.channel or "LIVE").upper(), set())
+        owned = {blueprint_key(n) for n in before} | {blueprint_key(n) for _t, n, _m in tr.blueprints}
         v = self._new_page()
 
         # Active missions, plus the ones still in their reward window; the

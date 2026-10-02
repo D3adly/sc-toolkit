@@ -2,6 +2,15 @@
 
 What changed in each SC-Toolkit release. The newest version is at the top.
 
+## Unreleased
+
+- **My Stats → Blueprints:** a clear note that this is a log of the blueprints you received (since your
+  oldest game log), not your blueprint collection. Only LIVE counts now: blueprints received on PTU,
+  EPTU or Tech Preview were mixed in before. Blueprints are sorted into the right types more reliably
+  (names from before or after installing StarStrings or a translation now match), and ones the
+  current game no longer knows are sorted by their name instead of landing in Other.
+- **Overlay mission cards:** "blueprints owned" only counts blueprints from the server you're playing on.
+
 ## 0.1.1 (2026-10-02)
 
 - **Updates from inside SC-Toolkit.** It checks GitHub for a new version once a day; when there is

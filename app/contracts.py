@@ -42,7 +42,7 @@ from app.datacore import DataCore
 
 GAME2_ENTRY = "Data\\Game2.dcb"
 CACHE = config.CACHE_DIR / "contracts"
-FORMAT = 6  # bump when the extracted shape changes
+FORMAT = 7  # bump when the extracted shape changes
 # A localization installed next to the game (e.g. StarStrings) overrides the
 # packed one, and the log shows its names ("Received Blueprint: …").
 INSTALLED_INI = ("Data", "Localization", "english", "global.ini")
@@ -135,17 +135,18 @@ class _Extractor:
     def item_name(self, entity_ref: str) -> str:
         """Localized display name of an entity class (what 'Received
         Blueprint: <name>' shows)."""
-        if entity_ref in self._items:
-            return self._items[entity_ref]
-        cls = entity_ref.split(".", 1)[-1]
-        name = cls
+        if entity_ref not in self._items:
+            cls = entity_ref.split(".", 1)[-1]
+            self._items[entity_ref] = _loc(self.loc, self.item_loc_key(entity_ref), cls)
+        return self._items[entity_ref]
+
+    def item_loc_key(self, entity_ref: str) -> str | None:
+        """The entity's name key in global.ini ("@item_Name…"), if it has one."""
         rec = self.dc.record(entity_ref[1:], max_depth=4) if entity_ref.startswith("@") else None
         for attach in _find_all(rec, "SAttachableComponentParams") if rec else []:
             key = ((attach.get("AttachDef") or {}).get("Localization") or {}).get("Name")
-            name = _loc(self.loc, key, cls)
-            break
-        self._items[entity_ref] = name
-        return name
+            return key if isinstance(key, str) else None
+        return None
 
     def blueprint_pool(self, ref: str) -> list[str]:
         pool = self.record(ref, depth=2) or {}
@@ -382,14 +383,15 @@ def _installed_ini(channel_root: Path) -> Path:
     return channel_root.joinpath(*INSTALLED_INI)
 
 
-def _localization(channel_root: Path) -> dict[str, str]:
+def _localizations(channel_root: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """(the game's packed global.ini, the installed one or {})."""
     loc_raw = bindings._load_from_p4k_cached(channel_root, bindings.GLOBAL_INI_ENTRY, "global.ini")
-    loc = bindings._parse_ini(loc_raw) if loc_raw else {}
+    packed = bindings._parse_ini(loc_raw) if loc_raw else {}
     try:
-        loc.update(bindings._parse_ini(_installed_ini(channel_root).read_bytes()))
+        installed = bindings._parse_ini(_installed_ini(channel_root).read_bytes())
     except OSError:
-        pass
-    return loc
+        installed = {}
+    return packed, installed
 
 
 def _extract(channel_root: Path, progress) -> dict:
@@ -399,7 +401,8 @@ def _extract(channel_root: Path, progress) -> dict:
         raise RuntimeError("Game2.dcb not found in Data.p4k")
     dc = DataCore(raw)
     del raw
-    ex = _Extractor(dc, _localization(channel_root))
+    packed, installed = _localizations(channel_root)
+    ex = _Extractor(dc, {**packed, **installed})
 
     contracts: dict[str, dict] = {}
     by_name: dict[str, str] = {}
@@ -423,18 +426,29 @@ def _extract(channel_root: Path, progress) -> dict:
                 contracts[guid] = info
                 by_name.setdefault(debug, guid)
     return {"format": FORMAT, "contracts": contracts, "by_name": by_name,
-            "blueprint_categories": _blueprint_categories(dc, ex)}
+            "blueprint_categories": _blueprint_categories(dc, ex, (packed, installed))}
 
 
 # StarStrings-style class/size/grade prefix on component names ("Ind/2/B BroadSpec").
 _GRADE_PREFIX_RE = re.compile(r"^[A-Za-z]{3}/\d/[A-D] ")
+_QUOTES = str.maketrans({"\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'"})
 
 
-def _blueprint_categories(dc: DataCore, ex: _Extractor) -> dict[str, str]:
-    """Item name -> the game's blueprint category ("FPSArmours",
-    "VehicleComponentS2", …). Names are added with and without a
-    class/size/grade prefix: logs written before such a localization was
-    installed carry the plain names."""
+def blueprint_key(name: str) -> str:
+    """Blueprint name → lookup key: no class/size/grade prefix, straight
+    quotes, single spaces, lower case. A log keeps the names the installed
+    localization showed at the time (StarStrings versions differ in prefixes)."""
+    name = _GRADE_PREFIX_RE.sub("", name.strip().translate(_QUOTES))
+    return " ".join(name.split()).lower()
+
+
+def _blueprint_categories(dc: DataCore, ex: _Extractor, tables) -> dict[str, str]:
+    """Blueprint name (as blueprint_key) -> the game's blueprint category
+    ("FPSArmours", "VehicleComponentS2", …). A log can span several
+    localizations (before/after StarStrings or a translation was installed),
+    so every name the item has in the packed and the installed global.ini is
+    added, plus its raw key and class name (what the game shows when the
+    installed file lacks the key)."""
     out: dict[str, str] = {}
     for rec_name in dc.record_names("CraftingBlueprintRecord."):
         bp = (dc.record(rec_name, max_depth=2) or {}).get("blueprint") or {}
@@ -442,10 +456,14 @@ def _blueprint_categories(dc: DataCore, ex: _Extractor) -> dict[str, str]:
         category = bp.get("category")
         if not isinstance(entity, str) or not isinstance(category, str):
             continue
-        name = ex.item_name(entity)
         category = category.split(".", 1)[-1]
-        out.setdefault(name, category)
-        out.setdefault(_GRADE_PREFIX_RE.sub("", name), category)
+        key = ex.item_loc_key(entity)
+        names = [_loc(table, key) for table in tables] + [entity.split(".", 1)[-1]]
+        if key:
+            names += [key, key.lstrip("@")]
+        for name in names:
+            if name:
+                out.setdefault(blueprint_key(name), category)
     return out
 
 
@@ -480,7 +498,7 @@ class Contracts:
     def blueprint_category(self, name: str) -> str | None:
         """The game's category of a blueprint, by the name in "Received
         Blueprint: <name>", e.g. "FPSWeapons" or "VehicleWeaponsS3"."""
-        return self._bp_categories.get(name) or self._bp_categories.get(_GRADE_PREFIX_RE.sub("", name))
+        return self._bp_categories.get(blueprint_key(name))
 
     def find(self, contract_id: str | None = None, debug_name: str | None = None) -> dict | None:
         """By the log's contractDefinitionId, else by its debug name (with or

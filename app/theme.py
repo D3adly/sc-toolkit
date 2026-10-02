@@ -432,6 +432,14 @@ QFrame#Divider {{
     color: {text_secondary};
     font-size: 11px;
 }}
+#StatsNotice {{
+    color: {text_primary};
+    font-size: 12px;
+    background: {accent_soft};
+    border-left: 3px solid {accent};
+    border-radius: 4px;
+    padding: 8px 10px;
+}}
 #InspectorNote {{
     color: {accent};
     font-size: 12px;

@@ -117,6 +117,30 @@ def blueprint_type(category: str | None) -> tuple[str, str]:
     return "other", ""
 
 
+# Blueprints the current game files don't know (renamed or removed since the
+# log was written): the type is guessed from the name. Order matters.
+_GUESSES = [
+    ("components", re.compile(r"^[A-Za-z]{3}/\d/[A-D] |mining laser|scraper|module|ore pod|quantum drive"
+                              r"|power plant|cooler|shield generator", re.I)),
+    ("ship_weapons", re.compile(r"\b(cannon|repeater|gatling|scattergun|mass driver|neutron|tachyon"
+                                r"|distortion|missile|torpedo)\b", re.I)),
+    ("weapons", re.compile(r"\b(pistol|rifle|shotgun|smg|sniper|lmg|launcher|crossbow|knife|railgun"
+                           r"|grenade)\b", re.I)),
+    ("armour", re.compile(r"\b(helmet|core|arms|legs|backpack|undersuit|armou?r|torso|chest)\b", re.I)),
+    ("medical", re.compile(r"\b(medpen|medgun|paramed|medical)\b", re.I)),
+    ("utility", re.compile(r"\b(multi-?tool|tractor|salvage|cutter)\b", re.I)),
+]
+
+
+def guess_blueprint_type(name: str) -> str:
+    return next((key for key, pattern in _GUESSES if pattern.search(name)), "other")
+
+
+# Blueprints belong to one game universe: those received on PTU, EPTU or
+# Tech Preview don't exist on LIVE (and test builds have other items).
+BLUEPRINT_CHANNELS = ("LIVE", "")
+
+
 # -- computing -----------------------------------------------------------------
 
 
@@ -208,8 +232,11 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
         ],
     })
 
-    # Blueprints, grouped by the game's blueprint categories
-    blueprints = kind("blueprint")
+    # Blueprints, grouped by the game's blueprint categories; LIVE only.
+    blueprints = [e for e in kind("blueprint") if e.channel.upper() in BLUEPRINT_CHANNELS]
+    elsewhere = len(kind("blueprint")) - len(blueprints)
+    live_sessions = [s for s in sessions if s.channel.upper() in BLUEPRINT_CHANNELS and s.started]
+    guessed = 0
     names = Counter(e.data.get("name", "") for e in blueprints)
     latest: dict[str, datetime | None] = {}
     for e in sorted(blueprints, key=lambda e: e.time or datetime.min.replace(tzinfo=timezone.utc)):
@@ -219,27 +246,48 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
                        reverse=True):
         if not name:
             continue
-        key, size = blueprint_type(contracts.blueprint_category(name) if contracts is not None else None)
+        category = contracts.blueprint_category(name) if contracts is not None else None
+        key, size = blueprint_type(category)
+        if category is None:
+            key = guess_blueprint_type(name)
+            guessed += 1
         value = _datetime(latest[name])
         if names[name] > 1:
             value = f"×{names[name]} · {value}"
         if size and not _HAS_SIZE_RE.search(name):
             name = f"{name}  ({size})"
         by_type.setdefault(key, []).append((name, value))
+    live_completed = [m for m in _missions([e for e in events if e.channel.upper() in BLUEPRINT_CHANNELS])
+                      if m.outcome == "Complete"]
+    if single:
+        since = "in this game session"
+    elif live_sessions:
+        since = f"since {_date(min(s.started for s in live_sessions))} (your oldest LIVE log)"
+    else:
+        since = "in your LIVE logs"
+    notice = (f"This is not your blueprint collection. It's a log of the blueprints you received on LIVE "
+              f"{since}, read from the game's \"Received Blueprint\" notifications. Blueprints from before "
+              "that, from deleted logs or another PC aren't in it, and a game wipe can remove ones listed here.")
+    if elsewhere:
+        notice += (f" {_n(elsewhere)} received on test servers (PTU, EPTU, Tech Preview) "
+                   f"{'is' if elsewhere == 1 else 'are'} not counted.")
     sections.append({
         "title": "Blueprints",
+        "notice": notice,
         "tiles": [
-            ("Received", _n(len(blueprints)), ""),
+            ("Received", _n(len(blueprints)), "Blueprint notifications in your LIVE logs"),
             ("Different", _n(len(names)), ""),
-            ("From missions", _n(sum(len(m.blueprints) for m in completed)),
+            ("From missions", _n(sum(len(m.blueprints) for m in live_completed)),
              "Received within seconds of completing a mission"),
         ],
         "filter": True,
         "lists": [{"title": title, "key": key, "rows": by_type[key], "limit": BLUEPRINT_ROWS,
                    "columns": True}
                   for key, title, _prefixes in BLUEPRINT_TYPES if by_type.get(key)],
-        "note": "" if contracts is not None else
-                "Blueprint types come from the game files, which couldn't be read; all are under Other.",
+        "note": ("Blueprint types come from the game files, which couldn't be read; they're guessed from "
+                 "the names." if contracts is None else
+                 (f"{_n(guessed)} of these {'is' if guessed == 1 else 'are'} not in the current game files "
+                  "(renamed or removed since); the type is guessed from the name.") if guessed else ""),
     })
 
     # Travel

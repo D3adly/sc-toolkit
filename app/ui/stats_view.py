@@ -175,6 +175,8 @@ class _SectionCard(QFrame):
         v.setContentsMargins(16, 12, 16, 14)
         v.setSpacing(10)
         v.addWidget(_label(section["title"].upper(), "SectionLabel"))
+        if section.get("notice"):
+            v.addWidget(_label(section["notice"], "StatsNotice", wrap=True))
 
         tiles = QGridLayout()
         tiles.setHorizontalSpacing(14)

@@ -2,7 +2,7 @@
 
 What changed in each SC-Toolkit release. The newest version is at the top.
 
-## Unreleased
+## 0.2.0 (2026-10-02)
 
 - **My Ships** (new tool): your hangar as a grid of ship cards. Add the ships you own from a list
   of every ship, including ships still in concept and ones you can only get in game, and mark

@@ -2,7 +2,7 @@
 
 What changed in each SC-Toolkit release. The newest version is at the top.
 
-## Unreleased
+## 0.2.1 (2026-10-04)
 
 - **Joystick bindings: Logitech / Saitek X56 H.O.T.A.S.** The bindings view now draws the X56 stick
   and throttle (Saitek *X-56 Rhino* and Logitech-branded units), with Logitech's product photos

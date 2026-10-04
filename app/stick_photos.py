@@ -2,8 +2,8 @@
 
 The photos are the manufacturer's, so they're downloaded on first use and
 cached (never shipped with the app). Each is cropped, has its white studio
-background keyed out so it sits on the dark UI, and is scaled to the
-template's display size.
+background keyed out so it sits on the dark UI (unless the photo is already
+transparent), and is scaled to the template's display size.
 """
 
 from __future__ import annotations
@@ -49,7 +49,8 @@ def ensure_photo(template) -> Path | None:
         return None
     x, y, w, h = photo.crop
     image = image.copy(QRect(x, y, w, h)).convertToFormat(QImage.Format_ARGB32)
-    _key_out_background(image)
+    if photo.key_background:
+        _key_out_background(image)
     size = template.size
     image = image.scaled(int(size[0]), int(size[1]), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
 

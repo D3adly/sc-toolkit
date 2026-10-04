@@ -37,6 +37,8 @@ data and tools goes to them:
 | [UEX Corp](https://uexcorp.space/) | Commodity prices for salvage cargo (via the public UEX API) | The UEX Corp team |
 | [LUG Helper](https://github.com/starcitizen-lug/lug-helper) | Its `sc-launch.sh` starts the game on Linux | [Star Citizen Linux Users Group](https://github.com/starcitizen-lug) |
 | [VKB-Sim](https://www.vkb-sim.pro/) | Joystick photos in the bindings view (downloaded from VKB, not bundled) | VKB-Sim |
+| [Logitech G](https://www.logitechg.com/) | X56 stick and throttle photos in the bindings view (downloaded from Logitech, not bundled) | Logitech |
+| [Joystick Diagrams](https://github.com/Rexeh/joystick-diagrams) | Its community X56 templates, used to cross-check the X56 button map | Rexeh and contributors |
 | [Star Citizen Wiki](https://starcitizen.tools/) ([API](https://api.star-citizen.wiki/)) | **My Ships**: the ship list (including ships in concept and their loaners), game ids and ship pictures (CC BY-SA 4.0) | The Star Citizen Wiki community |
 | [Erkul](https://www.erkul.games/) | The Erkul button on each ship in My Ships opens the ship there | Erkul |
 
@@ -222,6 +224,11 @@ The bindings diagram needs a drawing template for each stick model. Currently
 supported:
 
 - **VKB Gladiator EVO SCE (Standard grip)**, left and right
+- **Logitech / Saitek X56 H.O.T.A.S.**, stick and throttle (both the *Saitek Pro Flight X-56
+  Rhino* and the newer Logitech-branded units). The X56's button numbers are fixed, so its
+  diagram is filled in from the start; only the few inputs that differ between units (the
+  throttle's H and I buttons, SLD slider, mini-stick click and mode switch) need one press each
+  in *Identify the rest*.
 
 Any other device still works everywhere else in the launcher (backups, profiles,
 the game itself); it just has no diagram yet.

@@ -216,6 +216,26 @@ class HotspotItem(QGraphicsEllipseItem):
             self._on_moved(self.control, self.pos())
 
 
+def _device_label(product: str, instance: int) -> str:
+    """Short name for a device button: LEFT/RIGHT for paired sticks (VKB 'L'/'R' suffix),
+    STICK/THROTTLE for a HOTAS, otherwise the game's js number."""
+    words = product.split()
+    last = words[-1] if words else ""
+    if last in ("L", "R"):
+        return "LEFT" if last == "L" else "RIGHT"
+    lower = product.lower()
+    if "throttle" in lower:
+        return "THROTTLE"
+    if "stick" in lower:
+        return "STICK"
+    return f"js{instance}"
+
+
+def _left_hand(product: str) -> bool:
+    """Devices that sit on the left of the desk: a left stick, or a throttle."""
+    return product.lower().endswith(" l") or "throttle" in product.lower()
+
+
 def _leader_path(start: QPointF, end: QPointF) -> QPainterPath:
     path = QPainterPath(start)
     elbow_x = end.x() + (14 if end.x() < start.x() else -14)
@@ -249,7 +269,7 @@ class DiagramView(QGraphicsView):
 class _Loader(QObject):
     loaded = Signal(object)
     failed = Signal(str)
-    photos_ready = Signal()
+    photo_ready = Signal(str)  # template id
 
     def run(self, channel_root) -> None:
         def work():
@@ -259,11 +279,11 @@ class _Loader(QObject):
                 self.failed.emit(str(exc))
         threading.Thread(target=work, daemon=True).start()
 
-    def fetch_photos(self) -> None:
+    def fetch_photo(self, template) -> None:
+        """Downloads one template's photo (only templates in use, so nobody downloads every model)."""
         def work():
-            for template in TEMPLATES.values():
-                stick_photos.ensure_photo(template)
-            self.photos_ready.emit()
+            stick_photos.ensure_photo(template)
+            self.photo_ready.emit(template.id)
         threading.Thread(target=work, daemon=True).start()
 
 
@@ -316,9 +336,8 @@ class BindingsView(QWidget):
         self._loader = _Loader(self)
         self._loader.loaded.connect(self._on_game_loaded)
         self._loader.failed.connect(self._on_game_failed)
-        self._loader.photos_ready.connect(self._on_photos_ready)
-        self._photos_fetched = False
-        self._photos_done = False
+        self._loader.photo_ready.connect(self._on_photo_ready)
+        self._photo_fetches: dict[str, bool] = {}  # template id -> finished
 
         self._build_ui()
 
@@ -398,9 +417,6 @@ class BindingsView(QWidget):
         """Called each time the view is shown."""
         self.joy.start()
         self.live_device = self.joy.find_device(self.product)
-        if not self._photos_fetched:
-            self._photos_fetched = True
-            self._loader.fetch_photos()
         if self.game is None:
             self._loader.run(self.paths.channel_root)
         else:
@@ -422,9 +438,9 @@ class BindingsView(QWidget):
         self._refresh_sources()
         self._load_source(None)
 
-    def _on_photos_ready(self) -> None:
-        self._photos_done = True
-        if self.instance is not None and self.setup.template is not None:
+    def _on_photo_ready(self, template_id: str) -> None:
+        self._photo_fetches[template_id] = True
+        if self.instance is not None and self.setup.template_id == template_id:
             self._render_scene()
 
     def _on_game_failed(self, message: str) -> None:
@@ -492,17 +508,13 @@ class BindingsView(QWidget):
                 "Start the game once with your sticks plugged in so it records them."
             )
             return
-        # Left stick first, matching where it sits on the desk.
-        instances = sorted(products, key=lambda i: (not products[i].lower().endswith(" l"), i))
+        # Left-hand device first, matching where it sits on the desk.
+        instances = sorted(products, key=lambda i: (not _left_hand(products[i]), i))
         if self.instance not in products:
-            # Prefer showing the left stick first when both are present.
-            self.instance = next(
-                (i for i in instances if products[i].lower().endswith(" l")), instances[0]
-            )
+            self.instance = instances[0]
         for pos, inst in enumerate(instances):
             product = products[inst]
-            short = product.split()[-1] if product.split()[-1] in ("L", "R") else f"js{inst}"
-            btn = QPushButton(f"{'LEFT' if short == 'L' else 'RIGHT' if short == 'R' else short}")
+            btn = QPushButton(_device_label(product, inst))
             btn.setObjectName("Segment")
             btn.setProperty("pos", "first" if pos == 0 else "last" if pos == len(instances) - 1 else "mid")
             btn.setCheckable(True)
@@ -718,8 +730,12 @@ class BindingsView(QWidget):
             photo.setZValue(0)
             self.scene.addItem(photo)
         else:
+            fetched = self._photo_fetches.get(template.id)
+            if fetched is None:
+                self._photo_fetches[template.id] = False
+                self._loader.fetch_photo(template)
             msg = self.scene.addText(
-                "Stick photo unavailable (no connection?)" if self._photos_done else "Downloading the stick photo…"
+                "Stick photo unavailable (no connection?)" if fetched else "Downloading the stick photo…"
             )
             msg.setDefaultTextColor(C_MUTED)
             msg.setPos(DRAW_X + tw / 2 - msg.boundingRect().width() / 2, DRAW_Y + th / 2)
@@ -888,7 +904,21 @@ class BindingsView(QWidget):
                 "rebind it. Press buttons on the stick to light up their callouts.",
                 "InspectorHint",
             )
-            if not any(self.setup.inputs.values()):
+            template = self.setup.template
+            missing = [(c, s) for c in template.controls for s in c.inputs if not self.setup.input_for(c, s)]
+            if template.fixed_numbering:
+                if missing:
+                    self._text(
+                        "This model's button numbers are fixed, so the diagram is filled in already. "
+                        f"{len(missing)} input{'s' if len(missing) != 1 else ''} can differ between "
+                        "units and are marked “not identified”: press each one once to place it.",
+                        "InspectorNote",
+                    )
+                    go = QPushButton(f"Identify the rest ({len(missing)})", objectName="StartButtonSmall")
+                    go.setCursor(Qt.PointingHandCursor)
+                    go.clicked.connect(lambda _c=False, q=missing: self._start_identify(list(q)))
+                    self.inspector_layout.addWidget(go)
+            elif not any(self.setup.inputs.values()):
                 self._text(
                     "This stick's buttons haven't been identified yet, so only the axes can be "
                     "placed on the picture. VKB button numbers depend on the stick's firmware "

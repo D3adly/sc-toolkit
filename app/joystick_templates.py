@@ -6,9 +6,11 @@ A template is a product photo (downloaded on first use, see stick_photos)
 plus named controls with a marker position in display coordinates.
 
 Button numbering on VKB sticks depends on the firmware profile loaded in
-VKBDevCfg, so templates deliberately don't hardcode button numbers — the
+VKBDevCfg, so those templates deliberately don't hardcode button numbers: the
 Identify wizard records them from the real device. Only the conventional
-main axes get defaults.
+main axes get defaults. Devices with fixed numbering (the Logitech/Saitek X56)
+come with defaults for every input that is known for sure; Identify can still
+correct or fill any of them.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ class Photo:
     url: str
     crop: tuple[int, int, int, int]  # x, y, w, h in source pixels
     scale: float                     # source pixels -> display units
+    key_background: bool = True      # white studio background to key out (False: already transparent)
 
 
 @dataclass(frozen=True)
@@ -52,6 +55,9 @@ class StickTemplate:
     name: str
     photo: Photo
     controls: tuple[Control, ...]
+    # True when the device's button numbers are fixed in hardware, so the defaults are
+    # trustworthy and only inputs without a default need identifying.
+    fixed_numbering: bool = False
 
     @property
     def size(self) -> tuple[float, float]:
@@ -62,8 +68,8 @@ class StickTemplate:
         return next((c for c in self.controls if c.id == control_id), None)
 
 
-def _button(prompt: str) -> tuple[InputSlot, ...]:
-    return (InputSlot("press", "●", prompt),)
+def _button(prompt: str, default: str = "") -> tuple[InputSlot, ...]:
+    return (InputSlot("press", "●", prompt, default=default),)
 
 
 def _hat(name: str) -> tuple[InputSlot, ...]:
@@ -73,6 +79,30 @@ def _hat(name: str) -> tuple[InputSlot, ...]:
         InputSlot("down", "▼", f"Push the {name} DOWN"),
         InputSlot("left", "◀", f"Push the {name} LEFT"),
         InputSlot("push", "●", f"Press the {name} straight IN"),
+    )
+
+
+def _hat4(name: str, defaults: tuple[str, str, str, str] = ("", "", "", "")) -> tuple[InputSlot, ...]:
+    """A 4-way hat without a centre push. `defaults` in up, right, down, left order."""
+    up, right, down, left = defaults
+    return (
+        InputSlot("up", "▲", f"Push the {name} UP", default=up),
+        InputSlot("right", "▶", f"Push the {name} RIGHT", default=right),
+        InputSlot("down", "▼", f"Push the {name} DOWN", default=down),
+        InputSlot("left", "◀", f"Push the {name} LEFT", default=left),
+    )
+
+
+def _buttons4(first: int) -> tuple[str, str, str, str]:
+    """Default inputs for a hat reported as four consecutive buttons (up, right, down, left)."""
+    return tuple(f"button{first + i}" for i in range(4))  # type: ignore[return-value]
+
+
+def _rocker(name: str, up: str = "", down: str = "", up_label: str = "UP", down_label: str = "DOWN") -> tuple[InputSlot, ...]:
+    """A two-way switch (toggle or rocker) reported as one button per direction."""
+    return (
+        InputSlot("up", "▲", f"Flip the {name} {up_label}", default=up),
+        InputSlot("down", "▼", f"Flip the {name} {down_label}", default=down),
     )
 
 
@@ -116,26 +146,101 @@ _EVO_SCE_STD = (
 )
 
 
-def _controls(photo: Photo, positions: dict[str, tuple[int, int]]) -> tuple[Control, ...]:
-    """Builds controls from marker positions measured in source-photo pixels."""
+def _controls(photo: Photo, layout, positions: dict[str, tuple[int, int]]) -> tuple[Control, ...]:
+    """Builds controls from a control layout and marker positions measured in source-photo pixels."""
     x0, y0, _, _ = photo.crop
     out = []
-    for cid, label, inputs in _EVO_SCE_STD:
+    for cid, label, inputs in layout:
         sx, sy = positions[cid]
         out.append(Control(cid, label, ((sx - x0) * photo.scale, (sy - y0) * photo.scale), inputs))
     return tuple(out)
 
 
+# Logitech (formerly Saitek) X56 H.O.T.A.S. Its numbering is fixed in hardware. Defaults are the
+# ones two independent community maps agree on (Joystick Diagrams' Saitek and Logitech X56
+# templates); the throttle's H/I buttons, mini-stick click, SLD slider and mode switch disagree or
+# are missing there, so they have no default and Identify fills them.
+_X56_STICK = (
+    ("pov", "POV hat", _hat4("POV hat (silver, left of the head)", ("hat1_up", "hat1_right", "hat1_down", "hat1_left"))),
+    ("btn_a", "Button A", _button("Press button A (top of the head)", "button2")),
+    ("btn_b", "Button B", _button("Press button B (right side of the head)", "button3")),
+    ("h1", "Hat H1", _hat4("H1 hat (top right)", _buttons4(7))),
+    ("h2", "Hat H2", _hat4("H2 hat (lower right)", _buttons4(11))),
+    ("trigger", "Trigger", _button("Pull the trigger", "button1")),
+    ("ministick", "Mini-stick (C)", (
+        _axis("x", "↔", "Push the C mini-stick fully LEFT or RIGHT", default="rotx"),
+        _axis("y", "↕", "Push the C mini-stick fully UP or DOWN", default="roty"),
+        InputSlot("push", "●", "Press the C mini-stick in", default="button4"),
+    )),
+    ("btn_d", "Button D", _button("Press button D (front of the grip, near the pinkie)", "button5")),
+    ("pinkie", "Pinkie lever (E)", _button("Squeeze the pinkie lever", "button6")),
+    ("twist", "Twist", (_axis("twist", "⟲", "Twist the grip fully one way", default="rotz"),)),
+    ("stick", "Stick", (
+        _axis("x", "↔", "Push the stick fully LEFT or RIGHT", default="x"),
+        _axis("y", "↕", "Push the stick fully FORWARD or BACK", default="y"),
+    )),
+)
+
+_X56_THROTTLE = (
+    ("k1", "K1 rocker", _rocker("K1 rocker (back of the left lever)", "button28", "button29")),
+    ("btn_h", "Button H", _button("Press button H (back of the left lever)")),
+    ("btn_i", "Button I", _button("Press button I (back of the left lever)")),
+    ("lever_l", "Left throttle", (_axis("lever", "⇅", "Move the LEFT throttle lever end to end", default="x"),)),
+    ("lever_r", "Right throttle", (_axis("lever", "⇅", "Move the RIGHT throttle lever end to end", default="y"),)),
+    ("rty1", "Rotary 1 (F)", (
+        _axis("turn", "⟲", "Turn the top rotary (RTY1) fully one way", default="z"),
+        InputSlot("push", "●", "Press the top rotary in (F)", default="button2"),
+    )),
+    ("sld", "Slider (SLD)", _button("Slide the SLD switch")),
+    ("rty2", "Rotary 2 (G)", (
+        _axis("turn", "⟲", "Turn the lower rotary (RTY2) fully one way", default="rotz"),
+        InputSlot("push", "●", "Press the lower rotary in (G)", default="button3"),
+    )),
+    ("btn_e", "Button E", _button("Press button E (thumb)", "button1")),
+    ("h3", "Hat H3", _hat4("H3 hat (upper thumb hat)", _buttons4(20))),
+    ("ministick", "Mini-stick", (
+        _axis("x", "↔", "Push the thumb mini-stick fully LEFT or RIGHT", default="rotx"),
+        _axis("y", "↕", "Push the thumb mini-stick fully UP or DOWN", default="roty"),
+        InputSlot("push", "●", "Press the thumb mini-stick in"),
+    )),
+    ("h4", "Hat H4", _hat4("H4 hat (lower thumb hat)", _buttons4(24))),
+    ("mode", "Mode switch", (
+        InputSlot("m1", "1", "Turn the mode switch to M1"),
+        InputSlot("m2", "2", "Turn the mode switch to M2"),
+        InputSlot("s1", "S", "Turn the mode switch to S1"),
+    )),
+    ("sw12", "Switch SW1 / SW2", _rocker("SW1/SW2 switch", "button6", "button7", "to SW1", "to SW2")),
+    ("sw34", "Switch SW3 / SW4", _rocker("SW3/SW4 switch", "button8", "button9", "to SW3", "to SW4")),
+    ("sw56", "Switch SW5 / SW6", _rocker("SW5/SW6 switch", "button10", "button11", "to SW5", "to SW6")),
+    ("rty3", "Rotary 3", (_axis("turn", "⟲", "Turn the RTY3 knob on the base fully one way", default="slider1"),)),
+    ("rty4", "Rotary 4", (_axis("turn", "⟲", "Turn the RTY4 knob on the base fully one way", default="slider2"),)),
+    ("tgl1", "Toggle TGL1", _rocker("TGL1 toggle", "button12", "button13")),
+    ("tgl2", "Toggle TGL2", _rocker("TGL2 toggle", "button14", "button15")),
+    ("tgl3", "Toggle TGL3", _rocker("TGL3 toggle", "button16", "button17")),
+    ("tgl4", "Toggle TGL4", _rocker("TGL4 toggle", "button18", "button19")),
+)
+
+
 _PHOTO_CDN = "https://cdn.shopify.com/s/files/1/0571/3192/5689/products/"
+_LOGI_CDN = "https://resource.logitechg.com/content/dam/gaming/en/products/x56/2025/gallery/"
 _PHOTO_R = Photo(_PHOTO_CDN + "68_GNX-EVO_SCG-R_1024_2-nologo.jpg", (150, 30, 780, 950), 0.8)
 _PHOTO_L = Photo(_PHOTO_CDN + "67_GNX-EVO_SCG-L_1024_3-nologo.jpg", (115, 45, 780, 950), 0.8)
+# Logitech's gallery renders are transparent PNGs (2500x2160), one per unit.
+_PHOTO_X56_STICK = Photo(_LOGI_CDN + "x56-3qtr-left-angle-gallery-4.png", (722, 353, 1144, 1443), 0.55, key_background=False)
+_PHOTO_X56_THROTTLE = Photo(_LOGI_CDN + "x56-3qtr-left-angle-gallery-5.png", (601, 592, 1254, 1055), 0.62, key_background=False)
+
+
+def _at(photo: Photo, positions: dict[str, tuple[int, int]]) -> dict[str, tuple[int, int]]:
+    """Marker positions given relative to the photo's crop, converted to source-photo pixels."""
+    x0, y0, _, _ = photo.crop
+    return {cid: (x + x0, y + y0) for cid, (x, y) in positions.items()}
 
 TEMPLATES: dict[str, StickTemplate] = {
     t.id: t
     for t in (
         StickTemplate(
             "vkb_evo_sce_std_r", "VKB Gladiator EVO SCE (Standard) — Right", _PHOTO_R,
-            _controls(_PHOTO_R, {
+            _controls(_PHOTO_R, _EVO_SCE_STD, {
                 "hat_tl": (368, 122), "hat_tr": (455, 95), "hat_c": (425, 168),
                 "btn_red": (370, 203), "btn_front": (258, 175), "trigger": (362, 282),
                 "btn_thumb": (440, 355), "btn_pinky": (622, 520), "twist": (520, 440),
@@ -146,7 +251,7 @@ TEMPLATES: dict[str, StickTemplate] = {
         ),
         StickTemplate(
             "vkb_evo_sce_std_l", "VKB Gladiator EVO SCE (Standard) — Left", _PHOTO_L,
-            _controls(_PHOTO_L, {
+            _controls(_PHOTO_L, _EVO_SCE_STD, {
                 "hat_tl": (570, 112), "hat_tr": (636, 130), "hat_c": (580, 186),
                 "btn_red": (638, 220), "btn_front": (782, 198), "trigger": (675, 302),
                 "btn_thumb": (566, 374), "btn_pinky": (410, 548), "twist": (500, 440),
@@ -155,17 +260,47 @@ TEMPLATES: dict[str, StickTemplate] = {
                 "switch": (240, 792), "wheel": (293, 815), "encoder": (346, 832),
             }),
         ),
+        StickTemplate(
+            "logitech_x56_stick", "Logitech / Saitek X56 — Stick", _PHOTO_X56_STICK,
+            _controls(_PHOTO_X56_STICK, _X56_STICK, _at(_PHOTO_X56_STICK, {
+                "pov": (433, 125), "btn_a": (462, 48), "btn_b": (640, 120), "h1": (552, 38),
+                "h2": (592, 142), "trigger": (432, 335), "ministick": (385, 410), "btn_d": (440, 600),
+                "pinkie": (352, 575), "twist": (570, 520), "stick": (540, 905),
+            })),
+            fixed_numbering=True,
+        ),
+        StickTemplate(
+            "logitech_x56_throttle", "Logitech / Saitek X56 — Throttle", _PHOTO_X56_THROTTLE,
+            _controls(_PHOTO_X56_THROTTLE, _X56_THROTTLE, _at(_PHOTO_X56_THROTTLE, {
+                # K1, H and I sit on the back of the left lever, out of sight in this photo.
+                "k1": (500, 75), "btn_h": (430, 150), "btn_i": (425, 225),
+                "lever_l": (480, 300), "lever_r": (640, 210),
+                "rty1": (945, 50), "sld": (835, 225), "rty2": (952, 290), "btn_e": (775, 340),
+                "h3": (866, 352), "ministick": (728, 402), "h4": (838, 428),
+                "mode": (138, 520), "sw12": (308, 558), "sw34": (415, 597), "sw56": (535, 643),
+                "rty3": (704, 608), "rty4": (838, 612),
+                "tgl1": (973, 551), "tgl2": (850, 535), "tgl3": (1104, 482), "tgl4": (985, 485),
+            })),
+            fixed_numbering=True,
+        ),
     )
 }
 
 
 def guess_template(product: str) -> str | None:
+    """Template for a game product name: 'VKBsim Gladiator EVO L', 'Saitek Pro Flight X-56 Rhino
+    Throttle', 'X56 H.O.T.A.S. Stick' (the Logitech-era name)..."""
     p = product.lower()
     if "gladiator" in p and "evo" in p:
         if p.endswith(" l"):
             return "vkb_evo_sce_std_l"
         if p.endswith(" r"):
             return "vkb_evo_sce_std_r"
+    if "x-56" in p or "x56" in p:
+        if "throttle" in p:
+            return "logitech_x56_throttle"
+        if "stick" in p or "joystick" in p:
+            return "logitech_x56_stick"
     return None
 
 

@@ -2,6 +2,17 @@
 
 What changed in each SC-Toolkit release. The newest version is at the top.
 
+## Unreleased
+
+- **Joystick bindings: Logitech / Saitek X56 H.O.T.A.S.** The bindings view now draws the X56 stick
+  and throttle (Saitek *X-56 Rhino* and Logitech-branded units), with Logitech's product photos
+  (downloaded on first use, not bundled). The X56's button numbers are fixed, so every control
+  shows its bindings right away; *Identify the rest* asks only for the few inputs that can differ
+  (throttle H/I, SLD, mini-stick click, mode switch). A HOTAS shows as STICK / THROTTLE, throttle
+  first.
+- **Joystick photos download only when needed:** the view fetches a model's photo the first time a
+  device uses that model, instead of every model's photo up front.
+
 ## 0.2.0 (2026-10-02)
 
 - **My Ships** (new tool): your hangar as a grid of ship cards. Add the ships you own from a list

@@ -13,7 +13,7 @@ from pathlib import Path
 import threading
 import urllib.request
 
-from PySide6.QtCore import QObject, QRectF, Qt, Signal
+from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -303,7 +303,9 @@ class SettingsView(QWidget):
             self.hotkey_rows[field] = _HotkeyRow(ogrid, 4 + i, title, defaults[field], self._validate)
         sections.addWidget(overlay_panel)
 
-        sections.addWidget(self._build_account_panel())
+        self._scroll = scroll
+        self._account_panel = self._build_account_panel()
+        sections.addWidget(self._account_panel)
 
         updates_panel = QFrame(objectName="SidePanel")
         ugrid = QGridLayout(updates_panel)
@@ -436,6 +438,10 @@ class SettingsView(QWidget):
         self._avatar_loader.loaded.connect(self._on_avatar_loaded)
         account_controller().changed.connect(self._show_account)
         return panel
+
+    def show_account_panel(self) -> None:
+        """Scrolls the online account section into view (title bar account button)."""
+        QTimer.singleShot(0, lambda: self._scroll.ensureWidgetVisible(self._account_panel, 0, 40))
 
     def _validate_portal_url(self) -> None:
         text = self.portal_url.text().strip().rstrip("/")

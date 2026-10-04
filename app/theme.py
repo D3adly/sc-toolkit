@@ -98,6 +98,31 @@ QWidget {{
     selection-background-color: {accent_soft};
 }}
 
+#TitleAccount {{
+    background: transparent;
+    color: {accent};
+    border: 1px solid {accent_dim};
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1px;
+}}
+#TitleAccount:hover {{
+    background: {accent_soft};
+    border: 1px solid {accent};
+}}
+#TitleAccount[signedIn="true"] {{
+    color: {text_primary};
+    border: 1px solid transparent;
+    letter-spacing: 0px;
+    font-size: 12px;
+}}
+#TitleAccount[signedIn="true"]:hover {{
+    background: {bg_hover};
+    border: 1px solid {border};
+}}
+
 #TitleBarButton {{
     background: transparent;
     border: none;

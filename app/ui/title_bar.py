@@ -19,13 +19,15 @@ def _shadow(widget: QWidget) -> QWidget:
 
 class TitleBar(QWidget):
     """Frameless-window title bar (transparent over the wallpaper): app name
-    and version + drag-to-move + settings / minimize / maximize / close.
-    The version opens What's new; an Update button appears next to it when
-    a new version is out.
+    and version + drag-to-move + account / settings / minimize / maximize /
+    close. The version opens What's new; an Update button appears next to it
+    when a new version is out. The account button shows the online sign-in
+    (hidden while no service is configured).
     """
 
     settings_requested = Signal()
     whats_new_requested = Signal()
+    account_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -51,6 +53,13 @@ class TitleBar(QWidget):
         layout.addWidget(_shadow(self.update_btn))
         self.set_changelog_unseen(False)
         layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
+
+        self.account_btn = QPushButton(objectName="TitleAccount")
+        self.account_btn.setCursor(Qt.PointingHandCursor)
+        self.account_btn.clicked.connect(self.account_requested.emit)
+        self.account_btn.hide()
+        layout.addWidget(_shadow(self.account_btn))
+        layout.addSpacing(4)
 
         self.settings_btn = QPushButton("⚙")
         self.settings_btn.setObjectName("TitleBarButton")
@@ -86,6 +95,21 @@ class TitleBar(QWidget):
         self.version_btn.setProperty("unseen", unseen)
         self.version_btn.style().polish(self.version_btn)
         self.version_btn.setToolTip("What's new in SC-Toolkit")
+
+    def set_account(self, status: str, name: str = "", offline: bool = False) -> None:
+        """Mirrors the online account: hidden when off, "Sign in" when signed out, else the name."""
+        self.account_btn.setVisible(status != "off")
+        if status == "signed_in":
+            self.account_btn.setText(f"● {name}" + (" (offline)" if offline else ""))
+            self.account_btn.setToolTip("Signed in to SC-Toolkit online. Click for your account.")
+        elif status == "signing_in":
+            self.account_btn.setText("Signing in…")
+            self.account_btn.setToolTip("Finish signing in in your browser. Click to see the sign-in in Settings.")
+        else:
+            self.account_btn.setText("Sign in")
+            self.account_btn.setToolTip("Sign in to SC-Toolkit online with Discord (opens your browser)")
+        self.account_btn.setProperty("signedIn", status == "signed_in")
+        self.account_btn.style().polish(self.account_btn)
 
     def set_update(self, version: str | None) -> None:
         self.update_btn.setVisible(version is not None)

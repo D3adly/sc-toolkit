@@ -113,8 +113,9 @@ per game patch and cached, so it's always current and works offline.
 
 ## Online account (optional)
 
-**Settings → Online account** links the launcher to your SC-Toolkit account, for the online features
-(orgs and events first). *Sign in with Discord* opens your browser; you sign in there and approve
+**Sign in** at the top right of the launcher (next to ⚙), or **Settings → Online account**, links the
+launcher to your SC-Toolkit account, for the online features (orgs and events first). It opens your
+browser; you sign in there and approve
 SC-Toolkit, and the browser hands the sign-in back to the launcher on this computer only.
 
 - The launcher never sees your Discord or RSI password.

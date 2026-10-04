@@ -238,10 +238,15 @@ class MainWindow(QMainWindow):
             self.gamelog.start()
         self._setup_updates(live=start_overlay)
         self._setup_data(live=start_overlay)
+        # The online account (optional): the title bar mirrors it; a sign-in kept in the keyring is
+        # picked up at startup.
+        from app.account_controller import controller as account_controller
+        account = account_controller()
+        account.changed.connect(lambda st: self.title_bar.set_account(
+            st.status, st.profile.display_name if st.profile else "", st.offline))
+        title_bar.account_requested.connect(self._on_account_clicked)
         if start_overlay:
-            # The online account (optional): picks up a sign-in kept in the keyring.
-            from app.account_controller import controller as account_controller
-            account_controller().restore()
+            account.restore()
 
     # -- game files and web data (app.datahub) -----------------------------------
     def _setup_data(self, live: bool) -> None:
@@ -1041,6 +1046,17 @@ class MainWindow(QMainWindow):
         self.mining_view.activate()
 
     # -- settings view ---------------------------------------------------------
+    def _on_account_clicked(self) -> None:
+        """Title bar account button: signed out, it starts the browser sign-in straight away (and
+        shows its progress in Settings); otherwise it opens the account panel."""
+        from app.account_controller import controller as account_controller
+
+        account = account_controller()
+        if account.state.status == "signed_out":
+            account.sign_in()
+        self._show_settings()
+        self.settings_view.show_account_panel()
+
     def _show_settings(self, first_run: bool = False) -> None:
         if self.stack.currentWidget() is self.settings_view:
             return

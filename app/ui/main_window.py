@@ -238,6 +238,10 @@ class MainWindow(QMainWindow):
             self.gamelog.start()
         self._setup_updates(live=start_overlay)
         self._setup_data(live=start_overlay)
+        if start_overlay:
+            # The online account (optional): picks up a sign-in kept in the keyring.
+            from app.account_controller import controller as account_controller
+            account_controller().restore()
 
     # -- game files and web data (app.datahub) -----------------------------------
     def _setup_data(self, live: bool) -> None:

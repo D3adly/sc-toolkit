@@ -10,8 +10,11 @@ import sys
 from dataclasses import fields, replace
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QKeySequence
+import threading
+import urllib.request
+
+from PySide6.QtCore import QObject, QRectF, Qt, Signal
+from PySide6.QtGui import QKeySequence, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QFileDialog,
     QKeySequenceEdit,
@@ -26,7 +29,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import __version__, channel as channel_mod, datahub, hotkeys, settings
+from app import __version__, channel as channel_mod, config, datahub, hotkeys, portal, settings
+from app.account_controller import AccountState, controller as account_controller
 from app.settings import Settings
 from app.theme import PALETTE
 from app.ui.widgets import Switch
@@ -129,6 +133,38 @@ class _HotkeyRow:
         self.edit.setKeySequence(QKeySequence.fromString(text, QKeySequence.PortableText))
 
     set_status = _PathRow.set_status
+
+
+class _AvatarLoader(QObject):
+    """Downloads an avatar picture off the UI thread."""
+    loaded = Signal(str, bytes)  # url, image data
+
+    def fetch(self, url: str) -> None:
+        def work():
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    self.loaded.emit(url, resp.read(512 * 1024))
+            except OSError:
+                pass  # no avatar then; the initial stays
+        threading.Thread(target=work, daemon=True).start()
+
+
+def _round_pixmap(data: bytes, size: int) -> QPixmap | None:
+    source = QPixmap()
+    if not source.loadFromData(data):
+        return None
+    source = source.scaled(size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    out = QPixmap(size, size)
+    out.fill(Qt.transparent)
+    painter = QPainter(out)
+    painter.setRenderHint(QPainter.Antialiasing)
+    clip = QPainterPath()
+    clip.addEllipse(QRectF(0, 0, size, size))
+    painter.setClipPath(clip)
+    painter.drawPixmap(0, 0, source)
+    painter.end()
+    return out
 
 
 class SettingsView(QWidget):
@@ -267,6 +303,8 @@ class SettingsView(QWidget):
             self.hotkey_rows[field] = _HotkeyRow(ogrid, 4 + i, title, defaults[field], self._validate)
         sections.addWidget(overlay_panel)
 
+        sections.addWidget(self._build_account_panel())
+
         updates_panel = QFrame(objectName="SidePanel")
         ugrid = QGridLayout(updates_panel)
         ugrid.setContentsMargins(20, 18, 20, 18)
@@ -330,6 +368,138 @@ class SettingsView(QWidget):
         about.setOpenExternalLinks(True)
         outer.addWidget(about, alignment=Qt.AlignRight)
 
+    # -- online account ---------------------------------------------------------
+    AVATAR = 44
+
+    def _build_account_panel(self) -> QFrame:
+        panel = QFrame(objectName="SidePanel")
+        grid = QGridLayout(panel)
+        grid.setContentsMargins(20, 18, 20, 18)
+        grid.setHorizontalSpacing(18)
+        grid.setVerticalSpacing(12)
+        grid.setColumnMinimumWidth(0, 190)
+        grid.setColumnStretch(1, 1)
+        grid.addWidget(QLabel("ONLINE ACCOUNT", objectName="SectionLabel"), 0, 0, 1, 2)
+
+        grid.addWidget(QLabel("Account", objectName="SlotTitle"), 1, 0, Qt.AlignTop)
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        self.avatar = QLabel(objectName="AccountAvatar")
+        self.avatar.setFixedSize(self.AVATAR, self.AVATAR)
+        self.avatar.setAlignment(Qt.AlignCenter)
+        row.addWidget(self.avatar)
+        who = QVBoxLayout()
+        who.setSpacing(2)
+        self.account_name = QLabel("", objectName="InspectorText")
+        self.account_detail = QLabel("", objectName="InspectorHint")
+        self.account_detail.setWordWrap(True)
+        who.addWidget(self.account_name)
+        who.addWidget(self.account_detail)
+        row.addLayout(who, stretch=1)
+        self.sign_in_btn = QPushButton("Sign in with Discord", objectName="StartButtonSmall")
+        self.sign_in_btn.setCursor(Qt.PointingHandCursor)
+        self.sign_in_btn.clicked.connect(lambda: account_controller().sign_in())
+        self.cancel_btn = QPushButton("Cancel", objectName="MiniButton")
+        self.cancel_btn.setCursor(Qt.PointingHandCursor)
+        self.cancel_btn.clicked.connect(lambda: account_controller().cancel_sign_in())
+        self.sign_out_btn = QPushButton("Sign out", objectName="MiniButton")
+        self.sign_out_btn.setCursor(Qt.PointingHandCursor)
+        self.sign_out_btn.clicked.connect(lambda: account_controller().sign_out())
+        for btn in (self.sign_in_btn, self.cancel_btn, self.sign_out_btn):
+            row.addWidget(btn, alignment=Qt.AlignVCenter)
+        grid.addLayout(row, 1, 1)
+
+        grid.addWidget(QLabel("Service URL", objectName="SlotTitle"), 2, 0, Qt.AlignTop)
+        url_box = QVBoxLayout()
+        url_box.setSpacing(4)
+        self.portal_url = QLineEdit(objectName="SearchField")
+        self.portal_url.setPlaceholderText("https://…")
+        self.portal_url.textChanged.connect(self._validate_portal_url)
+        url_box.addWidget(self.portal_url)
+        self.portal_url_status = QLabel("", objectName="InspectorHint")
+        self.portal_url_status.setWordWrap(True)
+        url_box.addWidget(self.portal_url_status)
+        grid.addLayout(url_box, 2, 1)
+
+        note = QLabel(
+            "Optional. Signing in links the launcher to your SC-Toolkit account (orgs, events, and "
+            "soon keeping your stats). You sign in with Discord in your browser; the launcher never "
+            "sees a password, and keeps the sign-in in your system's password store. Everything else "
+            "works without an account.",
+            objectName="InspectorHint",
+        )
+        note.setWordWrap(True)
+        grid.addWidget(note, 3, 0, 1, 2)
+
+        self._avatar_url: str | None = None
+        self._avatar_loader = _AvatarLoader(self)
+        self._avatar_loader.loaded.connect(self._on_avatar_loaded)
+        account_controller().changed.connect(self._show_account)
+        return panel
+
+    def _validate_portal_url(self) -> None:
+        text = self.portal_url.text().strip().rstrip("/")
+        saved = settings.current().portal_url.strip().rstrip("/")
+        problem = portal.check_service_url(text) if text else None
+        if problem:
+            self.portal_url_status.setText(f"✕ {problem}")
+        elif text != saved:
+            self.portal_url_status.setText("Save to use this address.")
+        else:
+            self.portal_url_status.setText("" if text else "Not set: the online account is off.")
+        self._show_account(account_controller().state)
+        if hasattr(self, "save_btn"):
+            self._validate()
+
+    def _show_account(self, state: AccountState) -> None:
+        unsaved = self.portal_url.text().strip().rstrip("/") != settings.current().portal_url.strip().rstrip("/")
+        profile = state.profile
+        signed_in = state.status == "signed_in"
+        if state.status == "off":
+            name, detail = "Not available", "Set the service URL below and save."
+        elif state.status == "signing_in":
+            name, detail = "Signing in…", state.message
+        elif signed_in and profile:
+            name = profile.display_name
+            bits = [f"RSI: {profile.rsi_handle}" if profile.rsi_handle else "RSI account not verified"]
+            if state.offline:
+                bits.append("service offline right now")
+            detail = " · ".join(bits) + (f"\n{state.message}" if state.message else "")
+        else:
+            name, detail = "Not signed in", state.message
+        self.account_name.setText(name)
+        self.account_detail.setText(detail)
+        self.sign_in_btn.setVisible(state.status == "signed_out")
+        self.sign_in_btn.setEnabled(not unsaved)
+        self.cancel_btn.setVisible(state.status == "signing_in")
+        self.sign_out_btn.setVisible(signed_in)
+
+        avatar_url = profile.avatar_url if signed_in and profile else None
+        if avatar_url != self._avatar_url:
+            self._avatar_url = avatar_url
+            self._set_initial(name if signed_in else "")
+            if avatar_url:
+                self._avatar_loader.fetch(avatar_url)
+        elif not avatar_url:
+            self._set_initial(name if signed_in else "")
+
+    def _set_initial(self, name: str) -> None:
+        self.avatar.setPixmap(QPixmap())
+        self.avatar.setText((name[:1] or "?").upper())
+        self.avatar.setStyleSheet(
+            f"background:{PALETTE['accent_soft']};color:{PALETTE['accent']};border-radius:{self.AVATAR // 2}px;"
+            "font-weight:800;font-size:18px;"
+        )
+
+    def _on_avatar_loaded(self, url: str, data: bytes) -> None:
+        if url != self._avatar_url:
+            return
+        pixmap = _round_pixmap(data, self.AVATAR)
+        if pixmap is not None:
+            self.avatar.setText("")
+            self.avatar.setStyleSheet("background:transparent;")
+            self.avatar.setPixmap(pixmap)
+
     # -- lifecycle ------------------------------------------------------------
     def activate(self, first_run: bool = False) -> None:
         s = settings.current()
@@ -341,6 +511,8 @@ class SettingsView(QWidget):
             row.set_value(getattr(s, field))
         self.update_check.setChecked(s.update_check)
         self.update_prereleases.setChecked(s.update_prereleases)
+        self.portal_url.setText(s.portal_url)
+        self._validate_portal_url()
         self.back_btn.setVisible(not first_run)
         self.intro.setVisible(first_run)
         self.intro.setText(
@@ -442,10 +614,13 @@ class SettingsView(QWidget):
             seen[combo] = field
 
         # The game folder is the one thing nothing works without.
+        url = self.portal_url.text().strip()
         self.save_btn.setEnabled(live_err is None and hotkeys_ok and not (
-            Path(self.backups.value).is_file() if self.backups.value else False))
+            Path(self.backups.value).is_file() if self.backups.value else False)
+            and (not url or portal.check_service_url(url.rstrip("/")) is None))
 
     def _save(self) -> None:
+        old_url = settings.current().portal_url
         settings.apply(replace(
             settings.current(),
             live_dir=self.live.value,
@@ -455,7 +630,11 @@ class SettingsView(QWidget):
             rsi_log_path=self.rsi_log.value,
             update_check=self.update_check.isChecked(),
             update_prereleases=self.update_prereleases.isChecked(),
+            portal_url=self.portal_url.text().strip().rstrip("/"),
             **{field: hotkeys.format_combo(*hotkeys.parse(row.value))
                for field, row in self.hotkey_rows.items()},
         ))
+        if settings.current().portal_url != old_url:
+            account_controller().restore()  # a different service: check the sign-in there
+        self._validate_portal_url()
         self.saved.emit()

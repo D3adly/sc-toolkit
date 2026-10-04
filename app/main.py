@@ -117,7 +117,8 @@ def main():
                      "hangar_view"):
             importlib.import_module(f"app.ui.{view}")
         for module in ("mining", "salvage", "datacore", "socpak", "joyinput", "hotkeys", "gamelog",
-                       "contracts", "tracker", "stats", "ships", "hangar", "shipdata", "datahub"):
+                       "contracts", "tracker", "stats", "ships", "hangar", "shipdata", "datahub",
+                       "portal", "account_controller"):
             importlib.import_module(f"app.{module}")
         from app import changelog
 

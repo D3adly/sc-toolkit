@@ -58,6 +58,8 @@ a = Analysis(
         "app.ui.whats_new_view", "app.ui.hangar_view",
         "app.hotkeys",
         "jeepney", "jeepney.io.blocking", "jeepney.bus_messages",
+        # Sign-in storage (app.portal): keyring picks its OS backend at runtime.
+        "keyring.backends.Windows", "keyring.backends.SecretService", "keyring.backends.fail",
         "sdl2", "sdl2dll",
     ],
     noarchive=False,

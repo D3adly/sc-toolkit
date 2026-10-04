@@ -34,6 +34,7 @@ class Settings:
     update_check: bool = True                    # look for a new SC-Toolkit once a day (app.updater)
     update_prereleases: bool = False             # include beta versions
     changelog_seen: str = ""                     # version whose What's new was last opened
+    portal_url: str = ""                         # SC-Toolkit online service (app.portal); "" = off
 
     @property
     def game_root(self) -> Path | None:

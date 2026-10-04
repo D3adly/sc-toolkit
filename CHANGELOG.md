@@ -2,6 +2,14 @@
 
 What changed in each SC-Toolkit release. The newest version is at the top.
 
+## Unreleased
+
+- **Online account (optional):** Settings → *Online account* signs the launcher in to the SC-Toolkit
+  online service with Discord, in your browser. The launcher never sees a password: it gets a sign-in
+  that's kept in your system's password store (Windows Credential Manager, or KWallet / GNOME Keyring
+  on Linux), so you stay signed in after a restart. *Sign out* ends it on the service too. Nothing
+  changes if you don't sign in. (The service isn't public yet: its address is a setting for now.)
+
 ## 0.2.1 (2026-10-04)
 
 - **Joystick bindings: Logitech / Saitek X56 H.O.T.A.S.** The bindings view now draws the X56 stick

@@ -111,6 +111,22 @@ it adds a few tools that read their data straight from your own game files.
 Game data (mining, salvage, bindings) is extracted from your installation once
 per game patch and cached, so it's always current and works offline.
 
+## Online account (optional)
+
+**Settings → Online account** links the launcher to your SC-Toolkit account, for the online features
+(orgs and events first). *Sign in with Discord* opens your browser; you sign in there and approve
+SC-Toolkit, and the browser hands the sign-in back to the launcher on this computer only.
+
+- The launcher never sees your Discord or RSI password.
+- The sign-in is kept in your system's password store (Windows Credential Manager, or the Secret
+  Service on Linux: KWallet or GNOME Keyring), never in a plain file. On Linux without a password
+  store, signing in isn't possible.
+- *Sign out* revokes the sign-in on the service as well.
+- Everything else works the same without an account, offline included.
+
+The service isn't public yet, so its address is a setting (*Service URL*). For development it can
+also be given as the `SCT_PORTAL_URL` environment variable.
+
 ## In-game overlay
 
 A small always-on-top bar with five tabs, picked by icon:

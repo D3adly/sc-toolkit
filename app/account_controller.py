@@ -1,4 +1,4 @@
-"""The signed-in SC-Toolkit online account, for the UI: restores the sign-in at startup, runs the
+"""The signed-in SC-Toolbox online account, for the UI: restores the sign-in at startup, runs the
 browser sign-in and sign-out off the UI thread (app.portal does the work), and reports the state
 through `changed`.
 

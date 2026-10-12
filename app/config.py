@@ -10,9 +10,9 @@ from pathlib import Path
 import platformdirs
 
 APP_NAME = "sc-toolkit"
-DISPLAY_NAME = "SC-Toolkit"
+DISPLAY_NAME = "SC-Toolbox"
 USER_AGENT = "sc-toolkit"
-_LEGACY_APP_NAME = "sc-launcher-app"  # name before the SC-Toolkit rename
+_LEGACY_APP_NAME = "sc-launcher-app"  # folder name before the SC-Toolkit rename
 # Bundled assets live next to the package, or in PyInstaller's unpack dir
 # when running as a built executable.
 _BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))

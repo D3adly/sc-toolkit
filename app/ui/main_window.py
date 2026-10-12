@@ -60,7 +60,7 @@ def _section_label(text: str) -> QLabel:
 
 
 class _ToolTile(QFrame):
-    """A large clickable card for one of SC-Toolkit's own tools: icon, title,
+    """A large clickable card for one of SC-Toolbox's own tools: icon, title,
     a line of explanation and an optional credit (with links)."""
 
     clicked = Signal()
@@ -290,7 +290,7 @@ class MainWindow(QMainWindow):
 
     def _on_game_update_stopped(self, channel: str) -> None:
         # Cancelled or paused: the files may be half updated, so keep the
-        # previous data; the next start of SC-Toolkit or the game checks again.
+        # previous data; the next start of SC-Toolbox or the game checks again.
         datahub.hub().set_updating(channel, None)
         self._on_data_status(f"The {channel} update stopped: the tools keep the previous version's data.",
                              sticky=True)
@@ -373,7 +373,7 @@ class MainWindow(QMainWindow):
     def _install_update(self) -> None:
         view = self.whats_new_view
         if self.controller.busy:
-            view.set_install_state("Finish the game session first: SC-Toolkit backs up your keybinds "
+            view.set_install_state("Finish the game session first: SC-Toolbox backs up your keybinds "
                                    "when the game closes.", False)
             return
         if osutil.is_game_running():
@@ -395,7 +395,7 @@ class MainWindow(QMainWindow):
             updater.restart(target)
         except OSError as exc:
             self.whats_new_view.set_install_state(
-                f"Installed. Couldn't restart it ({exc}): close SC-Toolkit and start it again.", False)
+                f"Installed. Couldn't restart it ({exc}): close SC-Toolbox and start it again.", False)
             return
         self.whats_new_view.set_install_state("Installed. Restarting…", True)
         QTimer.singleShot(300, QApplication.instance().quit)
@@ -698,7 +698,7 @@ class MainWindow(QMainWindow):
             self.config_help.setText(
                 f"⚠ Overwrites your current in-game keybinds and game settings with this "
                 f"{kind} before launching. Changes made while the game was started without "
-                f"SC-Toolkit (not yet backed up) will be lost."
+                f"SC-Toolbox (not yet backed up) will be lost."
             )
         self.config_help.style().unpolish(self.config_help)
         self.config_help.style().polish(self.config_help)
@@ -821,7 +821,7 @@ class MainWindow(QMainWindow):
         self._update_gamelog_hint()
         return box
 
-    # -- middle: SC-Toolkit's own tools ---------------------------------------
+    # -- middle: SC-Toolbox's own tools ---------------------------------------
     def _build_tools_panel(self) -> QWidget:
         # No panel behind this column: each tile carries its own glass, so the
         # wallpaper shows through around and below them.
@@ -831,7 +831,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
         heading_row = QHBoxLayout()
         heading_row.setSpacing(12)
-        heading_row.addWidget(QLabel("SC-TOOLKIT TOOLS", objectName="ToolsHeading"))
+        heading_row.addWidget(QLabel("SC-TOOLBOX TOOLS", objectName="ToolsHeading"))
         heading_row.addStretch(1)
         layout.addLayout(heading_row)
 

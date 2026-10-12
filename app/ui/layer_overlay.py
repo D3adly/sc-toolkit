@@ -54,7 +54,7 @@ class LayerHost(QWidget):
         super().__init__()
         self.hint = hint
         self.passive = False            # click-through
-        self.setWindowTitle("SC-Toolkit overlay")
+        self.setWindowTitle("SC-Toolbox overlay")
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.winId()                    # the QWindow must exist to attach the layer surface

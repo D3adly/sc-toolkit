@@ -1,4 +1,4 @@
-"""Signing in to the SC-Toolkit online service, and calling its API.
+"""Signing in to the SC-Toolbox online service, and calling its API.
 
 The launcher is an OAuth 2 *public* client (it's open source, so it can't keep a secret):
 authorization code + PKCE (S256) through the system browser, with the code handed back on a
@@ -35,7 +35,7 @@ from app import __version__, config, settings
 
 CLIENT_ID = "sc-toolkit-launcher"
 SCOPES = "profile orgs events"
-KEYRING_SERVICE = "SC-Toolkit online"
+KEYRING_SERVICE = "SC-Toolkit online"  # unchanged by the SC-Toolbox rename: keeps stored sign-ins
 PROFILE_FILE = config.USER_CONFIG_DIR / "account.json"
 SIGN_IN_TIMEOUT = 300  # seconds to finish signing in in the browser
 _HTTP_TIMEOUT = 15
@@ -197,7 +197,7 @@ def pkce_pair() -> tuple[str, str]:
     return verifier, _b64url(hashlib.sha256(verifier.encode()).digest())
 
 
-_DONE_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SC-Toolkit</title>
+_DONE_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SC-Toolbox</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1215;color:#f3ede2;
 font:16px/1.5 Inter,'Segoe UI',system-ui,sans-serif">
@@ -231,7 +231,7 @@ class LoopbackReceiver:
                 error = query.get("error", [None])[0]
                 if code:
                     page = _DONE_PAGE.format(color="#e3a33b", title="You're signed in",
-                                             text="You can close this tab and go back to SC-Toolkit.")
+                                             text="You can close this tab and go back to SC-Toolbox.")
                 else:
                     page = _DONE_PAGE.format(color="#e26a55", title="Sign-in cancelled",
                                              text="Nothing was changed. You can close this tab.")

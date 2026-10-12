@@ -1,4 +1,4 @@
-"""Tiny local IPC between SC-Toolkit processes, over QLocalServer/Socket
+"""Tiny local IPC between SC-Toolbox processes, over QLocalServer/Socket
 (a named pipe on Windows, a Unix socket on Linux; per user).
 
 - The **main** app listens on `MAIN`: a second launch, or a command such as

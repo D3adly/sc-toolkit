@@ -1,3 +1,3 @@
-"""SC-Toolkit — a Star Citizen companion launcher and toolkit."""
+"""SC-Toolbox — a Star Citizen companion launcher and toolkit."""
 
 __version__ = "0.2.1"

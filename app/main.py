@@ -1,7 +1,7 @@
 import os
 import sys
 
-# Commands for an already running SC-Toolkit (e.g. bound to desktop
+# Commands for an already running SC-Toolbox (e.g. bound to desktop
 # shortcuts): forwarded over IPC, no window is opened.
 COMMANDS = {
     "--toggle-overlay": "toggle-overlay",
@@ -56,7 +56,7 @@ def _forward_command(command: str) -> int:
     # Launcher not running: the overlay may still be (it's its own process).
     if command != "show" and ipc.send(ipc.OVERLAY, command):
         return 0
-    print("SC-Toolkit isn't running.", file=sys.stderr)
+    print("SC-Toolbox isn't running.", file=sys.stderr)
     return 1
 
 

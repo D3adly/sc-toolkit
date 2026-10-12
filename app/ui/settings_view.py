@@ -256,11 +256,11 @@ class SettingsView(QWidget):
         self.rsi_log = _PathRow(
             grid, 4, "RSI Launcher log (optional)",
             "The RSI Launcher's logs\\log.log (in %APPDATA%\\rsilauncher on Windows, in the Wine prefix's "
-            "user folder on Linux). SC-Toolkit watches it to notice game updates: while one runs, the "
+            "user folder on Linux). SC-Toolbox watches it to notice game updates: while one runs, the "
             "tools keep the previous version's data; when it's done, they switch to the new one."
             if WINDOWS else
             "The RSI Launcher's logs/log.log, in the Wine prefix: drive_c/users/<you>/AppData/Roaming/"
-            "rsilauncher. SC-Toolkit watches it to notice game updates: while one runs, the tools keep the "
+            "rsilauncher. SC-Toolbox watches it to notice game updates: while one runs, the tools keep the "
             "previous version's data; when it's done, they switch to the new one.",
             folder=False, file_filter="Log (*.log);;All files (*)", on_change=self._validate,
         )
@@ -319,7 +319,7 @@ class SettingsView(QWidget):
         self.update_prereleases = Switch()
         for row, (title, switch, hint) in enumerate((
             ("Check for updates", self.update_check,
-             "Once a day, SC-Toolkit asks GitHub whether there's a new version. When there is, an "
+             "Once a day, SC-Toolbox asks GitHub whether there's a new version. When there is, an "
              "Update button shows next to the version at the top; nothing is installed until you click it."),
             ("Include beta versions", self.update_prereleases,
              "Also offer test versions (pre-releases), which get new features first but may have bugs."),
@@ -337,7 +337,7 @@ class SettingsView(QWidget):
         dv.setSpacing(8)
         dv.addWidget(QLabel("GAME & WEB DATA", objectName="SectionLabel"))
         data_note = QLabel(
-            "SC-Toolkit reads the game files once per game version and keeps what the tools need; "
+            "SC-Toolbox reads the game files once per game version and keeps what the tools need; "
             "it downloads the ship list weekly and the salvage spreadsheet and UEX prices at most "
             "once a day. All of this happens by itself. If something looks wrong or failed, "
             "Refresh data reads the game files again now and downloads whatever is due.",
@@ -362,7 +362,7 @@ class SettingsView(QWidget):
         outer.addWidget(scroll, stretch=1)
 
         about = QLabel(
-            f"SC-Toolkit v{__version__} · GPL-3.0 · "
+            f"SC-Toolbox v{__version__} · GPL-3.0 · "
             f"<a style='color:{PALETTE['info']}' href='https://github.com/D3adly/sc-toolkit'>"
             "github.com/D3adly/sc-toolkit</a>",
             objectName="AboutLabel",
@@ -424,7 +424,7 @@ class SettingsView(QWidget):
         grid.addLayout(url_box, 2, 1)
 
         note = QLabel(
-            "Optional. Signing in links the launcher to your SC-Toolkit account (orgs, events, and "
+            "Optional. Signing in links the launcher to your SC-Toolbox account (orgs, events, and "
             "soon keeping your stats). You sign in with Discord in your browser; the launcher never "
             "sees a password, and keeps the sign-in in your system's password store. Everything else "
             "works without an account.",
@@ -587,7 +587,7 @@ class SettingsView(QWidget):
             self.rsi_log.edit.setPlaceholderText(found)
             self.rsi_log.set_status(True if found else None,
                                     "Found automatically (leave empty to keep detecting it)" if found else
-                                    "Not found: game updates are noticed when SC-Toolkit or the game starts")
+                                    "Not found: game updates are noticed when SC-Toolbox or the game starts")
         else:
             err = settings.validate_file(self.rsi_log.value)
             self.rsi_log.set_status(False if err else True, err or "Found: game updates are noticed as they happen")

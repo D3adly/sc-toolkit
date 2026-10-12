@@ -219,7 +219,7 @@ class _LivePanel(_ScrollPanel):
         if state == "disabled":
             v = self._new_page()
             v.addStretch(1)
-            lbl = _label("The live log reader is off.\nTurn on LIVE LOG in SC-Toolkit to follow your "
+            lbl = _label("The live log reader is off.\nTurn on LIVE LOG in SC-Toolbox to follow your "
                          "missions and session here.", "InspectorHint", wrap=True)
             lbl.setAlignment(Qt.AlignCenter)
             v.addWidget(lbl)

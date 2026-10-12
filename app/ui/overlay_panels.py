@@ -1,4 +1,4 @@
-"""Compact ("minimised") layouts of SC-Toolkit's tools for the in-game
+"""Compact ("minimised") layouts of SC-Toolbox's tools for the in-game
 overlay. They're narrow widgets over the same data code as the full views
 (app.maps / app.mining / app.salvage) and reuse their helpers; only the
 layout differs.
@@ -143,7 +143,7 @@ def _cached_game(name: str, root):
         if data is not None:
             return data
         time.sleep(30)
-    raise RuntimeError("SC-Toolkit hasn't finished reading the game files yet. Keep it open and try again.")
+    raise RuntimeError("SC-Toolbox hasn't finished reading the game files yet. Keep it open and try again.")
 
 
 class _Task(QObject):

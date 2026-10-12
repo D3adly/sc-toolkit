@@ -110,7 +110,7 @@ class WhatsNewView(QWidget):
         log.addWidget(self.changelog)
         outer.addWidget(log_panel, stretch=1)
 
-        about = QLabel(f"You have SC-Toolkit v{__version__}", objectName="AboutLabel")
+        about = QLabel(f"You have SC-Toolbox v{__version__}", objectName="AboutLabel")
         outer.addWidget(about, alignment=Qt.AlignRight)
         self._page_url = updater.RELEASES_PAGE
         self.page_btn.clicked.connect(lambda: osutil.open_url(self._page_url))
@@ -121,7 +121,7 @@ class WhatsNewView(QWidget):
         if release is None:
             return
         beta = "  (beta)" if release.prerelease else ""
-        self.update_title.setText(f"SC-TOOLKIT {release.version} IS AVAILABLE{beta}")
+        self.update_title.setText(f"SC-TOOLBOX {release.version} IS AVAILABLE{beta}")
         _set_markdown(self.update_notes, release.notes or "No release notes.")
         self._page_url = release.page_url
         can_install = updater.install_target() is not None and bool(release.asset_url)

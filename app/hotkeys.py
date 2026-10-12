@@ -438,7 +438,7 @@ class _KDEHotkeys:
 
     SERVICE = "org.kde.kglobalaccel"
     COMPONENT = "sc-toolkit"
-    FRIENDLY = "SC-Toolkit"
+    FRIENDLY = "SC-Toolbox"
     SET_PRESENT, NO_AUTOLOADING = 2, 4
 
     def __init__(self, emit, combos):

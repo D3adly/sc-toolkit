@@ -234,7 +234,7 @@ class _InputShield(QWidget):
                             | Qt.WindowDoesNotAcceptFocus)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.setWindowTitle("SC-Toolkit overlay shield")
+        self.setWindowTitle("SC-Toolbox overlay shield")
 
     def cover(self, screen) -> None:
         self._target = screen.geometry()
@@ -289,7 +289,7 @@ class OverlayWindow(QWidget):
     def __init__(self, parent=None, host=None):
         super().__init__(host or parent)
         self._host = host
-        self.setWindowTitle("SC-Toolkit overlay")
+        self.setWindowTitle("SC-Toolbox overlay")
         self.setWindowIcon(QIcon(str(config.APP_ICON)))
         if host is None:
             # Not Qt.Tool on X11: that makes a "utility" window, which KWin hides
@@ -371,7 +371,7 @@ class OverlayWindow(QWidget):
         grip = QLabel("⠿", objectName="OverlayGrip")
         grip.setToolTip("Drag to move")
         head.addWidget(grip)
-        head.addWidget(QLabel("SC-TOOLKIT", objectName="OverlayTitle"))
+        head.addWidget(QLabel("SC-TOOLBOX", objectName="OverlayTitle"))
         head.addSpacing(4)
         self.tool_group = QButtonGroup(self)
         self.tool_group.setExclusive(False)
@@ -568,7 +568,7 @@ class OverlayWindow(QWidget):
         if self._host is None and self.isVisible() and not self.click_through:
             if self._shield is None:
                 self._shield = _InputShield(
-                    f"SC-Toolkit overlay has the mouse  ·  {hotkey_label('toggle-clickthrough')} "
+                    f"SC-Toolbox overlay has the mouse  ·  {hotkey_label('toggle-clickthrough')} "
                     f"gives it back to the game  ·  {hotkey_label('toggle-overlay')} hides the overlay", self)
             self._shield.cover(self.screen())
             self._shield.set_hole(self.frameGeometry())
@@ -703,7 +703,7 @@ def run(parent_pid: int | None, layer_shell: bool = False) -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(config.DISPLAY_NAME + " overlay")
     from app import __version__, settings
-    print(f"overlay: SC-Toolkit {__version__} on {sys.platform} ({QApplication.platformName()}), "
+    print(f"overlay: SC-Toolbox {__version__} on {sys.platform} ({QApplication.platformName()}), "
           f"settings {settings.SETTINGS_FILE} (game folder: {settings.current().live_dir or 'not set'})",
           file=sys.stderr, flush=True)
     app.setQuitOnLastWindowClosed(False)   # hidden overlay keeps running for the hotkeys
@@ -714,7 +714,7 @@ def run(parent_pid: int | None, layer_shell: bool = False) -> int:
     if layer_shell:
         from app.ui.layer_overlay import LayerHost
 
-        host = LayerHost(f"SC-Toolkit overlay has the mouse  ·  {hotkey_label('toggle-clickthrough')} "
+        host = LayerHost(f"SC-Toolbox overlay has the mouse  ·  {hotkey_label('toggle-clickthrough')} "
                          f"gives it back to the game  ·  {hotkey_label('toggle-overlay')} hides the overlay")
         print("overlay: layer-shell surface (KDE Wayland)", file=sys.stderr, flush=True)
     overlay = OverlayWindow(host=host)

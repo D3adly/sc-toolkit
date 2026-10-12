@@ -40,7 +40,7 @@ class TitleBar(QWidget):
         layout.setContentsMargins(14, 0, 8, 0)
         layout.setSpacing(4)
 
-        layout.addWidget(_shadow(QLabel("SC-TOOLKIT")))
+        layout.addWidget(_shadow(QLabel("SC-TOOLBOX")))
         layout.addSpacing(6)
         self.version_btn = QPushButton(objectName="TitleVersion")
         self.version_btn.setCursor(Qt.PointingHandCursor)
@@ -94,20 +94,20 @@ class TitleBar(QWidget):
         self.version_btn.setText(f"v{__version__} · what's new" if unseen else f"v{__version__}")
         self.version_btn.setProperty("unseen", unseen)
         self.version_btn.style().polish(self.version_btn)
-        self.version_btn.setToolTip("What's new in SC-Toolkit")
+        self.version_btn.setToolTip("What's new in SC-Toolbox")
 
     def set_account(self, status: str, name: str = "", offline: bool = False) -> None:
         """Mirrors the online account: hidden when off, "Sign in" when signed out, else the name."""
         self.account_btn.setVisible(status != "off")
         if status == "signed_in":
             self.account_btn.setText(f"● {name}" + (" (offline)" if offline else ""))
-            self.account_btn.setToolTip("Signed in to SC-Toolkit online. Click for your account.")
+            self.account_btn.setToolTip("Signed in to SC-Toolbox online. Click for your account.")
         elif status == "signing_in":
             self.account_btn.setText("Signing in…")
             self.account_btn.setToolTip("Finish signing in in your browser. Click to see the sign-in in Settings.")
         else:
             self.account_btn.setText("Sign in")
-            self.account_btn.setToolTip("Sign in to SC-Toolkit online with Discord (opens your browser)")
+            self.account_btn.setToolTip("Sign in to SC-Toolbox online with Discord (opens your browser)")
         self.account_btn.setProperty("signedIn", status == "signed_in")
         self.account_btn.style().polish(self.account_btn)
 
@@ -115,7 +115,7 @@ class TitleBar(QWidget):
         self.update_btn.setVisible(version is not None)
         if version:
             self.update_btn.setText(f"Update to v{version}")
-            self.update_btn.setToolTip(f"SC-Toolkit {version} is available: see what's new and install it")
+            self.update_btn.setToolTip(f"SC-Toolbox {version} is available: see what's new and install it")
 
     def _minimize(self):
         window = self.window()

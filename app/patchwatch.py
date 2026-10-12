@@ -10,7 +10,7 @@ The launcher logs, per update:
 While an update runs, app.datahub leaves that channel's game files alone and
 the tools keep the previous version's cached data; when it completes, the
 hub reads the new files in one pass. If the log can't be found or its format
-changes, the hub's checks at SC-Toolkit and game start still catch updates.
+changes, the hub's checks at SC-Toolbox and game start still catch updates.
 """
 
 from __future__ import annotations

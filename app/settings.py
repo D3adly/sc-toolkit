@@ -31,10 +31,10 @@ class Settings:
     hotkey_overlay: str = "F7"                   # show / hide the overlay
     hotkey_clickthrough: str = "F8"              # overlay click-through on/off
     gamelog_live_enabled: bool = False           # follow Game.log while playing (app.gamelog)
-    update_check: bool = True                    # look for a new SC-Toolkit once a day (app.updater)
+    update_check: bool = True                    # look for a new SC-Toolbox once a day (app.updater)
     update_prereleases: bool = False             # include beta versions
     changelog_seen: str = ""                     # version whose What's new was last opened
-    portal_url: str = ""                         # SC-Toolkit online service (app.portal); "" = off
+    portal_url: str = ""                         # SC-Toolbox online service (app.portal); "" = off
 
     @property
     def game_root(self) -> Path | None:

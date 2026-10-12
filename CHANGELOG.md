@@ -1,11 +1,15 @@
 # Changelog
 
-What changed in each SC-Toolkit release. The newest version is at the top.
+What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
 ## Unreleased
 
+- **SC-Toolkit is now SC-Toolbox.** Only the name changes: your settings, saved data, sign-in and
+  hotkeys stay as they are, updates keep arriving the usual way, and the website is moving to
+  sc-toolbox.com.
+
 - **Online account (optional):** *Sign in* at the top right (next to ⚙), or Settings → *Online
-  account*, signs the launcher in to the SC-Toolkit online service with Discord, in your browser. Once
+  account*, signs the launcher in to the SC-Toolbox online service with Discord, in your browser. Once
   signed in, your name shows there instead. The launcher never sees a password: it gets a sign-in
   that's kept in your system's password store (Windows Credential Manager, or KWallet / GNOME Keyring
   on Linux), so you stay signed in after a restart. *Sign out* ends it on the service too. Nothing

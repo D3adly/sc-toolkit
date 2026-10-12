@@ -4,7 +4,7 @@ one place, with one caching rule each:
 - **Game data** (missions, mining, salvage ships, ship stats): read from
   Data.p4k once per game patch per channel, all in one pass that opens
   Game2.dcb once (GameFiles), and cached. Only this module reads the game
-  files: at SC-Toolkit start and game start when the build changed, and
+  files: at SC-Toolbox start and game start when the build changed, and
   when the RSI Launcher's log says an update completed (app.patchwatch).
   While an update runs, the channel is frozen: nothing reads its files, and
   everyone gets the previous version's cache until the new one is built.

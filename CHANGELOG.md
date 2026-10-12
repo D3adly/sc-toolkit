@@ -11,6 +11,10 @@ What changed in each SC-Toolkit release. The newest version is at the top.
   on Linux), so you stay signed in after a restart. *Sign out* ends it on the service too. Nothing
   changes if you don't sign in. (The service isn't public yet: its address is a setting for now.)
 
+- **Fix: ship list refresh failing with "got 298 of 299".** The Star Citizen Wiki's ship pages
+  could repeat some ships and skip others, so the download was refused as incomplete. The list is
+  now fetched in a stable order.
+
 ## 0.2.1 (2026-10-04)
 
 - **Joystick bindings: Logitech / Saitek X56 H.O.T.A.S.** The bindings view now draws the X56 stick

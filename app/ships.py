@@ -32,7 +32,7 @@ from app import config
 # Paging: the API wants page[number]/page[size] (it ignores page=) and a sort
 # key, else pages overlap.
 WIKI_MATRIX = "https://api.star-citizen.wiki/api/shipmatrix/vehicles?page%5Bsize%5D=50&sort=name&page%5Bnumber%5D={page}"
-WIKI_VEHICLES = ("https://api.star-citizen.wiki/api/v2/vehicles?page%5Bsize%5D=50&sort=class_name"
+WIKI_VEHICLES = ("https://api.star-citizen.wiki/api/v2/vehicles?page%5Bsize%5D=50&sort=class_name,uuid"
                  "&page%5Bnumber%5D={page}")
 RSI_MATRIX = "https://robertsspaceindustries.com/ship-matrix/index"
 ERKUL_SHIP = "https://erkul.games/ships?ship={id}"

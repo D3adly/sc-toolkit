@@ -2,11 +2,11 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
-## Unreleased
+## 0.3.0 (2026-10-13)
 
 - **SC-Toolkit is now SC-Toolbox.** Only the name changes: your settings, saved data, sign-in and
-  hotkeys stay as they are, updates keep arriving the usual way, and the website is moving to
-  sc-toolbox.com.
+  hotkeys stay as they are, updates keep arriving the usual way, and the website is now
+  https://sc-toolbox.com.
 
 - **Windows: the .exe now carries its details** (Properties → Details: SC-Toolbox, version,
   description). Files without them are more often flagged by mistake by antivirus programs.

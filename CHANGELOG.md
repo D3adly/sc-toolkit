@@ -8,12 +8,15 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   hotkeys stay as they are, updates keep arriving the usual way, and the website is moving to
   sc-toolbox.com.
 
+- **Windows: the .exe now carries its details** (Properties → Details: SC-Toolbox, version,
+  description). Files without them are more often flagged by mistake by antivirus programs.
+
 - **Online account (optional):** *Sign in* at the top right (next to ⚙), or Settings → *Online
   account*, signs the launcher in to the SC-Toolbox online service with Discord, in your browser. Once
   signed in, your name shows there instead. The launcher never sees a password: it gets a sign-in
   that's kept in your system's password store (Windows Credential Manager, or KWallet / GNOME Keyring
   on Linux), so you stay signed in after a restart. *Sign out* ends it on the service too. Nothing
-  changes if you don't sign in. (The service isn't public yet: its address is a setting for now.)
+  changes if you don't sign in. The service is sc-toolbox.com, built in (no address to set).
 
 - **Fix: ship list refresh failing with "got 298 of 299".** The Star Citizen Wiki's ship pages
   could repeat some ships and skip others, so the download was refused as incomplete. The list is

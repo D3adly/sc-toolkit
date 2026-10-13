@@ -411,18 +411,6 @@ class SettingsView(QWidget):
             row.addWidget(btn, alignment=Qt.AlignVCenter)
         grid.addLayout(row, 1, 1)
 
-        grid.addWidget(QLabel("Service URL", objectName="SlotTitle"), 2, 0, Qt.AlignTop)
-        url_box = QVBoxLayout()
-        url_box.setSpacing(4)
-        self.portal_url = QLineEdit(objectName="SearchField")
-        self.portal_url.setPlaceholderText("https://…")
-        self.portal_url.textChanged.connect(self._validate_portal_url)
-        url_box.addWidget(self.portal_url)
-        self.portal_url_status = QLabel("", objectName="InspectorHint")
-        self.portal_url_status.setWordWrap(True)
-        url_box.addWidget(self.portal_url_status)
-        grid.addLayout(url_box, 2, 1)
-
         note = QLabel(
             "Optional. Signing in links the launcher to your SC-Toolbox account (orgs, events, and "
             "soon keeping your stats). You sign in with Discord in your browser; the launcher never "
@@ -431,7 +419,7 @@ class SettingsView(QWidget):
             objectName="InspectorHint",
         )
         note.setWordWrap(True)
-        grid.addWidget(note, 3, 0, 1, 2)
+        grid.addWidget(note, 2, 0, 1, 2)
 
         self._avatar_url: str | None = None
         self._avatar_loader = _AvatarLoader(self)
@@ -443,26 +431,11 @@ class SettingsView(QWidget):
         """Scrolls the online account section into view (title bar account button)."""
         QTimer.singleShot(0, lambda: self._scroll.ensureWidgetVisible(self._account_panel, 0, 40))
 
-    def _validate_portal_url(self) -> None:
-        text = self.portal_url.text().strip().rstrip("/")
-        saved = settings.current().portal_url.strip().rstrip("/")
-        problem = portal.check_service_url(text) if text else None
-        if problem:
-            self.portal_url_status.setText(f"✕ {problem}")
-        elif text != saved:
-            self.portal_url_status.setText("Save to use this address.")
-        else:
-            self.portal_url_status.setText("" if text else "Not set: the online account is off.")
-        self._show_account(account_controller().state)
-        if hasattr(self, "save_btn"):
-            self._validate()
-
     def _show_account(self, state: AccountState) -> None:
-        unsaved = self.portal_url.text().strip().rstrip("/") != settings.current().portal_url.strip().rstrip("/")
         profile = state.profile
         signed_in = state.status == "signed_in"
         if state.status == "off":
-            name, detail = "Not available", "Set the service URL below and save."
+            name, detail = "Not available", f"SCT_PORTAL_URL: {portal.check_service_url(portal.service_url())}"
         elif state.status == "signing_in":
             name, detail = "Signing in…", state.message
         elif signed_in and profile:
@@ -476,7 +449,6 @@ class SettingsView(QWidget):
         self.account_name.setText(name)
         self.account_detail.setText(detail)
         self.sign_in_btn.setVisible(state.status == "signed_out")
-        self.sign_in_btn.setEnabled(not unsaved)
         self.cancel_btn.setVisible(state.status == "signing_in")
         self.sign_out_btn.setVisible(signed_in)
 
@@ -517,8 +489,6 @@ class SettingsView(QWidget):
             row.set_value(getattr(s, field))
         self.update_check.setChecked(s.update_check)
         self.update_prereleases.setChecked(s.update_prereleases)
-        self.portal_url.setText(s.portal_url)
-        self._validate_portal_url()
         self.back_btn.setVisible(not first_run)
         self.intro.setVisible(first_run)
         self.intro.setText(
@@ -620,13 +590,10 @@ class SettingsView(QWidget):
             seen[combo] = field
 
         # The game folder is the one thing nothing works without.
-        url = self.portal_url.text().strip()
         self.save_btn.setEnabled(live_err is None and hotkeys_ok and not (
-            Path(self.backups.value).is_file() if self.backups.value else False)
-            and (not url or portal.check_service_url(url.rstrip("/")) is None))
+            Path(self.backups.value).is_file() if self.backups.value else False))
 
     def _save(self) -> None:
-        old_url = settings.current().portal_url
         settings.apply(replace(
             settings.current(),
             live_dir=self.live.value,
@@ -636,11 +603,7 @@ class SettingsView(QWidget):
             rsi_log_path=self.rsi_log.value,
             update_check=self.update_check.isChecked(),
             update_prereleases=self.update_prereleases.isChecked(),
-            portal_url=self.portal_url.text().strip().rstrip("/"),
             **{field: hotkeys.format_combo(*hotkeys.parse(row.value))
                for field, row in self.hotkey_rows.items()},
         ))
-        if settings.current().portal_url != old_url:
-            account_controller().restore()  # a different service: check the sign-in there
-        self._validate_portal_url()
         self.saved.emit()

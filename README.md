@@ -125,8 +125,8 @@ SC-Toolkit, and the browser hands the sign-in back to the launcher on this compu
 - *Sign out* revokes the sign-in on the service as well.
 - Everything else works the same without an account, offline included.
 
-The service isn't public yet, so its address is a setting (*Service URL*). For development it can
-also be given as the `SCT_PORTAL_URL` environment variable.
+The service is https://sc-toolbox.com, built in. For development, the `SCT_PORTAL_URL` environment
+variable points the launcher at another one (e.g. `SCT_PORTAL_URL=http://localhost:8080 ./run.sh`).
 
 ## In-game overlay
 

@@ -31,8 +31,9 @@ from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from app import __version__, config, settings
+from app import __version__, config
 
+SERVICE_URL = "https://sc-toolbox.com"
 CLIENT_ID = "sc-toolkit-launcher"
 SCOPES = "profile orgs events"
 KEYRING_SERVICE = "SC-Toolkit online"  # unchanged by the SC-Toolbox rename: keeps stored sign-ins
@@ -57,10 +58,9 @@ class Unreachable(PortalError):
 # -- the service ---------------------------------------------------------------
 
 def service_url() -> str:
-    """Base URL of the online service ('' = not configured). The SCT_PORTAL_URL environment
-    variable wins over Settings, for development."""
-    url = (os.environ.get("SCT_PORTAL_URL") or settings.current().portal_url).strip().rstrip("/")
-    return url
+    """Base URL of the online service. The SCT_PORTAL_URL environment variable replaces it, for
+    development (e.g. http://localhost:8080)."""
+    return (os.environ.get("SCT_PORTAL_URL") or SERVICE_URL).strip().rstrip("/")
 
 
 def check_service_url(url: str) -> str | None:

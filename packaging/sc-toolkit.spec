@@ -87,11 +87,41 @@ a.datas = [d for d in a.datas if not _DROP.search(d[0])]
 
 pyz = PYZ(a.pure)
 
+
+def windows_version_info():
+    """The exe's Properties → Details (product, version, description). An exe without them looks
+    more like malware to antivirus heuristics (Defender's "!ml" detections)."""
+    from PyInstaller.utils.win32.versioninfo import (
+        FixedFileInfo, StringFileInfo, StringStruct, StringTable, VarFileInfo, VarStruct, VSVersionInfo)
+
+    version = re.search(r'__version__ = "([^"]+)"', (ROOT / "app" / "__init__.py").read_text()).group(1)
+    numbers = tuple(int(n) for n in re.findall(r"\d+", version)[:4])
+    numbers += (0,) * (4 - len(numbers))
+    strings = {
+        "CompanyName": "SC-Toolbox",
+        "FileDescription": "SC-Toolbox: Star Citizen companion launcher",
+        "FileVersion": version,
+        "InternalName": "SC-Toolbox",
+        "LegalCopyright": "GPL-3.0, github.com/D3adly/sc-toolkit",
+        "OriginalFilename": "SC-Toolkit-windows.exe",
+        "ProductName": "SC-Toolbox",
+        "ProductVersion": version,
+    }
+    return VSVersionInfo(
+        ffi=FixedFileInfo(filevers=numbers, prodvers=numbers),
+        kids=[
+            StringFileInfo([StringTable("040904B0", [StringStruct(k, v) for k, v in strings.items()])]),
+            VarFileInfo([VarStruct("Translation", [0x0409, 1200])]),  # US English, Unicode
+        ],
+    )
+
+
 if WINDOWS:
     exe = EXE(
         pyz, a.scripts, a.binaries, a.datas, [],
         name="SC-Toolkit-windows",
         icon=str(assets / "app_icon.ico"),
+        version=windows_version_info(),
         console=False,
         upx=False,
     )

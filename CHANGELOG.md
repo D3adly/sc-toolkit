@@ -2,7 +2,7 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
-## Unreleased
+## 0.5.0 (2026-10-14)
 
 - **Overlay: panels follow your game** (with LIVE LOG on). **Salvage** opens on your active
   claim: its difficulty, with the claim's ship open and marked *Your claim*. **Mining** opens on

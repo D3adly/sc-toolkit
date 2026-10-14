@@ -2,6 +2,12 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
+## Unreleased
+
+- **Fix: the first Sync online could skip your ships.** If that first sync failed (for example
+  because the sign-in still had to be renewed), the ships already in the launcher weren't sent on
+  the next try. They now go up once the first sync actually succeeds.
+
 ## 0.4.0 (2026-10-14)
 
 - **New: Sync online** (signed in, under Live log and in Settings → Online account). It keeps

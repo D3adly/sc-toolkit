@@ -312,6 +312,8 @@ class SyncController(QObject):
             self._done.emit(job, result)
 
     def _on_done(self, job: str, result) -> None:
+        if isinstance(result, Exception):
+            _log(f"{job} failed: {type(result).__name__}: {result}")
         if isinstance(result, portal.InsufficientScope):
             self._report("Sign in again to turn on sync", "warning")
             self.needs_sign_in.emit(str(result))
@@ -325,7 +327,6 @@ class SyncController(QObject):
             return
         if isinstance(result, Exception):
             self._report("Sync failed: will retry", "danger")
-            _log(f"{job}: {result}")
             self._retry.start()
             return
         self.last_synced = datetime.now(timezone.utc)
@@ -358,14 +359,16 @@ class SyncController(QObject):
             return {}
         store = hangar.read(account)
         first = not store.rev and not store.synced_ms
+        local = None
         if first and not hangar.path_for(account).is_file():
-            # The first account on this PC takes over the local list (once).
+            # The first account on this PC takes over the local list (once): marked only after
+            # the service has them, so a failed first sync (offline, an old sign-in) tries again.
             local = hangar.read(None)
             if not local.claimed_by and local.live():
                 store.entries = [hangar.Entry(**{**e.__dict__}) for e in local.live()]
-                local.claimed_by = account
-                hangar.write(local)
-                _log(f"hangar: {len(store.entries)} local ships go to account {account}")
+                _log(f"hangar: sending {len(store.entries)} local ships to account {account}")
+            else:
+                local = None
         if first:
             remote = self._api("GET", "/hangar").get("entries", [])
             store.entries = pair_first_link(store.entries, remote)
@@ -385,6 +388,9 @@ class SyncController(QObject):
         latest.rev = int(reply.get("rev") or 0)
         latest.synced_ms = started
         hangar.write(latest)
+        if local is not None:
+            local.claimed_by = account
+            hangar.write(local)
         _log(f"hangar: sent {len(send)}, got {len(reply.get('changes', []))}, rev {latest.rev}")
         return {"hangar": bool(reply.get("changes")) or first}
 

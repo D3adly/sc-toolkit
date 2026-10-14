@@ -4,6 +4,14 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
 
 ## Unreleased
 
+- **Mission Database: more filters** (under More filters, like the website's): **faction**, **place**
+  (planets or places a mission is limited to, e.g. Pyro I or Rustville), **rank range** (the step on the
+  contractor's ladder it needs, 0 = the first) and **Added in** (the patch it first appeared in). The
+  game files don't say when a mission was added, so the launcher notes it per patch from now on: the
+  first patch you open it on lists everything as "or earlier". The details show the places, the rank's
+  step and the patch too. The star system filter now also knows missions offered at a place in a system.
+  (The mission data is read again once after the update.)
+
 - **Fix: the first Sync online could skip your ships.** If that first sync failed (for example
   because the sign-in still had to be renewed), the ships already in the launcher weren't sent on
   the next try. They now go up once the first sync actually succeeds.

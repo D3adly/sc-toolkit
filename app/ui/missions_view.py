@@ -96,7 +96,7 @@ def _minutes(value) -> str:
     return f"{value // 60} h {value % 60:02d} min" if value >= 60 else f"{value} min"
 
 
-def _summary(c: dict, owned: set[str]) -> dict:
+def _summary(c: dict, owned: set[str], added: dict[str, str]) -> dict:
     """One contract as the view needs it (computed once per load)."""
     items = sorted({n for pool in c.get("blueprints") or [] for n in pool.get("items") or []})
     levels = [d.get("level") or 0 for d in (c.get("difficulty_detail") or {}).values() if d.get("level")]
@@ -107,7 +107,11 @@ def _summary(c: dict, owned: set[str]) -> dict:
         "title": c.get("title") or c.get("debug") or "Untitled",
         "contractor": c.get("contractor") or c.get("faction") or "",
         "type": c.get("type") or "",
-        "systems": [x for x in c.get("systems") or [] if x in STAR_SYSTEMS],
+        "systems": c.get("star_systems") or [x for x in c.get("systems") or [] if x in STAR_SYSTEMS],
+        "places": c.get("places") or [],
+        "faction": c.get("faction") or "",
+        "rank_index": c.get("rank_index"),
+        "added": added.get(c.get("id"), ""),
         "illegal": bool(c.get("illegal")),
         "rep": c.get("rep"),
         "rank": c.get("rank") or "",
@@ -124,7 +128,7 @@ def _summary(c: dict, owned: set[str]) -> dict:
         "missing": sum(1 for n in items if contracts_mod.blueprint_key(n) not in owned),
     }
     resources = [(x.get("resource") or "").replace("[!]", "").strip() for x in cargo]
-    m["text"] = " ".join([m["title"], m["contractor"], c.get("faction") or "", m["type"], *items, *resources]).lower()
+    m["text"] = " ".join([m["title"], m["contractor"], m["faction"], m["type"], *items, *resources]).lower()
     return m
 
 
@@ -279,10 +283,12 @@ class _DetailPane(QFrame):
             v.addWidget(desc)
 
         facts = []
-        where = list(dict.fromkeys((c.get("systems") or []) + (c.get("locations") or [])))
+        where = list(dict.fromkeys(m["systems"] + m["places"])) or list(
+            dict.fromkeys((c.get("systems") or []) + (c.get("locations") or [])))
         facts.append(("Where", ", ".join(where) or "Anywhere"))
         if c.get("rank") or c.get("max_rank"):
-            facts.append(("Rank", (c.get("rank") or "Any") + (f" – {c['max_rank']}" if c.get("max_rank") else "")))
+            step = f" (step {m['rank_index']} of {c.get('rank_ladder') or 'the ladder'})" if m["rank_index"] else ""
+            facts.append(("Rank", (c.get("rank") or "Any") + (f" – {c['max_rank']}" if c.get("max_rank") else "") + step))
         if m["rep"]:
             facts.append(("Reputation", f"+{m['rep']:,}"))
         if m["payout"]:
@@ -310,6 +316,8 @@ class _DetailPane(QFrame):
             facts.append(("Chain", f"Needs {m['chain']} earlier mission{'s' if m['chain'] != 1 else ''} completed"))
         if m["once_only"]:
             facts.append(("Repeat", "Once only"))
+        if m["added"]:
+            facts.append(("Added in", m["added"]))
         detail = c.get("difficulty_detail") or {}
         if detail:
             facts.append(("Difficulty", " · ".join(f"{k} {d['level']}/7" for k, d in detail.items())))
@@ -367,6 +375,8 @@ class MissionsView(kit.ToolPage):
         self.paths = channel_mod.resolve_channel_paths(settings.current().game_root, channel)
         self.missions: list[dict] = []
         self._raw: list[dict] = []
+        self._added: dict[str, str] = {}      # contract id -> the patch it first appeared in
+        self._rank_top = 0
         self.owned: set[str] | None = None
         self.shown = PAGE
         self.selected: dict | None = None
@@ -420,6 +430,33 @@ class MissionsView(kit.ToolPage):
         first.addWidget(self.event_combo)
         first.addStretch(1)
         mv.addLayout(first)
+        second = QHBoxLayout()
+        second.setSpacing(8)
+        self.faction_combo = kit.Dropdown(min_width=150, tip="The faction whose reputation it builds")
+        self.faction_combo.setMaxVisibleItems(24)
+        self.place_combo = kit.Dropdown(min_width=150, tip="Planets or places it's limited to")
+        self.place_combo.setMaxVisibleItems(24)
+        for combo in (self.faction_combo, self.place_combo):
+            combo.activated.connect(lambda _i: self._render())
+            second.addWidget(combo)
+        second.addSpacing(6)
+        second.addWidget(kit.caps("Rank"))
+        self.rank_min = kit.Dropdown(marks=False, tip="Lowest rank it needs, from (0 = the first step of "
+                                     "the contractor's ladder)")
+        self.rank_max = kit.Dropdown(marks=False, tip="… to")
+        for combo in (self.rank_min, self.rank_max):
+            combo.setMinimumContentsLength(2)
+            combo.activated.connect(lambda _i: self._render())
+        second.addWidget(self.rank_min)
+        second.addWidget(label("to", "MutedText"))
+        second.addWidget(self.rank_max)
+        second.addSpacing(6)
+        second.addWidget(kit.caps("Added in"))
+        self.added_combo = kit.Dropdown(min_width=130, tip="The patch it first appeared in (as this PC saw it)")
+        self.added_combo.activated.connect(lambda _i: self._render())
+        second.addWidget(self.added_combo)
+        second.addStretch(1)
+        mv.addLayout(second)
         self.toggles: dict[str, QPushButton] = {}
         for caption, keys in (("Rewards", ("bp", "missing", "pay", "items")),
                               ("The work", ("ship", "fps", "cargo", "repeat", "solo"))):
@@ -475,11 +512,30 @@ class MissionsView(kit.ToolPage):
 
     def _on_loaded(self, data) -> None:
         self._raw = data.all() if hasattr(data, "all") else list((data or {}).get("contracts", {}).values())
+        # Only the installed patch's data counts as "seen in this patch".
+        self._added, versions = contracts_mod.first_seen(
+            self.paths.channel_root, [c.get("id") for c in self._raw if c.get("id")], record=self._loader.current)
         self._summarise()
         systems = [s for s in STAR_SYSTEMS if any(s in m["systems"] for m in self.missions)]
         self.systems.set_options([(None, "All")] + [(s, s) for s in systems], self.systems.value())
         self._fill_combo(self.type_combo, "All types", [m["type"] for m in self.missions])
         self._fill_combo(self.contractor_combo, "All contractors", [m["contractor"] for m in self.missions])
+        self._fill_combo(self.faction_combo, "Any faction", [m["faction"] for m in self.missions])
+        self._fill_combo(self.place_combo, "Any place", [p for m in self.missions for p in m["places"]])
+        top = max([m["rank_index"] for m in self.missions if m["rank_index"] is not None] or [0])
+        self._rank_top = top
+        for combo, value in ((self.rank_min, 0), (self.rank_max, top)):
+            current = combo.currentData()
+            combo.clear()
+            for r in range(top + 1):
+                combo.addItem(str(r), r)
+            combo.setCurrentIndex(combo.findData(current if current is not None and current <= top else value))
+        current = self.added_combo.currentData()
+        self.added_combo.clear()
+        self.added_combo.addItem("Any patch", None)
+        for i, v in enumerate(versions):
+            self.added_combo.addItem(v + (" or earlier" if i == len(versions) - 1 else ""), v)
+        self.added_combo.setCurrentIndex(max(0, self.added_combo.findData(current)))
         events = [m["event"] for m in self.missions if m["event"]]
         self.event_combo.clear()
         self.event_combo.addItem("Events hidden", None)
@@ -497,7 +553,7 @@ class MissionsView(kit.ToolPage):
 
     def _summarise(self) -> None:
         owned = self.owned or set()
-        self.missions = [_summary(c, owned) for c in self._raw]
+        self.missions = [_summary(c, owned, self._added) for c in self._raw]
         self.toggles["missing"].setEnabled(self.owned is not None)
 
     @staticmethod
@@ -518,8 +574,10 @@ class MissionsView(kit.ToolPage):
     def _clear(self) -> None:
         self.search.clear()
         self.systems.set_value(None)
-        for combo in (self.type_combo, self.contractor_combo, self.event_combo):
+        for combo in (self.type_combo, self.contractor_combo, self.event_combo, self.faction_combo,
+                      self.place_combo, self.added_combo, self.rank_min):
             combo.setCurrentIndex(0)
+        self.rank_max.setCurrentIndex(self.rank_max.count() - 1)
         self.legal.set_value("")
         for btn in self.toggles.values():
             btn.blockSignals(True)
@@ -534,6 +592,11 @@ class MissionsView(kit.ToolPage):
         contractor = self.contractor_combo.currentData()
         legal = self.legal.value()
         event = self.event_combo.currentData()
+        faction = self.faction_combo.currentData()
+        place = self.place_combo.currentData()
+        added = self.added_combo.currentData()
+        low, high = self.rank_min.currentData() or 0, self.rank_max.currentData()
+        high = self._rank_top if high is None else high
         tests = [t for key, _l, t in TOGGLES if self.toggles[key].isChecked()]
         hidden = 0
         out = []
@@ -546,6 +609,14 @@ class MissionsView(kit.ToolPage):
             if kind and m["type"] != kind:
                 continue
             if contractor and m["contractor"] != contractor:
+                continue
+            if faction and m["faction"] != faction:
+                continue
+            if place and place not in m["places"]:
+                continue
+            if not low <= (m["rank_index"] or 0) <= high:
+                continue
+            if added and m["added"] != added:
                 continue
             if legal and m["illegal"] != (legal == "illegal"):
                 continue
@@ -575,10 +646,19 @@ class MissionsView(kit.ToolPage):
             chips.append((f"“{self.search.text().strip()}”", lambda _c=False: self.search.clear()))
         if self.systems.value():
             chips.append((self.systems.value(), lambda _c=False: (self.systems.set_value(None), self._render())))
-        for combo in (self.type_combo, self.contractor_combo, self.event_combo):
+        for combo in (self.type_combo, self.contractor_combo, self.event_combo, self.faction_combo,
+                      self.place_combo):
             if combo.currentIndex() > 0:
                 chips.append((combo.currentText().rsplit(" (", 1)[0],
                               lambda _c=False, c=combo: (c.setCurrentIndex(0), self._render())))
+        low, high = self.rank_min.currentData() or 0, self.rank_max.currentData()
+        if high is not None and (low, high) != (0, self._rank_top):
+            chips.append((f"Rank {low}–{high}", lambda _c=False: (
+                self.rank_min.setCurrentIndex(0), self.rank_max.setCurrentIndex(self.rank_max.count() - 1),
+                self._render())))
+        if self.added_combo.currentIndex() > 0:
+            chips.append((f"Added in {self.added_combo.currentData()}",
+                          lambda _c=False: (self.added_combo.setCurrentIndex(0), self._render())))
         if self.legal.value():
             chips.append((self.legal.value().title(), lambda _c=False: (self.legal.set_value(""), self._render())))
         for key, text, _t in TOGGLES:

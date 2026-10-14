@@ -6,9 +6,12 @@ Per contract (keys of each record):
 - identity: id, debug, generator, handler (the sub-generator), template
 - display: title, description, type (mobiGlas mission type), contractor,
   faction, illegal
-- availability: systems, locations, rank (minimum standing, localized),
-  max_rank, crimestat range, needs_completed (earlier contracts required),
-  max_players, can_share, once_only
+- availability: systems, locations (the game's own locality names),
+  star_systems and places ("Rustville (Pyro I)": planets or places it's
+  limited to, when narrower than a system), rank (minimum standing,
+  localized), rank_index (its step on the contractor's ladder, 0 = the
+  first) and rank_ladder, max_rank, crimestat range, needs_completed
+  (earlier contracts required), max_players, can_share, once_only
 - rewards: rep, blueprints [{chance, items}], items [{name, amount}] (e.g.
   scrip), payout (fixed amounts only), calculated_payout, partial_payout
 - combat: "ship" and/or "fps" when the mission spawns hostile ships /
@@ -33,6 +36,7 @@ app.datahub, which caches it; read it with datahub.read_game("contracts", …).
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -40,12 +44,13 @@ from app import config
 from app.datacore import DataCore
 
 CACHE = config.CACHE_DIR / "contracts"
-FORMAT = 7  # bump when the extracted shape changes
+FORMAT = 8  # bump when the extracted shape changes
 # A localization installed next to the game (e.g. StarStrings) overrides the
 # packed one, and the log shows its names ("Received Blueprint: …").
 INSTALLED_INI = ("Data", "Localization", "english", "global.ini")
 
 _MARKUP_RE = re.compile(r"<[^>]+>")
+_PLANET_RE = re.compile(r"^@StarMapObject\.(Stanton|Pyro|Nyx)\d+[a-z]?$")
 
 
 def _guid(hex32: str) -> str:
@@ -122,6 +127,7 @@ class _Extractor:
         self._items: dict[str, str] = {}
         self._templates: dict[str, dict] = {}
         self._tag_names: dict[str, str] = {}
+        self._ladders: dict[str, tuple[int, str]] = {}
 
     def record(self, ref: str | None, depth: int = 3) -> dict | None:
         if not isinstance(ref, str) or not ref.startswith("@"):
@@ -264,22 +270,92 @@ class _Extractor:
         rec = self.record(ref, depth=0) or {}
         return self.text(rec.get("displayName"), (ref or "").rsplit("_", 1)[-1] if isinstance(ref, str) else "")
 
+    def _star_object(self, ref: str) -> tuple[str, str, str]:
+        """A StarMapObject → (its star system, the planet/body it is on or is, its own name)."""
+        chain = []
+        while isinstance(ref, str) and ref.startswith("@StarMapObject.") and len(chain) < 12:
+            rec = self.record(ref, depth=0) or {}
+            chain.append(self.text(rec.get("name"), ""))
+            ref = rec.get("parent")
+        if not chain:
+            return "", "", ""
+        system = chain[-1].removesuffix(" System")
+        body = chain[-2] if len(chain) >= 2 else ""
+        return system, body, chain[0]
+
+    def locality(self, ref: str) -> tuple[set[str], list[str]]:
+        """A MissionLocality → its star systems, and the bodies it covers unless it is whole systems."""
+        rec = self.record(ref, depth=1) or {}
+        systems, bodies = set(), []
+        for loc in rec.get("availableLocations") or []:
+            system, _body, own = self._star_object(loc)
+            if system:
+                systems.add(system)
+            # Only planets name the area ("Pyro I", "Monox"); its stations and L-points are too fine.
+            if isinstance(loc, str) and _PLANET_RE.match(loc) and own and own not in bodies:
+                bodies.append(own)
+        name = ref.split(".", 1)[-1]
+        whole = name in ("Stanton", "Pyro", "Nyx") or "And" in name or name == "StantonPyroNyx"
+        return systems, [] if whole else bodies
+
+    def location(self, ref: str) -> tuple[str, str]:
+        """A StarMapObject prerequisite → (its star system, "Place (Body)")."""
+        system, body, own = self._star_object(ref)
+        if not own or own.removesuffix(" System") == system:
+            return system, ""
+        return system, own if not body or body in (own, system) else f"{own} ({body})"
+
+    def rank_index(self, ref) -> tuple[int | None, str]:
+        """A standing → (its step on its ladder counting from the first non-negative one, the ladder's name)."""
+        if not self._ladders:
+            for name in self.dc.record_names("SReputationScopeParams."):
+                scope = self.dc.record(name, max_depth=1) or {}
+                standings = (scope.get("standingMap") or {}).get("standings") or []
+                steps = []
+                for sref in standings:
+                    srec = self.record(sref, depth=0) or {}
+                    rep = srec.get("minReputation")
+                    if isinstance(rep, (int, float)):
+                        steps.append((rep, sref))
+                steps.sort()
+                ladder = [r for rep, r in steps if rep >= 0]
+                label = self.text(scope.get("displayName"), "")
+                if not label or label.startswith("@"):
+                    label = _words(str(scope.get("scopeName") or "").replace("_", " "))
+                for i, sref in enumerate(ladder):
+                    self._ladders.setdefault(sref, (i, label))
+        if not isinstance(ref, str):
+            return None, ""
+        return self._ladders.get(ref, (None, ""))
+
     def availability(self, prerequisites: list) -> dict:
-        out: dict = {"systems": [], "locations": [], "rank": "", "crimestat": None, "needs_completed": 0}
+        out: dict = {"systems": [], "locations": [], "rank": "", "rank_ref": None, "crimestat": None,
+                     "needs_completed": 0, "star_systems": set(), "places": []}
         for p in prerequisites:
             if not isinstance(p, dict):
                 continue
             t = p.get("_type", "")
             if t == "ContractPrerequisite_Locality" and p.get("localityAvailable"):
                 out["systems"].append(_place(p["localityAvailable"].split(".", 1)[-1]))
+                systems, places = self.locality(p["localityAvailable"])
+                out["star_systems"] |= systems
+                out["places"] += places
             elif t == "ContractPrerequisite_Location" and p.get("locationAvailable"):
                 out["locations"].append(_place(p["locationAvailable"].split(".", 1)[-1]))
+                system, place = self.location(p["locationAvailable"])
+                if system:
+                    out["star_systems"].add(system)
+                if place:
+                    out["places"].append(place)
             elif t == "ContractPrerequisite_Reputation" and not p.get("exclude"):
                 out["rank"] = out["rank"] or self.standing(p.get("minStanding"))
+                out["rank_ref"] = out["rank_ref"] or p.get("minStanding")
             elif t == "ContractPrerequisite_CrimeStat":
                 out["crimestat"] = [p.get("minCrimeStat"), p.get("maxCrimeStat")]
             elif t == "ContractPrerequisite_CompletedContractTags":
-                out["needs_completed"] = max(out["needs_completed"], p.get("requiredCountValue") or 0)
+                # Without required tags the count means nothing (an intro only excludes itself once done).
+                if ((p.get("requiredCompletedContractTags") or {}).get("tags")):
+                    out["needs_completed"] = max(out["needs_completed"], p.get("requiredCountValue") or 0)
         return out
 
     def contract(self, c: dict, generator: str, defaults: dict[str, str], handler: dict | None = None) -> dict:
@@ -309,6 +385,8 @@ class _Extractor:
             "systems": where["systems"],
             "locations": where["locations"],
             "rank": self.standing(c.get("minStanding")) if c.get("minStanding") else where["rank"],
+            "star_systems": sorted(where["star_systems"]),
+            "places": list(dict.fromkeys(where["places"])),
             "max_rank": self.standing(c.get("maxStanding")) if c.get("maxStanding") else "",
             "crimestat": where["crimestat"],
             "needs_completed": where["needs_completed"],
@@ -338,6 +416,7 @@ class _Extractor:
             if prop.get("missionVariableName") == "CompletionPercentage_BP":
                 values = [o.get("value") for o in _find_all(prop, "MissionPropertyValueOption_Integer")]
                 info["salvage_percent"] = values[0] if values else None
+        info["rank_index"], info["rank_ladder"] = self.rank_index(c.get("minStanding") or where["rank_ref"])
         contractor = params.get("Contractor")
         if contractor:
             info["contractor"] = _clean(_loc(self.loc, contractor))
@@ -420,6 +499,47 @@ def build(game, progress) -> dict:
                 by_name.setdefault(debug, guid)
     return {"format": FORMAT, "contracts": contracts, "by_name": by_name,
             "blueprint_categories": _blueprint_categories(dc, ex, (packed, installed))}
+
+
+def game_version(channel_root: Path) -> str:
+    """'4.10.2 LIVE' from the channel's build_manifest.id; "" if it can't be read."""
+    try:
+        data = json.loads((channel_root / "build_manifest.id").read_text(encoding="utf-8"))["Data"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return ""
+    branch = str(data.get("Branch") or "").removeprefix("sc-alpha-")
+    return f"{branch} {channel_root.name.upper()}".strip() if branch else ""
+
+
+def first_seen(channel_root: Path, ids, record: bool = True) -> tuple[dict[str, str], list[str]]:
+    """The patch each contract first appeared in, as this PC saw it: ({id:
+    "4.10.2 LIVE"}, patches newest first). The game files don't say; the
+    first patch recorded counts as "or earlier" for everything in it.
+    record=False only reads (e.g. while showing an older patch's data)."""
+    path = CACHE / f"first-seen-{channel_root.name.upper()}.json"
+    try:
+        seen = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        seen = {}
+    known: dict[str, str] = seen.get("ids") or {}
+    version = game_version(channel_root) if record else ""
+    new = [i for i in ids if i not in known]
+    if version and new:
+        for i in new:
+            known[i] = version
+        try:
+            CACHE.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"ids": known}), encoding="utf-8")
+            tmp.replace(path)
+        except OSError:
+            pass
+
+    def order(v: str):
+        nums = re.findall(r"\d+", v.split(" ", 1)[0])
+        return [int(n) for n in nums]
+    versions = sorted({known[i] for i in ids if i in known}, key=order, reverse=True)
+    return known, versions
 
 
 # StarStrings-style class/size/grade prefix on component names ("Ind/2/B BroadSpec").

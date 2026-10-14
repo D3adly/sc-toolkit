@@ -173,17 +173,16 @@ QWidget {{
 }}
 
 #TitleAccount {{
-    background: transparent;
-    color: {accent};
-    border: 1px solid {accent_dim};
-    border-radius: 4px;
-    padding: 2px 10px;
-    font-weight: 700;
-    font-size: 11px;
-    letter-spacing: 1px;
+    background: rgba(16, 19, 23, 0.45);
+    color: {text_primary};
+    border: 1px solid {border_strong};
+    border-radius: 13px;
+    padding: 3px 12px 3px 8px;
+    font-weight: 600;
+    font-size: 12px;
 }}
 #TitleAccount:hover {{
-    background: {accent_soft};
+    background: rgba(16, 19, 23, 0.7);
     border: 1px solid {border_hover};
 }}
 #TitleAccount[signedIn="true"] {{
@@ -197,6 +196,17 @@ QWidget {{
 }}
 #TitleAccount[offline="true"] {{
     color: {text_muted};
+}}
+#TitleAccountMenu {{
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: {text_secondary};
+    font-size: 12px;
+}}
+#TitleAccountMenu:hover {{
+    background: rgba(0, 0, 0, 0.35);
+    color: {text_primary};
 }}
 #TitleAccount[signedIn="true"]:hover {{
     background: {bg_hover};

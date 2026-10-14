@@ -14,6 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QPixmap
 from PySide6.QtWidgets import (
+    QMessageBox,
     QFileDialog,
     QKeySequenceEdit,
     QFrame,
@@ -142,6 +143,7 @@ class SettingsView(kit.ToolPage):
     saved = Signal()
     open_overlay_requested = Signal()
     sync_toggled = Signal(bool)
+    logs_owner_changed = Signal()
 
     def set_sync(self, on: bool) -> None:
         """Mirrors the launch screen's switch."""
@@ -406,8 +408,19 @@ class SettingsView(kit.ToolPage):
             "on the live log, which it needs.", objectName="InspectorHint")
         self.sync_note.setWordWrap(True)
         sync_row.addWidget(self.sync_note, stretch=1)
-        self.sync_widgets = (self.sync_title, self.sync_switch, self.sync_note)
         grid.addLayout(sync_row, 2, 1)
+        # This PC's game logs belong to the account that first synced them (app.sync).
+        self.logs_owner_row = QHBoxLayout()
+        self.logs_owner_note = QLabel("", objectName="InspectorHint")
+        self.logs_owner_note.setWordWrap(True)
+        self.logs_owner_row.addWidget(self.logs_owner_note, stretch=1)
+        self.logs_owner_btn = kit.button("Send my game stats to this account instead",
+                                         slot=self._take_logs)
+        self.logs_owner_row.addWidget(self.logs_owner_btn, alignment=Qt.AlignTop)
+        self.logs_owner_box = QWidget()
+        self.logs_owner_box.setLayout(self.logs_owner_row)
+        grid.addWidget(self.logs_owner_box, 3, 1)
+        self.sync_widgets = (self.sync_title, self.sync_switch, self.sync_note)
 
         note = QLabel(
             "Optional. Signing in links the launcher to your SC-Toolbox account (orgs, events, and "
@@ -417,7 +430,7 @@ class SettingsView(kit.ToolPage):
             objectName="InspectorHint",
         )
         note.setWordWrap(True)
-        grid.addWidget(note, 3, 0, 1, 2)
+        grid.addWidget(note, 4, 0, 1, 2)
 
         self._avatar_url: str | None = None
         self._avatar_loader = _AvatarLoader(self)
@@ -451,6 +464,7 @@ class SettingsView(kit.ToolPage):
         self.sign_out_btn.setVisible(signed_in)
         for w in self.sync_widgets:
             w.setVisible(signed_in)
+        self._show_logs_owner(state)
 
         avatar_url = profile.avatar_url if signed_in and profile else None
         if avatar_url != self._avatar_url:
@@ -460,6 +474,39 @@ class SettingsView(kit.ToolPage):
                 self._avatar_loader.fetch(avatar_url)
         elif not avatar_url:
             self._set_initial(name if signed_in else "")
+
+    def _show_logs_owner(self, state: AccountState) -> None:
+        """Another account owns this PC's game logs: say so, and offer to hand them over."""
+        from app import sync
+
+        owner = sync.logs_owner()
+        me = state.profile.account_id if state.status == "signed_in" and state.profile else ""
+        other = bool(me and owner.get("account") and owner["account"] != me)
+        self.logs_owner_box.setVisible(other)
+        if other:
+            self.logs_owner_note.setText(
+                f"This PC's game stats and blueprints sync to <b>{owner.get('name') or 'another account'}</b>, the "
+                "account that synced them first, so they never mix with another player's. This account "
+                "syncs its own My Ships.")
+
+    def _take_logs(self) -> None:
+        from app import sync
+
+        state = account_controller().state
+        if state.status != "signed_in" or not state.profile:
+            return
+        owner = sync.logs_owner()
+        answer = QMessageBox.question(
+            self, "Send game stats to this account",
+            f"From now on, this PC's game stats and blueprints sync to {state.profile.display_name} "
+            f"instead of {owner.get('name') or 'the other account'}. What's already online stays where it is.\n\n"
+            "Only do this if both accounts are you (for example a new account).",
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes:
+            return
+        sync.set_logs_owner(state.profile.account_id, state.profile.display_name)
+        self._show_logs_owner(state)
+        self.logs_owner_changed.emit()
 
     def _set_initial(self, name: str) -> None:
         self.avatar.setPixmap(QPixmap())

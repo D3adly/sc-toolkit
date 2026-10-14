@@ -116,3 +116,29 @@ def initial_pixmap(name: str, size: int) -> QPixmap:
     p.drawText(QRectF(0, 0, size, size), Qt.AlignCenter, (name[:1] or "?").upper())
     p.end()
     return out
+
+
+def person_pixmap(size: int, colour: str | None = None) -> QPixmap:
+    """A simple head-and-shoulders glyph (the Sign in button)."""
+    out = QPixmap(size, size)
+    out.fill(Qt.transparent)
+    p = QPainter(out)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(colour or PALETTE["text_secondary"]))
+    p.drawEllipse(QRectF(size * 0.32, size * 0.08, size * 0.36, size * 0.36))
+    body = QPainterPath()
+    body.addRoundedRect(QRectF(size * 0.14, size * 0.52, size * 0.72, size * 0.44), size * 0.3, size * 0.3)
+    p.drawPath(body)
+    p.end()
+    return out
+
+
+def dimmed(pixmap: QPixmap, opacity: float = 0.4) -> QPixmap:
+    out = QPixmap(pixmap.size())
+    out.fill(Qt.transparent)
+    p = QPainter(out)
+    p.setOpacity(opacity)
+    p.drawPixmap(0, 0, pixmap)
+    p.end()
+    return out

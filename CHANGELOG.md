@@ -21,6 +21,14 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   - Sync needs the live log: turning it on turns the live log on, turning the live log off stops
     sync. It needs permissions older sign-ins don't have: *Sign in again* under the switch.
   - HOTFIX counts as the same game universe as LIVE for blueprints (another build of LIVE).
+  - This PC's game stats belong to one player: the first account that syncs them. Signed in with
+    another account, sync keeps that account's own My Ships but doesn't send it your game stats;
+    Settings → Online account can hand them over (for example to a new account of yours).
+
+- **Online account in the title bar:** *Sign in* is a quiet button with a person icon; while it
+  waits for your browser it says *Signing in… · Cancel*. Signed in, your avatar and name open your
+  profile on sc-toolbox.com, and the ▾ next to them has Sync online, Account settings, *Switch
+  account* and Sign out. When sc-toolbox.com can't be reached, the avatar dims and says *offline*.
 
 - **A new look, the same on every tool.** Every tool now has the same layout: a header with what it's
   for and where its data comes from, one filter bar, a result line with the count and your active

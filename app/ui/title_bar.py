@@ -1,11 +1,11 @@
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem, QWidget,
 )
 
 from app import __version__
-from app.ui.widgets import AvatarLoader, initial_pixmap, round_pixmap
+from app.ui.widgets import AvatarLoader, dimmed, initial_pixmap, person_pixmap, round_pixmap
 
 AVATAR = 20
 
@@ -64,6 +64,15 @@ class TitleBar(QWidget):
         self.account_btn.clicked.connect(self.account_requested.emit)
         self.account_btn.hide()
         layout.addWidget(_shadow(self.account_btn))
+        # ▾ next to the signed-in chip: the account menu (the chip itself opens the online profile).
+        self.account_menu_btn = QPushButton("▾", objectName="TitleAccountMenu")
+        self.account_menu_btn.setCursor(Qt.PointingHandCursor)
+        self.account_menu_btn.setFixedSize(22, 26)
+        self.account_menu_btn.setToolTip("Account: sync, settings, switch account, sign out")
+        self.account_menu_btn.clicked.connect(self._show_account_menu)
+        self.account_menu_btn.hide()
+        layout.addWidget(_shadow(self.account_menu_btn))
+        self.account_menu = None
         layout.addSpacing(4)
 
         self.minimize_btn = QPushButton("–")
@@ -98,18 +107,25 @@ class TitleBar(QWidget):
         """Mirrors the online account: hidden when off, "Sign in" when signed out, else your
         avatar and name (with "offline" when the service can't be reached)."""
         self.account_btn.setVisible(status != "off")
+        self.account_menu_btn.setVisible(status == "signed_in")
+        self._offline = offline
         if status == "signed_in":
             self.account_btn.setText(f"{name}" + ("  · offline" if offline else ""))
             self.account_btn.setIcon(QIcon(self._avatar(name, avatar_url)))
             self.account_btn.setIconSize(QSize(AVATAR, AVATAR))
-            self.account_btn.setToolTip("Signed in to SC-Toolbox online. Click for your account.")
+            self.account_btn.setToolTip("sc-toolbox.com can't be reached right now. Click to open your profile "
+                                        "there." if offline else "Open your profile on sc-toolbox.com")
         elif status == "signing_in":
-            self.account_btn.setText("Signing in…")
-            self.account_btn.setToolTip("Finish signing in in your browser. Click to see the sign-in in Settings.")
+            self.account_btn.setIcon(QIcon(person_pixmap(AVATAR * 2)))
+            self.account_btn.setIconSize(QSize(16, 16))
+            self.account_btn.setText("Signing in…  ·  Cancel")
+            self.account_btn.setToolTip("Finish signing in in your browser, or click to cancel")
         else:
-            self.account_btn.setIcon(QIcon())
+            self.account_btn.setIcon(QIcon(person_pixmap(AVATAR * 2)))
+            self.account_btn.setIconSize(QSize(16, 16))
             self.account_btn.setText("Sign in")
-            self.account_btn.setToolTip("Sign in to SC-Toolbox online with Discord (opens your browser)")
+            self.account_btn.setToolTip("Sign in to sc-toolbox.com with Discord (opens your browser): "
+                                        "sync your stats, blueprints and ships")
         self.account_btn.setProperty("signedIn", status == "signed_in")
         self.account_btn.setProperty("offline", offline)
         self.account_btn.style().unpolish(self.account_btn)
@@ -118,7 +134,7 @@ class TitleBar(QWidget):
     def _avatar(self, name: str, url: str | None) -> QPixmap:
         """The round avatar: the downloaded picture once it's here, else the initial."""
         if url and url in self._avatars:
-            return self._avatars[url]
+            return dimmed(self._avatars[url]) if getattr(self, "_offline", False) else self._avatars[url]
         if url and url not in self._avatar_wanted:
             self._avatar_wanted.add(url)
             self._avatar_loader.fetch(url)
@@ -132,7 +148,15 @@ class TitleBar(QWidget):
         self._avatars[url] = pix
         pending = getattr(self, "_pending_avatar", None)
         if pending and pending[1] == url and self.account_btn.property("signedIn"):
-            self.account_btn.setIcon(QIcon(pix))
+            self.account_btn.setIcon(QIcon(dimmed(pix) if getattr(self, "_offline", False) else pix))
+
+    def set_account_menu(self, menu) -> None:
+        self.account_menu = menu
+
+    def _show_account_menu(self) -> None:
+        if self.account_menu is not None:
+            self.account_menu.exec(self.account_menu_btn.mapToGlobal(self.account_menu_btn.rect().bottomRight())
+                                   - self.account_menu.sizeHint().width() * QPoint(1, 0))
 
     def set_update(self, version: str | None) -> None:
         self.update_btn.setVisible(version is not None)

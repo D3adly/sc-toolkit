@@ -74,6 +74,35 @@ def owned_file(account: str):
     return config.DATA_DIR / f"blueprints-owned-{account}.json"
 
 
+# -- whose game logs these are ------------------------------------------------------------
+# This PC's game logs are one player's: the first account that syncs them owns them, and their
+# stats and blueprints never go to another account unless the player hands them over
+# (Settings → Online account), e.g. after making a new account.
+LOGS_OWNER_FILE = config.DATA_DIR / "sync-logs-owner.json"
+
+
+def logs_owner() -> dict:
+    try:
+        data = json.loads(LOGS_OWNER_FILE.read_text("utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def set_logs_owner(account: str, name: str) -> None:
+    LOGS_OWNER_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LOGS_OWNER_FILE.write_text(json.dumps({"account": account, "name": name}), encoding="utf-8")
+
+
+def logs_belong_to(account: str, name: str) -> bool:
+    """True if this account may receive this PC's game logs (claiming them if nobody has)."""
+    owner = logs_owner()
+    if not owner.get("account"):
+        set_logs_owner(account, name)
+        return True
+    return owner["account"] == account
+
+
 # -- hangar: the pure parts (tested without a service) ---------------------------------
 
 def entry_to_input(e: hangar.Entry) -> dict:
@@ -228,6 +257,9 @@ class SyncController(QObject):
                 text, tone = "Sign in to sync", "muted"
             elif not settings.current().sync_enabled:
                 text, tone = "Off", "muted"
+            elif logs_owner().get("account") not in (None, "", self.account_id):
+                text, tone = (f"My Ships synced · your game stats go to {logs_owner().get('name') or 'another account'}",
+                              "info")
             elif self.last_synced:
                 text, tone = f"Synced {self.last_synced.astimezone():%H:%M}", "success"
             else:
@@ -356,9 +388,13 @@ class SyncController(QObject):
         _log(f"hangar: sent {len(send)}, got {len(reply.get('changes', []))}, rev {latest.rev}")
         return {"hangar": bool(reply.get("changes")) or first}
 
+    def _logs_allowed(self) -> bool:
+        st = self.account.state
+        return logs_belong_to(self.account_id, st.profile.display_name if st.profile else "")
+
     def _upload_all_sessions(self) -> None:
         root = settings.current().game_root
-        if root is None:
+        if root is None or not self._logs_allowed():
             return
         stored = {(s.get("channel", "").upper(), s.get("logId")): s.get("hash")
                   for s in self._api("GET", "/stats/sessions").get("sessions", [])}
@@ -374,7 +410,7 @@ class SyncController(QObject):
 
     def _job_stats_live(self):
         session = self.reader.session
-        if session is None or session.channel.upper() not in SYNC_CHANNELS:
+        if session is None or session.channel.upper() not in SYNC_CHANNELS or not self._logs_allowed():
             return {}
         events = self.reader.session_events(stats.KINDS)
         summaries = stats_digest.digest(events, [session], self._contracts())

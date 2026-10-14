@@ -344,6 +344,7 @@ class MainWindow(QMainWindow):
             st.status, st.profile.display_name if st.profile else "", st.offline,
             st.profile.avatar_url if st.profile else None))
         title_bar.account_requested.connect(self._on_account_clicked)
+        title_bar.set_account_menu(self._build_account_menu())
         account.changed.connect(self._on_account_for_sync)
         if start_overlay:
             from app.sync import SyncController
@@ -1263,15 +1264,71 @@ class MainWindow(QMainWindow):
 
     # -- settings view ---------------------------------------------------------
     def _on_account_clicked(self) -> None:
-        """Title bar account button: signed out, it starts the browser sign-in straight away (and
-        shows its progress in Settings); otherwise it opens the account panel."""
+        """Title bar account chip: signed out it starts the browser sign-in; while signing in
+        it cancels; signed in it opens your profile on sc-toolbox.com (the ▾ next to it has
+        the rest)."""
+        from app import portal
         from app.account_controller import controller as account_controller
 
         account = account_controller()
-        if account.state.status == "signed_out":
+        status = account.state.status
+        if status == "signed_out":
             account.sign_in()
+        elif status == "signing_in":
+            account.cancel_sign_in()
+        elif status == "signed_in":
+            osutil.open_url(f"{portal.service_url()}/app/account")
+
+    def _build_account_menu(self) -> QMenu:
+        """The ▾ next to the signed-in chip."""
+        from app import portal
+        from app.account_controller import controller as account_controller
+
+        menu = QMenu(self)
+        header = menu.addAction("")
+        header.setEnabled(False)
+        menu.addAction("Open my profile on sc-toolbox.com",
+                       lambda: osutil.open_url(f"{portal.service_url()}/app/account"))
+        sync = menu.addAction("Sync online")
+        sync.setCheckable(True)
+        sync.toggled.connect(lambda on: self.sync_switch.setChecked(on))
+        menu.addAction("Account settings…", self._show_account_settings)
+        menu.addSeparator()
+        menu.addAction("Switch account…", self._switch_account)
+        menu.addAction("Sign out", lambda: account_controller().sign_out())
+
+        def refresh():
+            st = account_controller().state
+            name = st.profile.display_name if st.profile else ""
+            header.setText(f"Signed in as {name}" + (" · sc-toolbox.com can't be reached" if st.offline else ""))
+            sync.blockSignals(True)
+            sync.setChecked(self.sync_switch.isChecked())
+            sync.blockSignals(False)
+        menu.aboutToShow.connect(refresh)
+        return menu
+
+    def _show_account_settings(self) -> None:
         self._show_settings()
         self.settings_view.show_account_panel()
+
+    def _switch_account(self) -> None:
+        """Sign out, then sign in again (with another Discord account in the browser).
+        Each account keeps its own My Ships here; this PC's game logs stay with the account
+        that first synced them (Settings can hand them to another)."""
+        from app.account_controller import controller as account_controller
+
+        answer = QMessageBox.question(
+            self, "Switch account",
+            "You'll be signed out here, then your browser opens to sign in again.\n\n"
+            "If the browser signs you straight back into the same account, sign out on "
+            "sc-toolbox.com there first, then choose the other Discord account.\n\n"
+            "Each account keeps its own My Ships list in the launcher.",
+            QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Ok)
+        if answer != QMessageBox.Ok:
+            return
+        account = account_controller()
+        account.sign_out()
+        QTimer.singleShot(800, account.sign_in)
 
     def _show_settings(self, first_run: bool = False) -> None:
         if self.settings_view is None:
@@ -1283,6 +1340,7 @@ class MainWindow(QMainWindow):
             self.settings_view.open_overlay_requested.connect(self._open_overlay)
             self.settings_view.sync_toggled.connect(self.sync_switch.setChecked)
             self.sync_switch.toggled.connect(self.settings_view.set_sync)
+            self.settings_view.logs_owner_changed.connect(lambda: self.sync and self.sync.request("startup"))
             self.stack.addWidget(self.settings_view)
         if self.stack.currentWidget() is not self.settings_view:
             self._switch_to("settings", self.settings_view)

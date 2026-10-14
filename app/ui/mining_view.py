@@ -1,7 +1,8 @@
-"""Mining resource finder: pick resources (and a system / mining method),
-see every location whose rocks hold *all* of them, with each location's
-rock types, how often each spawns, and — for the rocks that carry a picked
-resource — how much of it they hold and at what quality.
+"""Mining Finder: where is it, and how do I spot it on radar? Pick resources
+(and a system / mining method) and see every location whose rocks hold all
+of them, best chance first: each location's rock types, how often each
+spawns, the radar signature (one rock, then groups) and — for the rocks that
+carry a picked resource — how much of it they hold and at what quality.
 
 All data is extracted from the game files once per build (app.mining).
 """
@@ -13,61 +14,39 @@ import html
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
-    QButtonGroup,
-    QFrame,
     QGridLayout,
     QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from app import channel as channel_mod, datahub, mining, settings
-from app.theme import PALETTE
+from app.theme import PALETTE, RARITY
+from app.ui import kit
+from app.ui.kit import Badge, label
 
+WEB_URL = "https://sc-toolbox.com/mining"
 KIND_LABELS = {"planet": "Planet", "moon": "Moon", "lagrange": "Lagrange point",
                "belt": "Asteroid belt", "cluster": "Asteroid cluster"}
-RARITY_COLORS = {"Common": "#9a958c", "Uncommon": "#7cc47f", "Rare": "#5fa8e8",
-                 "Epic": "#b98ae8", "Legendary": "#e8935a"}
+RARITY_COLORS = RARITY
+RARITY_ORDER = ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
 
-
-def _label(text: str, name: str = "SalvageCell", tip: str = "", align=None) -> QLabel:
-    lbl = QLabel(text, objectName=name)
-    if tip:
-        lbl.setToolTip(tip)
-    if align is not None:
-        lbl.setAlignment(align)
-    return lbl
+HELP = (
+    "<b>Bar and %</b>: the chance that a rock spawned here is that type. With ores picked, the card's "
+    "green figure is the chance a rock here carries one of them.<br>"
+    "<b>RS</b>: the radar signature of one rock; then <b>×2, ×3…</b> the totals for groups of rocks, because "
+    "a group scans as the sum. Match these on your scanner to know the rock and group size from afar.<br>"
+    "<b>avg %</b>: the average share of the rock that is the resource (range in brackets). Many rocks hold "
+    "the same resource twice, a large low-grade share and a small high-grade one: both are listed.<br>"
+    "<b>Q</b>: estimated average quality, 0–1000; the little bars show how likely each quality is.<br>"
+    "Picking several resources shows places that have all of them, not necessarily in the same rock."
+)
 
 
 def _pct(value: float) -> str:
     return f"{value:.1f}%" if value < 10 else f"{value:.0f}%"
-
-
-class _Bar(QWidget):
-    """A thin horizontal bar showing a spawn chance."""
-
-    def __init__(self, value: float, lit: bool, parent=None):
-        super().__init__(parent)
-        self.value = max(0.0, min(100.0, value))
-        self.lit = lit
-        self.setFixedSize(64, 8)
-
-    def paintEvent(self, _event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(255, 255, 255, 18))
-        p.drawRoundedRect(QRectF(self.rect()), 3, 3)
-        fill = QColor(PALETTE["info"] if self.lit else PALETTE["text_muted"])
-        p.setBrush(fill)
-        p.drawRoundedRect(QRectF(0, 0, self.width() * self.value / 100, self.height()), 3, 3)
 
 
 def _chance(p: float) -> str:
@@ -85,7 +64,7 @@ def _quality_tip(name: str, q: dict) -> str:
     peak = max(p for _, p in dist) or 1
     rows = "".join(
         f"<tr><td align='right'>Q {v}</td><td align='right'>&nbsp;{html.escape(_chance(p))}&nbsp;</td>"
-        f"<td><span style='color:{PALETTE['accent']}'>"
+        f"<td><span style='color:{PALETTE['info']}'>"
         f"{'▇' * max(1, round(12 * p / peak)) if p >= 0.05 else '·'}</span></td></tr>"
         for v, p in dist
     )
@@ -102,8 +81,8 @@ def _quality_tip(name: str, q: dict) -> str:
 
 class _QualityHist(QWidget):
     """Tiny histogram: one bar per possible quality, height ~ its chance
-    (square-root scaled so rare high qualities stay visible).
-    """
+    (square-root scaled so rare high qualities stay visible); higher
+    qualities brighter."""
 
     def __init__(self, dist: list, parent=None):
         super().__init__(parent)
@@ -116,7 +95,7 @@ class _QualityHist(QWidget):
         p = QPainter(self)
         p.setPen(Qt.NoPen)
         peak = max(x for _, x in self.dist) or 1
-        low, high = QColor(PALETTE["text_muted"]), QColor(PALETTE["accent"])
+        low, high = QColor(PALETTE["text_muted"]), QColor(PALETTE["info"])
         for i, (value, chance) in enumerate(self.dist):
             h = max(1.5, (chance / peak) ** 0.5 * self.height()) if chance > 0 else 0
             t = max(0.0, min(1.0, (value - 300) / 700))
@@ -128,7 +107,7 @@ class _QualityHist(QWidget):
             p.drawRect(QRectF(i * 7, self.height() - h, 5, h))
 
 
-def _signature_line(rock: dict, item: dict, method: str) -> tuple[str, str]:
+def _signature_line(rock: dict, item: dict, method: str, strong: bool = True) -> tuple[str, str]:
     """('RS 3825  ×2 7650  ×3 11475 …', tooltip) — the scanner shows a
     group of rocks as the sum of their signatures.
     """
@@ -139,9 +118,10 @@ def _signature_line(rock: dict, item: dict, method: str) -> tuple[str, str]:
     clus = item.get("cluster") or {}
     sizes = clus.get("sizes") or []
     top = max((n for n, _ in sizes), default=1)
-    text = f"<span style='color:{muted}'>RS</span> <b>{sig}</b>"
+    text = (f"<span style='color:{PALETTE['text_primary']}'><b>RS {sig}</b></span>" if strong
+            else f"<span style='color:{PALETTE['text_muted']}'>RS {sig}</span>")
     if method == "ship":
-        text += "".join(f"&nbsp;&nbsp;<span style='color:{muted}'>×{n}</span> {sig * n}"
+        text += "".join(f"&nbsp;&nbsp;<span style='color:{muted}'>×{n}</span>&nbsp;{sig * n}"
                         for n in range(2, top + 1))
     tip = f"Radar signature of one {rock['name']} rock: {sig}."
     if sizes:
@@ -154,97 +134,103 @@ def _signature_line(rock: dict, item: dict, method: str) -> tuple[str, str]:
     return text, tip
 
 
+def resource_rarity(data: dict) -> dict[str, str]:
+    """Each resource's rarity: that of the rock where it makes up the largest share."""
+    best: dict[str, tuple[float, str]] = {}
+    for rock in data["rocks"].values():
+        for part in rock["parts"]:
+            if rock.get("rarity") and part["avg"] > best.get(part["res"], (-1, ""))[0]:
+                best[part["res"]] = (part["avg"], rock["rarity"])
+    return {res: rarity for res, (_avg, rarity) in best.items()}
+
+
 # -- one location --------------------------------------------------------------
 
-class LocationCard(QFrame):
-    def __init__(self, loc: dict, method: str, data: dict, picked: list[str],
-                 show_system: bool, parent=None):
+class LocationCard(QWidget):
+    def __init__(self, loc: dict, method: str, data: dict, picked: list[str], show_system: bool, parent=None):
         super().__init__(parent)
-        self.setObjectName("ShipCard")
         rocks, resources = data["rocks"], data["resources"]
         quality = data["quality"]
         items = loc["groups"].get(method, [])
-
-        v = QVBoxLayout(self)
-        v.setContentsMargins(16, 12, 16, 12)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        frame = kit.panel()
+        outer.addWidget(frame)
+        v = QVBoxLayout(frame)
+        v.setContentsMargins(14, 11, 14, 12)
         v.setSpacing(6)
 
         head = QHBoxLayout()
         head.setSpacing(8)
-        head.addWidget(_label(loc["name"], "ShipName"))
+        head.addWidget(label(loc["name"], "CardTitle"))
         kind = KIND_LABELS.get(loc["kind"], loc["kind"].title())
         if loc["parent"] and loc["kind"] in ("moon", "lagrange"):
             kind += f" · {loc['parent']}"
-        head.addWidget(_label(kind.upper(), "ShipTier"))
+        head.addWidget(Badge(kind))
         if show_system:
-            head.addWidget(_label(loc["system"].upper(), "ShipTier"))
+            head.addWidget(Badge(loc["system"].title(), hue=loc["system"]))
         head.addStretch(1)
-        v.addLayout(head)
-
-        # How likely a random rock here is to carry each picked resource.
-        for res in picked:
+        if picked:
+            # How likely a random rock here is to carry one of the picked resources.
             share = sum(i["chance"] for i in items
-                        if any(p["res"] == res for p in rocks[i["rock"]]["parts"]))
-            v.addWidget(_label(
-                f"<b>{resources[res]['name']}</b> in {_pct(share)} of rocks here",
-                "ShipMatch",
-                tip="Sum of the spawn chances of every rock type below that contains it",
-            ))
+                        if any(p["res"] in picked for p in rocks[i["rock"]]["parts"]))
+            chance = label(f"<b>{_pct(share)}</b> of rocks", "ChanceText", rich=True,
+                           tip="Chance that a rock spawned here carries " +
+                               " or ".join(resources[r]["name"] for r in picked))
+            head.addWidget(chance)
+        v.addLayout(head)
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(3)
+        grid.setVerticalSpacing(2)
         row = 0
         for item in items:
             rock = rocks[item["rock"]]
             hits = [p for p in rock["parts"] if p["res"] in picked]
-            lit = bool(hits) or not picked
-            style = "SalvageCell" if lit else "SalvageDim"
-
-            grid.addWidget(_Bar(item["chance"], bool(hits)), row, 0, Qt.AlignVCenter)
-            grid.addWidget(_label(_pct(item["chance"]), "MiningChance" if hits else style,
-                                  tip="Chance that a rock spawned here is this type",
-                                  align=Qt.AlignRight | Qt.AlignVCenter), row, 1)
+            dim = bool(picked) and not hits
+            colour = PALETTE["success"] if hits else (PALETTE["text_muted"] if dim else PALETTE["text_secondary"])
+            bar = kit.Bar(item["chance"] / 100, colour, 54, 5)
+            grid.addWidget(bar, row, 0, Qt.AlignVCenter)
+            grid.addWidget(label(_pct(item["chance"]), "RockPctHit" if hits else ("RockPctDim" if dim else "RockPct"),
+                                 tip="Chance that a rock spawned here is this type",
+                                 align=Qt.AlignRight | Qt.AlignVCenter), row, 1)
             name = rock["name"] + (" asteroid" if rock["asteroid"] else "")
-            name_lbl = _label(name, "MiningRockHit" if hits else style,
-                              tip=self._composition_tip(rock, resources))
-            grid.addWidget(name_lbl, row, 2)
+            grid.addWidget(label(name, "RockNameHit" if hits else ("RockNameDim" if dim else "RockName"),
+                                 tip=self._composition_tip(rock, resources)), row, 2)
             if rock["rarity"]:
-                rarity = _label(rock["rarity"].upper(), "MiningRarity")
-                rarity.setStyleSheet(f"color: {RARITY_COLORS.get(rock['rarity'], '#9a958c')};")
-                grid.addWidget(rarity, row, 3)
+                rarity = kit.Rarity(rock["rarity"])
+                if dim:
+                    rarity.setStyleSheet(f"color: {PALETTE['text_muted']};")
+                grid.addWidget(rarity, row, 3, Qt.AlignRight | Qt.AlignVCenter)
             row += 1
 
-            sig_text, sig_tip = _signature_line(rock, item, method)
+            sig_text, sig_tip = _signature_line(rock, item, method, strong=not dim)
             if sig_text:
-                sig = _label(sig_text, "MiningSignature" if lit else "MiningSignatureDim", tip=sig_tip)
-                grid.addWidget(sig, row, 2, 1, 3)
+                sig = label(sig_text, "SignatureDim" if dim else "Signature", tip=sig_tip, rich=True)
+                grid.addWidget(sig, row, 2, 1, 2)
                 row += 1
 
             for part in hits:
                 q = quality.get(part["res"], {}).get(loc["system"], {}).get(str(part["scale"]))
-                amount = f"avg {_pct(part['avg'])}"
                 rng = f"{part['min']:g}–{part['max']:g}%"
                 if part["prob"] < 1:
                     rng += f", in {part['prob'] * 100:.0f}% of rocks"
                 detail = QHBoxLayout()
-                detail.setSpacing(10)
-                vein = _label(f"↳ {resources[part['res']]['name']}", "MiningPart")
-                vein.setMinimumWidth(110)
-                detail.addWidget(vein)
-                detail.addWidget(_label(amount, "MiningAmount",
-                                        tip="Average share of the rock's mass"))
-                detail.addWidget(_label(f"({rng})", "InspectorHint"))
+                detail.setSpacing(8)
+                detail.addWidget(label(f"↳ {resources[part['res']]['name']}", "MatchText"))
+                detail.addWidget(label(f"avg {_pct(part['avg'])}", "StrongText",
+                                       tip="Average share of the rock's mass"))
+                detail.addWidget(label(f"({rng})", "MutedText"))
                 if q is not None:
                     tip = _quality_tip(resources[part["res"]]["name"], q)
-                    detail.addWidget(_label(f"Q ≈ {q['avg']}", "MiningQuality", tip=tip))
+                    detail.addWidget(label(f"Q ≈ {q['avg']}", "StrongText", tip=tip))
                     hist = _QualityHist(q["dist"])
                     hist.setToolTip(tip)
                     detail.addWidget(hist)
                 detail.addStretch(1)
-                grid.addLayout(detail, row, 2, 1, 3)
+                grid.addLayout(detail, row, 2, 1, 2)
                 row += 1
-        grid.setColumnStretch(4, 1)
+        grid.setColumnStretch(2, 1)
         v.addLayout(grid)
 
     @staticmethod
@@ -256,152 +242,146 @@ class LocationCard(QFrame):
         return "\n".join(lines)
 
 
+# -- the resource picker --------------------------------------------------------------
+
+class _PickRow(QPushButton):
+    def __init__(self, name: str, count: int, rarity: str | None, parent=None):
+        super().__init__(parent, objectName="PickRow")
+        self.setCheckable(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.name = name
+        row = QHBoxLayout(self)
+        row.setContentsMargins(8, 4, 8, 4)
+        row.setSpacing(8)
+        self.box = box = QWidget(objectName="PickBox")
+        box.setAttribute(Qt.WA_StyledBackground, True)
+        box.setFixedSize(13, 13)
+        box.setAttribute(Qt.WA_TransparentForMouseEvents)
+        row.addWidget(box)
+        self.toggled.connect(self._sync)
+        dot = kit.Dot(RARITY.get(rarity or "", PALETTE["text_muted"]), 7)
+        dot.setToolTip(rarity or "")
+        row.addWidget(dot)
+        text = label(name, "PickName")
+        text.setAttribute(Qt.WA_TransparentForMouseEvents)
+        row.addWidget(text, stretch=1)
+        n = label(str(count), "PickCount")
+        n.setAttribute(Qt.WA_TransparentForMouseEvents)
+        row.addWidget(n)
+        self.setToolTip(f"{name}: found at {count} location{'s' if count != 1 else ''}"
+                        + (f" · {rarity}" if rarity else ""))
+        self.text = text
+
+    def _sync(self, on: bool) -> None:
+        for w in (self.box, self.text):
+            w.setProperty("on", on)
+            kit.repolish(w)
+
+
 # -- the view ------------------------------------------------------------------------
 
-class MiningView(QWidget):
-    back_requested = Signal()
-
+class MiningView(kit.ToolPage):
     def __init__(self, channel: str, parent=None):
-        super().__init__(parent)
+        super().__init__("mining", "Mining Finder",
+                         "Where each ore spawns, its radar signature and quality odds, from the game files",
+                         web_url=WEB_URL, parent=parent)
         self.paths = channel_mod.resolve_channel_paths(settings.current().game_root, channel)
         self.data: dict | None = None
         self.system: str | None = None   # None = all systems
         self.method = "ship"
         self.picked: list[str] = []
+        self._rarity: dict[str, str] = {}
 
         self._loader = datahub.GameDataWaiter("mining", self)
         self._loader.ready.connect(self._on_loaded)
-        self._loader.progress.connect(self._show_message)
-        self._loader.failed.connect(
-            lambda msg: self._show_message(f"Couldn't read Star Citizen's game data:\n\n{msg}"))
+        self._loader.progress.connect(self.show_message)
+        self._loader.failed.connect(lambda msg: self.show_empty(
+            "Couldn't read the game files", msg.splitlines()[0] if msg else "",
+            "Open Settings", lambda: self.window().show_tool("settings")))
         self._columns = 2
         self._build_ui()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        wanted = 2 if self.scroll.viewport().width() >= 1000 else 1
+        wanted = 2 if self.locs_scroll.viewport().width() >= 760 else 1
         if wanted != self._columns:
             self._columns = wanted
             self._render()
 
     def _build_ui(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 14, 20, 20)
-        outer.setSpacing(10)
+        f = self.filters
+        self.systems = kit.Segmented([(None, "All")], None)
+        self.systems.changed.connect(self._set_system)
+        f.add(self.systems, "System")
+        f.add_spacing(6)
+        self.methods = kit.Segmented(list(mining.METHOD_LABELS.items()), self.method)
+        self.methods.changed.connect(self._set_method)
+        f.add(self.methods, "Mining")
+        f.add_stretch()
 
-        bar_frame = QFrame(objectName="ToolBar")
-        bar = QHBoxLayout(bar_frame)
-        bar.setContentsMargins(10, 8, 10, 8)
-        bar.setSpacing(8)
-        back = QPushButton("←  Back", objectName="ToolButton")
-        back.setCursor(Qt.PointingHandCursor)
-        back.clicked.connect(self.back_requested.emit)
-        bar.addWidget(back)
-        bar.addSpacing(10)
-        bar.addWidget(QLabel("SYSTEM", objectName="ConfigLabel"))
-        self.system_bar = QHBoxLayout()
-        self.system_bar.setSpacing(0)
-        self.system_group = QButtonGroup(self)
-        bar.addLayout(self.system_bar)
-        bar.addSpacing(10)
-        bar.addWidget(QLabel("MINING", objectName="ConfigLabel"))
-        self.method_group = QButtonGroup(self)
-        methods = list(mining.METHOD_LABELS.items())
-        for i, (key, label) in enumerate(methods):
-            btn = self._segment(label, i, len(methods))
-            btn.setChecked(key == self.method)
-            btn.clicked.connect(lambda _c=False, k=key: self._set_method(k))
-            self.method_group.addButton(btn)
-            bar.addWidget(btn)
-        bar.addStretch(1)
-        self.result_label = QLabel("", objectName="InspectorHint")
-        # On narrow windows this summary gives way first, not the buttons.
-        self.result_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.result_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        bar.addWidget(self.result_label)
-        outer.addWidget(bar_frame)
+        self.result.clear_requested.connect(self._clear)
+        self.set_help(HELP)
 
-        body = QHBoxLayout()
-        body.setSpacing(14)
-
-        side = QFrame(objectName="SidePanel")
-        side.setFixedWidth(270)
+        body = QWidget()
+        row = QHBoxLayout(body)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(12)
+        side = kit.panel()
+        side.setFixedWidth(232)
         sv = QVBoxLayout(side)
-        sv.setContentsMargins(14, 14, 14, 14)
+        sv.setContentsMargins(10, 10, 6, 10)
         sv.setSpacing(8)
-        sv.addWidget(_label("RESOURCES", "SectionLabel"))
-        self.search = QLineEdit(objectName="SearchField")
-        self.search.setPlaceholderText("Search…")
+        self.search = kit.SearchField("Find a resource…")
+        self.filters.search = self.search          # "/" focuses it
         self.search.textChanged.connect(self._filter_list)
         sv.addWidget(self.search)
-        self.res_list = QListWidget(objectName="ActionList")
-        self.res_list.itemChanged.connect(self._on_item_changed)
-        sv.addWidget(self.res_list, stretch=1)
-        self.clear_btn = QPushButton("Clear selection", objectName="MiniButton")
-        self.clear_btn.setCursor(Qt.PointingHandCursor)
-        self.clear_btn.clicked.connect(self._clear)
-        sv.addWidget(self.clear_btn)
-        legend = _label(
-            "<b>Bar / %</b> — chance a rock spawned here is that type.<br>"
-            "<b>avg %</b> — average share of the rock that is the resource (range in brackets).<br>"
-            "<b>RS</b> — radar signature of one rock, then the totals for groups of 2, 3… "
-            "rocks (a group scans as the sum).<br>"
-            "<b>Q</b> — estimated average quality, 0–1000; the small bars show the chance of "
-            "each possible quality (hover for exact numbers).<br>"
-            "Many rocks hold the same resource twice: a large low-grade share and a small "
-            "high-grade one — both are listed.<br>"
-            "Picking several resources shows places that have all of them, "
-            "not necessarily in the same rock.",
-            "InspectorHint")
-        legend.setWordWrap(True)
-        sv.addWidget(legend)
-        body.addWidget(side)
+        self.pick_scroll = kit.scroll_area()
+        host = QWidget()
+        self.pick_box = QVBoxLayout(host)
+        self.pick_box.setContentsMargins(0, 0, 4, 0)
+        self.pick_box.setSpacing(1)
+        self.pick_scroll.setWidget(host)
+        sv.addWidget(self.pick_scroll, stretch=1)
+        row.addWidget(side)
 
-        self.scroll = QScrollArea(objectName="InspectorScroll")
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.scroll.setFrameShape(QFrame.NoFrame)
-        body.addWidget(self.scroll, stretch=1)
-        outer.addLayout(body, stretch=1)
-        self._show_message("Loading mining data…")
-
-    @staticmethod
-    def _segment(text: str, index: int, count: int) -> QPushButton:
-        btn = QPushButton(text, objectName="Segment")
-        btn.setCheckable(True)
-        btn.setCursor(Qt.PointingHandCursor)
-        if index == 0:
-            btn.setProperty("pos", "first")
-        if index == count - 1:
-            btn.setProperty("pos", "last")
-        return btn
+        self.locs_scroll = kit.scroll_area()
+        self.locs_host = QWidget()
+        self.locs_scroll.setWidget(self.locs_host)
+        row.addWidget(self.locs_scroll, stretch=1)
+        self._body = body
+        self.set_content(body)
+        self.show_message("Loading mining data…")
 
     # -- lifecycle -------------------------------------------------------------------
     def activate(self) -> None:
         if self.data is None:
             self._loader.request(self.paths.channel_root)
 
-    def deactivate(self) -> None:
-        pass
+    def focus_on(self, resource_name: str) -> None:
+        """Links from other tools: pick this resource (by its display name)."""
+        if self.data is None:
+            self._pending = resource_name
+            return
+        for res, info in self.data["resources"].items():
+            if info["name"].lower() == str(resource_name).lower():
+                self.picked = [res]
+                self._fill_list()
+                self._render()
+                return
 
     def _on_loaded(self, data: dict) -> None:
         self.data = data
+        self._rarity = resource_rarity(data)
         # Delivered again when a new game version's data is ready: rebuild.
-        for btn in self.system_group.buttons():
-            self.system_group.removeButton(btn)
-            self.system_bar.removeWidget(btn)
-            btn.deleteLater()
         if self.system is not None and all(s["id"] != self.system for s in data["systems"]):
             self.system = None
-        options = [(None, "All")] + [(s["id"], s["name"]) for s in data["systems"]]
-        for i, (key, label) in enumerate(options):
-            btn = self._segment(label, i, len(options))
-            btn.setChecked(key == self.system)
-            btn.clicked.connect(lambda _c=False, k=key: self._set_system(k))
-            self.system_group.addButton(btn)
-            self.system_bar.addWidget(btn)
+        self.systems.set_options([(None, "All")] + [(s["id"], s["name"]) for s in data["systems"]], self.system)
         self._fill_list()
         self._render()
+        pending = getattr(self, "_pending", None)
+        if pending:
+            self._pending = None
+            self.focus_on(pending)
 
     # -- filters ----------------------------------------------------------------------
     def _set_system(self, system: str | None) -> None:
@@ -410,6 +390,9 @@ class MiningView(QWidget):
         self._render()
 
     def _set_method(self, method: str) -> None:
+        if method is None:              # clicking the checked button again
+            self.methods.set_value(self.method)
+            return
         self.method = method
         self._fill_list()
         self._render()
@@ -429,32 +412,34 @@ class MiningView(QWidget):
             for res in found:
                 counts[res] = counts.get(res, 0) + 1
         self.picked = [r for r in self.picked if r in counts]
-        self.res_list.blockSignals(True)
-        self.res_list.clear()
+        kit.clear_layout(self.pick_box)
+        self._pick_rows: list[tuple[str, _PickRow]] = []
         for res in sorted(counts, key=lambda r: self.data["resources"][r]["name"]):
-            name = self.data["resources"][res]["name"]
-            item = QListWidgetItem(f"{name}   ({counts[res]})")
-            item.setData(Qt.UserRole, res)
-            item.setToolTip(f"Found at {counts[res]} location(s)")
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked if res in self.picked else Qt.Unchecked)
-            self.res_list.addItem(item)
-        self.res_list.blockSignals(False)
+            row = _PickRow(self.data["resources"][res]["name"], counts[res], self._rarity.get(res))
+            row.setChecked(res in self.picked)
+            row._sync(res in self.picked)
+            row.toggled.connect(lambda on, r=res: self._toggle(r, on))
+            self.pick_box.addWidget(row)
+            self._pick_rows.append((res, row))
+        self.pick_box.addStretch(1)
         self._filter_list(self.search.text())
 
     def _filter_list(self, text: str) -> None:
         text = text.strip().lower()
-        for i in range(self.res_list.count()):
-            item = self.res_list.item(i)
-            item.setHidden(bool(text) and text not in item.text().lower())
+        for _res, row in getattr(self, "_pick_rows", []):
+            row.setVisible(not text or text in row.name.lower())
 
-    def _on_item_changed(self, item: QListWidgetItem) -> None:
-        res = item.data(Qt.UserRole)
-        if item.checkState() == Qt.Checked and res not in self.picked:
+    def _toggle(self, res: str, on: bool) -> None:
+        if on and res not in self.picked:
             self.picked.append(res)
-        elif item.checkState() != Qt.Checked and res in self.picked:
+        elif not on and res in self.picked:
             self.picked.remove(res)
         self._render()
+
+    def _unpick(self, res: str) -> None:
+        for r, row in self._pick_rows:
+            if r == res:
+                row.setChecked(False)
 
     def _clear(self) -> None:
         self.picked = []
@@ -462,12 +447,6 @@ class MiningView(QWidget):
         self._render()
 
     # -- rendering ------------------------------------------------------------------------
-    def _show_message(self, text: str) -> None:
-        lbl = QLabel(text, objectName="InspectorHint")
-        lbl.setAlignment(Qt.AlignCenter)
-        lbl.setWordWrap(True)
-        self.scroll.setWidget(lbl)
-
     def _share(self, loc: dict, res: str) -> float:
         rocks = self.data["rocks"]
         return sum(i["chance"] for i in loc["groups"][self.method]
@@ -476,22 +455,31 @@ class MiningView(QWidget):
     def _render(self) -> None:
         if self.data is None:
             return
-        self.clear_btn.setEnabled(bool(self.picked))
         locs = self._locations()
         total = len(locs)
+        names = {r: self.data["resources"][r]["name"] for r in self.picked}
         if self.picked:
             locs = [l for l in locs if all(self._share(l, r) > 0 for r in self.picked)]
             # Best first: the place where the rarest picked resource is most common.
             locs.sort(key=lambda l: -min(self._share(l, r) for r in self.picked))
-            names = ", ".join(self.data["resources"][r]["name"] for r in self.picked)
-            self.result_label.setText(f"{len(locs)} of {total} locations have {names}")
+            self.result.set_count(f"{len(locs)} of {total} places have " + " and ".join(names.values())
+                                  + " · best chance first")
         else:
-            self.result_label.setText(f"{total} locations — pick resources on the left to search")
+            self.result.set_count(f"{total} locations · pick resources on the left to find where they are")
+        self.result.set_chips([(names[r], lambda _c=False, r=r: self._unpick(r)) for r in self.picked])
 
-        page = QWidget(objectName="Inspector")
-        page.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-        cols = QHBoxLayout(page)
-        cols.setContentsMargins(0, 0, 8, 0)
+        self.show_content()
+        if not locs:
+            # In the results column, so the picker stays.
+            self.locs_scroll.setWidget(kit.EmptyState(
+                "No place has all of them",
+                "These resources never spawn at the same location. Remove one to see the places "
+                "that have the others.", "Clear", self._clear))
+            return
+        host = QWidget()
+        host.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        cols = QHBoxLayout(host)
+        cols.setContentsMargins(0, 0, 6, 0)
         cols.setSpacing(10)
         columns, heights = [], []
         for _ in range(self._columns):
@@ -500,9 +488,6 @@ class MiningView(QWidget):
             cols.addLayout(col, stretch=1)
             columns.append(col)
             heights.append(0)
-        if not locs:
-            columns[0].addWidget(_label("No location has all of the picked resources.",
-                                        "InspectorHint", align=Qt.AlignCenter))
         for loc in locs:
             card = LocationCard(loc, self.method, self.data, self.picked, self.system is None)
             i = heights.index(min(heights))  # masonry: shortest column first
@@ -510,6 +495,6 @@ class MiningView(QWidget):
             heights[i] += card.sizeHint().height() + 10
         for col in columns:
             col.addStretch(1)
-        keep = self.scroll.verticalScrollBar().value()
-        self.scroll.setWidget(page)
-        self.scroll.verticalScrollBar().setValue(keep)
+        keep = self.locs_scroll.verticalScrollBar().value()
+        self.locs_scroll.setWidget(host)
+        self.locs_scroll.verticalScrollBar().setValue(keep)

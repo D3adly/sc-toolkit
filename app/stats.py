@@ -3,7 +3,8 @@ the My Stats view: all time, and the last play session.
 
 `compute()` returns display-ready sections, so the view only lays them out:
     {"sessions": n, "first": datetime, "last": datetime,
-     "scopes": {"all": [Section…], "last": [Section…]}, "last_label": str}
+     "scopes": {"all"|"30d"|"7d"|"last": [Section…]}, "last_label": str,
+     "counts": {scope: sessions in it}}
     Section = {"title", "tiles": [(label, value, hint)], "lists": [List…],
                "filter": bool, "note"}
     List = {"title", "rows": [(name, value)] (all of them),
@@ -30,6 +31,7 @@ from app.tracker import REFINERY_REMINDER_SECONDS, Mission, SessionTracker
 # the specific ones).
 KINDS = [k for k in gamelog.EVENT_TYPES if k != "notification"]
 LIST_ROWS = 12
+PERIODS = {"30d": 30, "7d": 7}     # My Stats' rolling periods, in days
 BLUEPRINT_ROWS = 8   # per type, before "…and n more"
 
 # Blueprint types: (key = glyph name, title, game categories by prefix). The
@@ -369,5 +371,15 @@ def compute(events: list[gamelog.Event], sessions: list[gamelog.LogSession], con
         end = latest.ended()
         result["last_label"] = (f"{_datetime(latest.started)} – {end.astimezone():%H:%M}"
                                 if end else _datetime(latest.started))
+        # Rolling periods, counted back from now (a session counts by its start).
+        now = datetime.now(timezone.utc)
+        result["counts"] = {"all": len(sessions), "last": 1}
+        for key, days in PERIODS.items():
+            since = now - timedelta(days=days)
+            picked = [s for s in sessions if s.started and s.started >= since]
+            ids = {s.id for s in picked}
+            result["counts"][key] = len(picked)
+            if picked:
+                result["scopes"][key] = _scope([e for e in events if e.session in ids], picked, contracts)
     result["range"] = f"{_date(result['first'])} – {_date(sessions[-1].ended() if sessions else None)}"
     return result

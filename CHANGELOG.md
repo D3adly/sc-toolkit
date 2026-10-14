@@ -2,6 +2,30 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
+## Unreleased
+
+- **A new look, the same on every tool.** Every tool now has the same layout: a header with what it's
+  for and where its data comes from, one filter bar, a result line with the count and your active
+  filters (click ✕ on one to remove it, or *Clear filters*), then the results. Explanations that used
+  to fill the screen are behind *How to read this*. The colours now mean the same thing everywhere,
+  and on the website: amber is the one main button, steel blue is what you've selected, green is the
+  best value or something you have. The text is now Inter, bundled with the app, and numbers line
+  up in columns.
+
+- **A tool rail on the left replaces Back.** Every tool, the launch screen and Settings are one click
+  away from anywhere; the window no longer resizes when you switch. Tool pages dim the wallpaper so
+  tables are easier to read.
+
+- **Salvage Claims:** one table with a single header row; the best net value is green, and a bar
+  shows each ship's value split into components and cargo, so they can be compared at a glance.
+
+- **Mining Finder:** places are sorted by the best chance of finding the ores you picked, with that
+  chance on each card. The ore you picked stands out and the other rocks fade back; the single-rock
+  radar signature (RS) is bold. The resource list shows each ore's rarity and how many places have it.
+
+- **My Stats:** new *Last 30 days* and *Last 7 days* periods next to All time and Last session, four
+  headline figures at the top, and the longest lists as top-5 bar charts with *Show all*.
+
 ## 0.3.0 (2026-10-13)
 
 - **SC-Toolkit is now SC-Toolbox.** Only the name changes: your settings, saved data, sign-in and

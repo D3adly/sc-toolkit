@@ -34,7 +34,8 @@ from app.patchwatch import PatchWatcher
 from app.starstrings_controller import StarStringsController
 from app.update_controller import UpdateController
 from app.theme import PALETTE
-from app.ui.title_bar import TitleBar
+from app.ui.kit import ToolRail
+from app.ui.title_bar import TitleBar, _shadow
 from app.ui.widgets import Switch
 
 ICON_SIZE = QSize(20, 20)
@@ -44,6 +45,19 @@ def _icon(name: str) -> QIcon:
     return QIcon(str(config.ICONS_DIR / f"{name}.png"))
 
 CORNER_RADIUS = 14
+
+# The tool rail: (key, icon, caption). Tools in NEEDS_GAME read the game files.
+RAIL_ITEMS = [
+    ("launch", "launch", "Launch"),
+    ("missions", "missions", "Missions"),
+    ("mining", "mining", "Mining"),
+    ("salvage", "salvage", "Salvage"),
+    ("stats", "stats", "My Stats"),
+    ("hangar", "hangar", "My Ships"),
+    ("maps", "scmaps", "Maps"),
+    ("bindings", "joystick", "Bindings"),
+]
+NEEDS_GAME = {"missions", "mining", "salvage", "bindings"}
 
 
 def _divider() -> QFrame:
@@ -108,6 +122,12 @@ class RootFrame(QWidget):
         super().__init__(parent)
         self.setObjectName("RootFrame")
         self._bg = QPixmap(str(config.BACKGROUND_IMAGE))
+        self.scrim = 0          # 0–255: darkens the wallpaper behind the tools
+
+    def set_scrim(self, alpha: int) -> None:
+        if alpha != self.scrim:
+            self.scrim = alpha
+            self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -128,7 +148,17 @@ class RootFrame(QWidget):
             # Anchored to the watermark's corner so it's never cropped.
             x0 = self.width() - scaled.width() if config.BACKGROUND_ANCHOR_RIGHT else 0
             painter.drawPixmap(x0, bottom - scaled.height(), scaled)
-
+            if self.scrim:
+                # Dimmed behind the tools, but never the STAR CITIZEN watermark
+                # (the Fankit terms want it visible).
+                fx, fy, fw, fh = config.BACKGROUND_WATERMARK
+                mark = QRectF(x0 + scaled.width() * fx, bottom - scaled.height() + scaled.height() * fy,
+                              scaled.width() * fw, scaled.height() * fh).adjusted(-6, -6, 6, 6)
+                shade = QPainterPath()
+                shade.addRect(QRectF(self.rect()))
+                hole = QPainterPath()
+                hole.addRoundedRect(mark, 8, 8)
+                painter.fillPath(shade.subtracted(hole), QColor(9, 11, 13, self.scrim))
 
         painter.setPen(QColor(255, 255, 255, 20))
         painter.drawPath(path)
@@ -175,14 +205,22 @@ class MainWindow(QMainWindow):
         outer.setSpacing(0)
 
         self.title_bar = title_bar = TitleBar()
-        title_bar.settings_requested.connect(self._show_settings)
         title_bar.whats_new_requested.connect(self._show_whats_new)
         outer.addWidget(title_bar)
 
-        # Main view and the joystick bindings view share the window; the
-        # bindings view is built on first use.
+        # The tool rail on the left; the launch screen and every tool share the
+        # rest of the window. Tool views are built on first use.
+        middle = QHBoxLayout()
+        middle.setContentsMargins(14, 6, 0, 10)
+        middle.setSpacing(12)
+        self.rail = ToolRail(RAIL_ITEMS, [("settings", "settings", "Settings")])
+        self.rail.selected.connect(self.show_tool)
+        middle.addWidget(self.rail)
         self.stack = QStackedWidget()
-        outer.addWidget(self.stack, stretch=1)
+        middle.addWidget(self.stack, stretch=1)
+        outer.addLayout(middle, stretch=1)
+        self._views: dict[str, QWidget] = {}
+        self._current = "launch"
 
         # Footer band: CIG's notice (required by the Fankit Agreement wherever
         # their material is shown) on the left, and a clear area on the right
@@ -190,26 +228,20 @@ class MainWindow(QMainWindow):
         # because the watermark scales with the wallpaper.
         self.footer = QWidget()
         footer_layout = QHBoxLayout(self.footer)
-        footer_layout.setContentsMargins(24, 0, 0, 6)
+        footer_layout.setContentsMargins(100, 0, 0, 4)
         notice = QLabel(config.CIG_NOTICE, objectName="CigNotice")
         notice.setWordWrap(True)
+        _shadow(notice)
         notice.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         footer_layout.addWidget(notice, stretch=1)
         self._watermark_gap = footer_layout.addSpacing(0) or footer_layout.itemAt(1)
         outer.addWidget(self.footer)
-        self.bindings_view = None
-        self.salvage_view = None
-        self.mining_view = None
         self.settings_view = None
-        self.maps_view = None
-        self.stats_view = None
         self.whats_new_view = None
-        self.hangar_view = None
-        self._main_size = None
 
         body = QWidget()
         body_layout = QHBoxLayout(body)
-        body_layout.setContentsMargins(20, 20, 20, 20)
+        body_layout.setContentsMargins(0, 0, 18, 0)
         body_layout.setSpacing(16)
         self.stack.addWidget(body)
 
@@ -357,15 +389,9 @@ class MainWindow(QMainWindow):
             self.whats_new_view.check_requested.connect(lambda: self.updates.check(force=True))
             self.whats_new_view.install_requested.connect(self._install_update)
             self.stack.addWidget(self.whats_new_view)
-        current = self.stack.currentWidget()
-        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view,
-                       self.hangar_view):
-            current.deactivate()
-            if self._main_size is not None:
-                self.resize(self._main_size)
         if not self.updates.installing:
             self.whats_new_view.show_release(self.updates.release)
-        self.stack.setCurrentWidget(self.whats_new_view)
+        self._switch_to("whatsnew", self.whats_new_view)
         if settings.current().changelog_seen != __version__:
             settings.apply(replace(settings.current(), changelog_seen=__version__))
         self.title_bar.set_changelog_unseen(False)
@@ -655,6 +681,8 @@ class MainWindow(QMainWindow):
             self._set_status("Idle")
         for btn in (self.bindings_btn, self.salvage_btn, self.mining_btn, self.starstrings_btn):
             btn.setEnabled(has_game)
+        for key in NEEDS_GAME:
+            self.rail.set_enabled(key, has_game, "" if has_game else "Set your Star Citizen folder in Settings")
         glass = s.gameglass
         self.gameglass_btn.setEnabled(glass is not None)
         self.gameglass_btn.setToolTip("" if glass else "Set the GameGlass path in Settings to enable")
@@ -842,19 +870,19 @@ class MainWindow(QMainWindow):
             "See what every button on your stick does, rebind by pressing it, "
             "and save the result as a launch profile.",
         )
-        self.bindings_btn.clicked.connect(self._show_bindings)
+        self.bindings_btn.clicked.connect(lambda: self.show_tool("bindings"))
         self.salvage_btn = _ToolTile(
             "salvage", "Salvage Claims",
             "Ships in Adagio salvage claims by difficulty: their components, sell vs "
             "dismantle prices, and cargo aboard.",
         )
-        self.salvage_btn.clicked.connect(self._show_salvage)
+        self.salvage_btn.clicked.connect(lambda: self.show_tool("salvage"))
         self.mining_btn = _ToolTile(
             "mining", "Mining Finder",
             "Where each ore spawns, how likely each rock is, radar signatures and "
             "quality odds, straight from the game files.",
         )
-        self.mining_btn.clicked.connect(self._show_mining)
+        self.mining_btn.clicked.connect(lambda: self.show_tool("mining"))
         maps_tile = _ToolTile(
             "scmaps", "SC Maps",
             "One-page guides and maps for events, locations and missions.",
@@ -864,19 +892,19 @@ class MainWindow(QMainWindow):
                 "all credit to the author."
             ),
         )
-        maps_tile.clicked.connect(self._show_maps)
+        maps_tile.clicked.connect(lambda: self.show_tool("maps"))
         self.stats_tile = _ToolTile(
             "stats", "My Stats",
             "Your missions, blueprints, money, travel, ships and losses from the game's "
             "logs: all time and your last session.",
         )
-        self.stats_tile.clicked.connect(self._show_stats)
+        self.stats_tile.clicked.connect(lambda: self.show_tool("stats"))
         hangar_tile = _ToolTile(
             "hangar", "My Ships",
             "Your hangar: the ships you pledged or bought in game, ships in concept with their "
             "loaners, and a link to each on Erkul.",
         )
-        hangar_tile.clicked.connect(self._show_hangar)
+        hangar_tile.clicked.connect(lambda: self.show_tool("hangar"))
         for i, tile in enumerate((self.bindings_btn, self.salvage_btn, self.mining_btn, maps_tile,
                                   self.stats_tile, hangar_tile)):
             grid.addWidget(tile, i // 2, i % 2)
@@ -959,91 +987,77 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             QMessageBox.warning(self, "GameGlass", f"Failed to launch GameGlass:\n{exc}")
 
-    # -- joystick bindings view ----------------------------------------------
-    def _show_bindings(self) -> None:
-        if self.bindings_view is None:
+    # -- tools: the rail and the views ---------------------------------------------
+    def show_tool(self, key: str) -> None:
+        """Shows the launch screen ("launch") or a tool view, building it on
+        first use; the rail follows."""
+        if key == "settings":
+            self._show_settings()
+            return
+        if key != "launch" and key in NEEDS_GAME and self.channel is None:
+            key = "launch"
+        view = self.stack.widget(0) if key == "launch" else self._view(key)
+        self._switch_to(key, view)
+
+    def _switch_to(self, key: str, view: QWidget) -> None:
+        previous = self.stack.currentWidget()
+        if previous is not view and hasattr(previous, "deactivate"):
+            previous.deactivate()
+        self._current = key
+        self.rail.set_current(key)
+        self.centralWidget().set_scrim(0 if key == "launch" else 150)
+        self.stack.setCurrentWidget(view)
+        if hasattr(view, "activate") and key != "settings":
+            view.activate()
+
+    def _view(self, key: str) -> QWidget:
+        view = self._views.get(key)
+        if view is not None:
+            return view
+        if key == "bindings":
             from app.ui.bindings_view import BindingsView
 
-            self.bindings_view = BindingsView(self.channel)
-            self.bindings_view.back_requested.connect(self._show_main)
-            self.bindings_view.profiles_changed.connect(self._refresh_config_combo)
-            self.stack.addWidget(self.bindings_view)
-        # The diagram wants more room than the launcher's compact size.
-        self._main_size = self._normal_size()
-        screen = self.screen().availableGeometry()
-        self.resize(min(1640, int(screen.width() * 0.94)), min(980, int(screen.height() * 0.92)))
-        self.stack.setCurrentWidget(self.bindings_view)
-        self.bindings_view.activate()
-
-    # -- salvage claims view ---------------------------------------------------
-    def _show_salvage(self) -> None:
-        if self.salvage_view is None:
+            view = BindingsView(self.channel)
+            view.profiles_changed.connect(self._refresh_config_combo)
+        elif key == "salvage":
             from app.ui.salvage_view import SalvageView
 
-            self.salvage_view = SalvageView(self.channel)
-            self.salvage_view.back_requested.connect(self._show_main)
-            self.stack.addWidget(self.salvage_view)
-        self._main_size = self._normal_size()
-        screen = self.screen().availableGeometry()
-        self.resize(min(1320, int(screen.width() * 0.9)), min(900, int(screen.height() * 0.9)))
-        self.stack.setCurrentWidget(self.salvage_view)
-        self.salvage_view.activate()
-
-    # -- My Stats ----------------------------------------------------------------
-    def _show_stats(self) -> None:
-        if self.stats_view is None:
-            from app.ui.stats_view import StatsView
-
-            self.stats_view = StatsView()
-            self.stats_view.back_requested.connect(self._show_main)
-            self.stack.addWidget(self.stats_view)
-        self._main_size = self._normal_size()
-        screen = self.screen().availableGeometry()
-        self.resize(min(1320, int(screen.width() * 0.9)), min(900, int(screen.height() * 0.9)))
-        self.stack.setCurrentWidget(self.stats_view)
-        self.stats_view.activate()
-
-    # -- My Ships -------------------------------------------------------------------
-    def _show_hangar(self) -> None:
-        if self.hangar_view is None:
-            from app.ui.hangar_view import HangarView
-
-            self.hangar_view = HangarView()
-            self.hangar_view.back_requested.connect(self._show_main)
-            self.stack.addWidget(self.hangar_view)
-        self._main_size = self._normal_size()
-        screen = self.screen().availableGeometry()
-        self.resize(min(1400, int(screen.width() * 0.92)), min(920, int(screen.height() * 0.9)))
-        self.stack.setCurrentWidget(self.hangar_view)
-        self.hangar_view.activate()
-
-    # -- SC Maps viewer ---------------------------------------------------------
-    def _show_maps(self) -> None:
-        if self.maps_view is None:
-            from app.ui.maps_view import MapsView
-
-            self.maps_view = MapsView()
-            self.maps_view.back_requested.connect(self._show_main)
-            self.stack.addWidget(self.maps_view)
-        self._main_size = self._normal_size()
-        screen = self.screen().availableGeometry()
-        self.resize(min(1400, int(screen.width() * 0.92)), min(960, int(screen.height() * 0.92)))
-        self.stack.setCurrentWidget(self.maps_view)
-        self.maps_view.activate()
-
-    # -- mining finder view ------------------------------------------------------
-    def _show_mining(self) -> None:
-        if self.mining_view is None:
+            view = SalvageView(self.channel)
+        elif key == "mining":
             from app.ui.mining_view import MiningView
 
-            self.mining_view = MiningView(self.channel)
-            self.mining_view.back_requested.connect(self._show_main)
-            self.stack.addWidget(self.mining_view)
-        self._main_size = self._normal_size()
-        screen = self.screen().availableGeometry()
-        self.resize(min(1400, int(screen.width() * 0.92)), min(920, int(screen.height() * 0.9)))
-        self.stack.setCurrentWidget(self.mining_view)
-        self.mining_view.activate()
+            view = MiningView(self.channel)
+        elif key == "missions":
+            from app.ui.missions_view import MissionsView
+
+            view = MissionsView(self.channel)
+        elif key == "stats":
+            from app.ui.stats_view import StatsView
+
+            view = StatsView()
+        elif key == "hangar":
+            from app.ui.hangar_view import HangarView
+
+            view = HangarView()
+        elif key == "maps":
+            from app.ui.maps_view import MapsView
+
+            view = MapsView()
+        else:
+            raise KeyError(key)
+        view.back_requested.connect(self._show_main)
+        if hasattr(view, "open_tool"):
+            view.open_tool.connect(self.open_tool)
+        self._views[key] = view
+        self.stack.addWidget(view)
+        return view
+
+    def open_tool(self, key: str, target: object = None) -> None:
+        """Links between tools: opens `key` and, if it can, points it at `target`."""
+        self.show_tool(key)
+        view = self._views.get(key)
+        if view is not None and target is not None and hasattr(view, "focus_on"):
+            view.focus_on(target)
 
     # -- settings view ---------------------------------------------------------
     def _on_account_clicked(self) -> None:
@@ -1058,8 +1072,6 @@ class MainWindow(QMainWindow):
         self.settings_view.show_account_panel()
 
     def _show_settings(self, first_run: bool = False) -> None:
-        if self.stack.currentWidget() is self.settings_view:
-            return
         if self.settings_view is None:
             from app.ui.settings_view import SettingsView
 
@@ -1068,23 +1080,17 @@ class MainWindow(QMainWindow):
             self.settings_view.saved.connect(self._on_settings_saved)
             self.settings_view.open_overlay_requested.connect(self._open_overlay)
             self.stack.addWidget(self.settings_view)
-        current = self.stack.currentWidget()
-        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view,
-                       self.hangar_view):
-            current.deactivate()
-            if self._main_size is not None:
-                self.resize(self._main_size)
-        self.stack.setCurrentWidget(self.settings_view)
-        self.settings_view.activate(first_run)
+        if self.stack.currentWidget() is not self.settings_view:
+            self._switch_to("settings", self.settings_view)
+            self.settings_view.activate(first_run)
 
     def _on_settings_saved(self) -> None:
         # Tools built against the old install are rebuilt on next use.
-        for attr in ("bindings_view", "salvage_view", "mining_view"):
-            view = getattr(self, attr)
+        for key in ("bindings", "salvage", "mining", "missions"):
+            view = self._views.pop(key, None)
             if view is not None:
                 self.stack.removeWidget(view)
                 view.deleteLater()
-                setattr(self, attr, None)
         self.channel = channel_mod.pick_default_channel(settings.current().game_root)
         if self._start_overlay:
             self.patches.start()        # the RSI Launcher log setting may have changed
@@ -1103,13 +1109,7 @@ class MainWindow(QMainWindow):
         self._show_main()
 
     def _show_main(self) -> None:
-        current = self.stack.currentWidget()
-        if current in (self.bindings_view, self.salvage_view, self.mining_view, self.maps_view,
-                       self.hangar_view):
-            current.deactivate()
-        self.stack.setCurrentIndex(0)
-        if self._main_size is not None:
-            self.resize(self._main_size)
+        self.show_tool("launch")
 
     def _on_update_starstrings_clicked(self) -> None:
         if self.channel is None or self.starstrings_controller.busy:

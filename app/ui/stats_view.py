@@ -1,10 +1,12 @@
-"""My Stats: the player's statistics from every Game.log on disk (app.stats),
-all time or for the last play session. Read on opening and on Refresh;
-nothing is stored.
+"""My Stats: the player's statistics from every Game.log on disk (app.stats):
+all time, the last 30 or 7 days, or the last play session. Headline figures
+first, then a card per topic. Read on opening and on Refresh; nothing is
+stored.
 """
 
 from __future__ import annotations
 
+import re
 import threading
 import traceback
 
@@ -25,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from app import channel as channel_mod, config, datahub, settings, stats
 from app.theme import PALETTE
+from app.ui import kit
 
 TILE_COLUMNS = 4
 COLUMN_MIN_WIDTH = 260   # a column of a multi-column list
@@ -78,12 +81,12 @@ class _Loader(QObject):
 
 
 def _glyph_icon(name: str) -> QIcon:
-    """A white glyph PNG, tinted muted (off) and gold (selected)."""
+    """A white glyph PNG, tinted muted (off) and bright (selected)."""
     icon = QIcon()
     source = QPixmap(str(GLYPHS / f"{name}.png"))
     if source.isNull():
         return icon
-    for colour, state in ((PALETTE["text_muted"], QIcon.Off), (PALETTE["accent"], QIcon.On)):
+    for colour, state in ((PALETTE["text_muted"], QIcon.Off), (PALETTE["text_primary"], QIcon.On)):
         pix = QPixmap(source.size())
         pix.fill(Qt.transparent)
         p = QPainter(pix)
@@ -108,9 +111,9 @@ class _RowList(QWidget):
         self._ncols = 0
         self._cells = []
         for name, value in rows:
-            left = _label(name, "StatRowName", name)
+            left = _label(name, "RankName", name)
             left.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-            right = _label(value, "StatRowValue")
+            right = _label(value, "RankValue")
             right.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self._cells.append((left, right))
         self._v = v = QVBoxLayout(self)
@@ -177,59 +180,67 @@ class _RowList(QWidget):
             self._layout_rows(wanted)
 
 
-class _SectionCard(QFrame):
+_NUM_RE = re.compile(r"^(?:(\d+)h)?\s*(?:(\d+)m)?$")
+
+
+def _number(value: str) -> float | None:
+    """A row value as a number for its bar: '1,204' → 1204, '11h 48m' → 708
+    (minutes); None if it isn't a plain count or duration."""
+    text = value.strip()
+    plain = text.replace(",", "")
+    if plain.isdigit():
+        return float(plain)
+    m = _NUM_RE.match(text)
+    if m and (m.group(1) or m.group(2)):
+        return float(int(m.group(1) or 0) * 60 + int(m.group(2) or 0))
+    return None
+
+
+class _SectionCard(kit.Section):
+    """One stats section: its figures, then its lists (bars where the values
+    are counts), the blueprint section with its type filter."""
+
     def __init__(self, section: dict, parent=None):
-        super().__init__(parent)
-        self.setObjectName("SidePanel")
-        v = QVBoxLayout(self)
-        v.setContentsMargins(16, 12, 16, 14)
-        v.setSpacing(10)
-        v.addWidget(_label(section["title"].upper(), "SectionLabel"))
+        super().__init__(section["title"], parent)
         if section.get("notice"):
-            v.addWidget(_label(section["notice"], "StatsNotice", wrap=True))
+            note = kit.label(section["notice"], "MutedText", wrap=True)
+            self.add(note)
 
         tiles = QGridLayout()
         tiles.setHorizontalSpacing(14)
         tiles.setVerticalSpacing(10)
         for i, (name, value, hint) in enumerate(section["tiles"]):
-            box = QVBoxLayout()
-            box.setSpacing(0)
-            box.addWidget(_label(value, "StatValue", hint))
-            box.addWidget(_label(name, "StatLabel", hint, wrap=True))
-            tiles.addLayout(box, i // TILE_COLUMNS, i % TILE_COLUMNS)
+            tiles.addWidget(kit.Stat(value, name, tip=hint, size="md"), i // TILE_COLUMNS, i % TILE_COLUMNS)
         for c in range(TILE_COLUMNS):
             tiles.setColumnStretch(c, 1)
-        v.addLayout(tiles)
+        self.v.addLayout(tiles)
 
         lists = [lst for lst in section.get("lists", []) if lst["rows"]]
         if section.get("filter") and lists:
-            self._add_filtered(v, lists)
-        elif lists:
-            side = [lst for lst in lists if not lst.get("columns")]
-            if side:
-                row = QHBoxLayout()
-                row.setSpacing(18)
-                for lst in side:
-                    row.addWidget(self._list_block(lst), stretch=1, alignment=Qt.AlignTop)
-                v.addLayout(row)
+            self._add_filtered(lists)
+        else:
             for lst in lists:
-                if lst.get("columns"):
-                    v.addWidget(self._list_block(lst))
+                self.add(self._list_block(lst))
         if section.get("note"):
-            v.addWidget(_label(section["note"], "InspectorHint", wrap=True))
+            self.add(kit.label(section["note"], "MutedText", wrap=True))
 
     @staticmethod
     def _list_block(lst: dict, count: bool = False) -> QWidget:
         block = QWidget()
         col = QVBoxLayout(block)
-        col.setContentsMargins(0, 0, 0, 0)
-        col.setSpacing(3)
-        title = lst["title"].upper() + (f"  ·  {len(lst['rows'])}" if count else "")
-        col.addWidget(_label(title, "ConfigLabel"))
-        col.addWidget(_RowList(lst["rows"], lst.get("limit"), bool(lst.get("columns"))))
+        col.setContentsMargins(0, 2, 0, 0)
+        col.setSpacing(6)
+        title = lst["title"] + (f"  ·  {len(lst['rows'])}" if count else "")
+        col.addWidget(kit.caps(title))
+        numbers = [_number(v) for _n, v in lst["rows"]]
+        if lst.get("columns") or any(n is None for n in numbers):
+            col.addWidget(_RowList(lst["rows"], lst.get("limit"), bool(lst.get("columns"))))
+        else:
+            col.addWidget(kit.RankList([(n, num, v) for (n, v), num in zip(lst["rows"], numbers)],
+                                       limit=min(5, lst.get("limit") or 5)))
         return block
 
-    def _add_filtered(self, v: QVBoxLayout, lists: list[dict]) -> None:
+    def _add_filtered(self, lists: list[dict]) -> None:
         """A glyph button per list (plus All); shows the chosen list, or all."""
         bar = QHBoxLayout()
         bar.setSpacing(6)
@@ -254,16 +265,27 @@ class _SectionCard(QFrame):
             group.addButton(btn)
             bar.addWidget(btn)
         bar.addStretch(1)
-        v.addLayout(bar)
+        self.v.addLayout(bar)
         for _key, block in blocks:
-            v.addWidget(block)
+            self.add(block)
 
 
-class StatsView(QWidget):
-    back_requested = Signal()
+PERIODS = [("all", "All time"), ("30d", "Last 30 days"), ("7d", "Last 7 days"), ("last", "Last session")]
 
+
+def _tile(sections: list[dict], section: str, name: str) -> tuple[str, str]:
+    for sec in sections:
+        if sec["title"] == section:
+            for n, value, hint in sec["tiles"]:
+                if n == name:
+                    return value, hint
+    return "—", ""
+
+
+class StatsView(kit.ToolPage):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__("stats", "My Stats", "Your play time, missions, blueprints, travel and losses, "
+                         "from the game's own logs", parent=parent)
         self.data: dict | None = None
         self.scope = "all"
         self._loading = False
@@ -271,51 +293,20 @@ class StatsView(QWidget):
         self._loader = _Loader(self)
         datahub.hub().updated.connect(self._on_hub_updated)
         self._loader.loaded.connect(self._on_loaded)
-        self._loader.progress.connect(self._message)
-        self._loader.failed.connect(lambda msg: self._on_failed(f"Couldn't read your game logs:\n\n{msg}"))
+        self._loader.progress.connect(self.show_message)
+        self._loader.failed.connect(lambda msg: self._on_failed(msg))
         self._build_ui()
 
     def _build_ui(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 14, 20, 20)
-        outer.setSpacing(10)
-
-        bar_frame = QFrame(objectName="ToolBar")
-        bar = QHBoxLayout(bar_frame)
-        bar.setContentsMargins(10, 8, 10, 8)
-        bar.setSpacing(8)
-        back = QPushButton("←  Back", objectName="ToolButton")
-        back.setCursor(Qt.PointingHandCursor)
-        back.clicked.connect(self.back_requested.emit)
-        bar.addWidget(back)
-        bar.addSpacing(10)
-        bar.addWidget(QLabel("SHOW", objectName="ConfigLabel"))
-        self.scope_group = QButtonGroup(self)
-        for i, (key, text) in enumerate((("all", "ALL TIME"), ("last", "LAST SESSION"))):
-            btn = QPushButton(text, objectName="Segment")
-            btn.setCheckable(True)
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setProperty("pos", "first" if i == 0 else "last")
-            btn.setChecked(key == self.scope)
-            btn.clicked.connect(lambda _c=False, k=key: self._set_scope(k))
-            self.scope_group.addButton(btn)
-            bar.addWidget(btn)
-        bar.addStretch(1)
-        self.summary = QLabel("", objectName="InspectorHint")
-        self.summary.setMinimumWidth(80)
-        self.summary.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        bar.addWidget(self.summary, stretch=2)
-        self.refresh_btn = QPushButton("Refresh", objectName="ToolButton")
-        self.refresh_btn.setCursor(Qt.PointingHandCursor)
+        self.periods = kit.Segmented(PERIODS, self.scope)
+        self.periods.changed.connect(self._set_scope)
+        self.filters.add(self.periods, "Period")
+        self.refresh_btn = kit.button("Refresh", tip="Read your game logs again")
         self.refresh_btn.clicked.connect(self._load)
-        bar.addWidget(self.refresh_btn)
-        outer.addWidget(bar_frame)
-
-        self.scroll = QScrollArea(objectName="InspectorScroll")
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.scroll.setFrameShape(QFrame.NoFrame)
-        outer.addWidget(self.scroll, stretch=1)
+        self.filters.add_right(self.refresh_btn)
+        self.scroll = kit.scroll_area()
+        self.set_content(self.scroll)
+        self.result.hide()
 
     # -- lifecycle ------------------------------------------------------------------
     def activate(self) -> None:
@@ -325,7 +316,7 @@ class StatsView(QWidget):
     def _load(self) -> None:
         self._loading = True
         self.refresh_btn.setEnabled(False)
-        self._message("Reading your game logs…")
+        self.show_message("Reading your game logs…")
         self._loader.run()
 
     def _on_hub_updated(self, name: str) -> None:
@@ -338,72 +329,65 @@ class StatsView(QWidget):
         self.data = data
         self._render()
 
-    def _on_failed(self, text: str) -> None:
+    def _on_failed(self, message: str) -> None:
         self._loading = False
         self.refresh_btn.setEnabled(True)
-        self._message(text)
+        self.show_empty("Couldn't read your game logs", message.splitlines()[0] if message else "",
+                        "Try again", self._load)
 
-    def _set_scope(self, scope: str) -> None:
+    def _set_scope(self, scope: str | None) -> None:
+        if scope is None:
+            self.periods.set_value(self.scope)
+            return
         self.scope = scope
         self._render()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        wanted = 2 if self.scroll.viewport().width() >= 900 else 1
+        wanted = 2 if self.width() >= 960 else 1
         if wanted != self._columns:
             self._columns = wanted
             self._render()
 
     # -- rendering ----------------------------------------------------------------------
-    def _page(self) -> QVBoxLayout:
-        old = self.scroll.takeWidget()
-        if old is not None:
-            old.deleteLater()
-        page = QWidget(objectName="Inspector")
-        v = QVBoxLayout(page)
-        v.setContentsMargins(0, 0, 6, 0)
-        v.setSpacing(12)
-        self.scroll.setWidget(page)
-        return v
-
-    def _message(self, text: str) -> None:
-        v = self._page()
-        lbl = _label(text, "InspectorHint", wrap=True)
-        lbl.setAlignment(Qt.AlignCenter)
-        v.addWidget(lbl, stretch=1)
-
-    @staticmethod
-    def _rough_rows(section: dict) -> int:
-        """Rough height of a card's lists, in rows, for placing the cards."""
-        heights = []
-        for lst in section.get("lists", []):
-            n = len(lst["rows"])
-            if lst.get("limit"):
-                n = min(n, lst["limit"] + 1)
-            if lst.get("columns"):
-                n = -(-n // 2)
-            heights.append(n + 1)
-        if not heights:
-            return 0
-        return sum(heights) if section.get("filter") else max(heights)
-
     def _render(self) -> None:
         if self.data is None:
             return
         data = self.data
         if not data["sessions"]:
-            self.summary.setText("")
-            self._message("No game logs found. Check the game folder in Settings; the logs are "
-                          "Game.log and the logbackups folder next to it.")
+            self.set_data_chip("")
+            self.show_empty("No game logs found",
+                            "Check the game folder in Settings. The logs are Game.log and the logbackups "
+                            "folder next to it.", "Open Settings", lambda: self.window().show_tool("settings"))
             return
+        self.set_data_chip(f"<b>{data['sessions']}</b> sessions · {data['range']}",
+                           "Everything the game still keeps: Game.log and the logbackups folder. "
+                           "Older logs the game deleted can't be counted.")
+        sections = data["scopes"].get(self.scope)
+        if not sections:
+            label_ = dict(PERIODS)[self.scope].lower()
+            self.show_empty(f"No play sessions in the {label_.removeprefix('last ')}",
+                            "Your logs have no game session that started in this period.",
+                            "Show all time", lambda: (self.periods.set_value("all"), self._set_scope("all")))
+            return
+        page = QWidget()
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 6, 0)
+        v.setSpacing(12)
         if self.scope == "last":
-            self.summary.setText(f"Last session: {data['last_label']}")
-        else:
-            self.summary.setText(f"{data['sessions']} sessions · {data['range']}")
-            self.summary.setToolTip("Everything the game still keeps: Game.log and the logbackups folder. "
-                                    "Older logs the game deleted can't be counted.")
-        sections = data["scopes"].get(self.scope) or []
-        v = self._page()
+            v.addWidget(kit.label(f"Last session: {data['last_label']}", "ResultCount"))
+        elif self.scope in ("30d", "7d"):
+            n = data.get("counts", {}).get(self.scope, 0)
+            v.addWidget(kit.label(f"{n} session{'s' if n != 1 else ''} in the "
+                                  f"{dict(PERIODS)[self.scope].lower()}", "ResultCount"))
+        headline = [
+            (*_tile(sections, "Play time", "Time played"), "time played"),
+            (*_tile(sections, "Missions", "Completed"), "missions completed"),
+            (*_tile(sections, "Missions", "Success rate"), "success rate"),
+            (*_tile(sections, "Blueprints", "Received"), "blueprints received"),
+        ]
+        v.addWidget(kit.StatStrip([(value, caption, hint) for value, hint, caption in headline]))
+
         # Cards go into the shorter column (by rough height), top to bottom.
         cols = QHBoxLayout()
         cols.setSpacing(12)
@@ -423,3 +407,19 @@ class StatsView(QWidget):
             lay.addStretch(1)
         v.addLayout(cols)
         v.addStretch(1)
+        keep = self.scroll.verticalScrollBar().value()
+        self.scroll.setWidget(page)
+        self.scroll.verticalScrollBar().setValue(keep)
+        self.show_content()
+
+    @staticmethod
+    def _rough_rows(section: dict) -> int:
+        """Rough height of a card's lists, in rows, for placing the cards."""
+        heights = []
+        for lst in section.get("lists", []):
+            n = len(lst["rows"])
+            n = min(n, 6) if not lst.get("columns") else min(n, (lst.get("limit") or n) + 1) // 2 + 1
+            heights.append(n + 1)
+        if not heights:
+            return 0
+        return sum(heights)

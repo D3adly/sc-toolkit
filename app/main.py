@@ -114,7 +114,7 @@ def main():
 
         for view in ("bindings_view", "maps_view", "mining_view", "salvage_view", "settings_view",
                      "overlay", "overlay_panels", "overlay_live", "stats_view", "whats_new_view",
-                     "hangar_view"):
+                     "hangar_view", "missions_view", "kit"):
             importlib.import_module(f"app.ui.{view}")
         for module in ("mining", "salvage", "datacore", "socpak", "joyinput", "hotkeys", "gamelog",
                        "contracts", "tracker", "stats", "ships", "hangar", "shipdata", "datahub",

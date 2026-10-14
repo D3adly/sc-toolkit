@@ -1,28 +1,22 @@
-"""Salvage claim browser: pick an Adagio claim difficulty, see every ship
-that claim can spawn as an accordion — components (from the game's own
-loadouts), whether each comes off (per the community spreadsheet), what it
-sells or dismantles for, and the cargo aboard priced at UEX averages.
+"""Salvage Claims: which claim ship pays the most. Pick an Adagio claim
+difficulty and see every ship that claim can spawn, best net value first —
+components (from the game's own loadouts), whether each comes off (per the
+community spreadsheet), what it sells or dismantles for, and the cargo aboard
+priced at UEX averages. A row expands in place with the details.
 
 Game data is re-extracted automatically once per game build; the
-spreadsheet and UEX prices are only fetched when their refresh buttons are
-pressed (or once, when nothing has been fetched yet). Rendering always
-works from the local copies.
+spreadsheet and UEX prices come from app.datahub (at most daily, or on the
+refresh buttons). Rendering always works from the local copies.
 """
 
 from __future__ import annotations
 
-import time
-
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QLabel,
     QMessageBox,
-    QPushButton,
-    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -30,16 +24,32 @@ from PySide6.QtWidgets import (
 
 from app import channel as channel_mod, datahub, osutil, salvage, settings
 from app.salvage import ComponentRow, ShipRow
+from app.theme import PALETTE
+from app.ui import kit
+from app.ui.kit import Badge, label
 
 ALL_TIERS = "__all__"
+WEB_URL = "https://sc-toolbox.com/salvage"
+
+# Column widths of the table (header and rows share them).
+COLS = {"arrow": 18, "fee": 84, "components": 108, "cargo": 92, "net": 196}
 
 _STATE = {
-    "yes": ("✓", "SalvageYes", "The spreadsheet records this coming off this ship"),
-    "unlisted": ("?", "SalvageMaybe",
-                 "Priced in the spreadsheet, but not recorded coming off this ship — "
-                 "not counted in the total"),
-    "unknown": ("—", "SalvageNo", "Not in the spreadsheet"),
+    "yes": ("✓", "success", "The spreadsheet records this coming off this ship"),
+    "unlisted": ("?", "warning",
+                 "Priced in the spreadsheet, but not recorded coming off this ship: not counted in the total"),
+    "unknown": ("—", "neutral", "Not in the spreadsheet"),
 }
+
+HELP = (
+    "<b>Net value</b> = salvageable components + cargo aboard − the claim fee.<br>"
+    "<b>Components</b>: each part the community spreadsheet confirms comes off the ship, at the better of "
+    "its sell or dismantle price (shown green in the expanded row). Parts marked <b>?</b> are priced but not "
+    "confirmed and aren't counted.<br>"
+    "<b>Cargo</b>: what the spreadsheet's author found aboard, at UEX average sell prices; contents vary.<br>"
+    "The bar shows how the value splits: <span style='color:%s'>■</span> components, "
+    "<span style='color:%s'>■</span> cargo." % (PALETTE["info"], PALETTE["hue_industry"])
+)
 
 
 def _money(value: float | None) -> str:
@@ -47,16 +57,7 @@ def _money(value: float | None) -> str:
 
 
 def _when(ts: float | None) -> str:
-    return time.strftime("%Y-%m-%d %H:%M", time.localtime(ts)) if ts else "never"
-
-
-def _label(text: str, name: str = "SalvageCell", tip: str = "", align=None) -> QLabel:
-    lbl = QLabel(text, objectName=name)
-    if tip:
-        lbl.setToolTip(tip)
-    if align is not None:
-        lbl.setAlignment(align)
-    return lbl
+    return kit.short_date(ts)
 
 
 def _better_option(c: ComponentRow) -> str | None:
@@ -65,8 +66,6 @@ def _better_option(c: ComponentRow) -> str | None:
         return None
     return "sell" if c.sell >= c.dismantle else "dismantle"
 
-
-# -- one ship ---------------------------------------------------------------------
 
 class _Header(QFrame):
     clicked = Signal()
@@ -77,74 +76,106 @@ class _Header(QFrame):
         super().mouseReleaseEvent(event)
 
 
-class ShipCard(QFrame):
+def _cell(text: str, width: int, name: str = "RowValue") -> QWidget:
+    lbl = label(text, name, align=Qt.AlignRight | Qt.AlignVCenter)
+    lbl.setFixedWidth(width)
+    return lbl
+
+
+def _table_head() -> QWidget:
+    head = QFrame(objectName="TableHead")
+    row = QHBoxLayout(head)
+    row.setContentsMargins(14, 9, 14, 7)
+    row.setSpacing(14)
+    row.addSpacing(COLS["arrow"])
+    row.addWidget(kit.caps("Ship"), stretch=1)
+    for key, text in (("fee", "Fee"), ("components", "Components"), ("cargo", "Cargo"), ("net", "Net value")):
+        cap = kit.caps(text)
+        cap.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        cap.setFixedWidth(COLS[key])
+        row.addWidget(cap)
+    return head
+
+
+# -- one ship ---------------------------------------------------------------------
+
+class ShipRowWidget(QWidget):
     toggled = Signal(str, bool)
 
-    def __init__(self, row: ShipRow, expanded: bool, match=None, tier: str = "", parent=None):
+    def __init__(self, row: ShipRow, expanded: bool, *, best: bool, top: float = 0, match=None, tier: str = "",
+                 parent=None):
         super().__init__(parent)
-        self.setObjectName("ShipCard")
         self.row = row
         self.match = match  # component filter predicate, or None
         self._detail: QWidget | None = None
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
         self._open = False
-        self.header = _Header(objectName="ShipHeader")
+
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        self.header = _Header(objectName="PanelRow")
         self.header.setCursor(Qt.PointingHandCursor)
         self.header.clicked.connect(lambda: self._set_open(not self._open))
         head = QHBoxLayout(self.header)
-        head.setContentsMargins(14, 10, 14, 10)
-        head.setSpacing(18)
-        self.arrow = _label("▸", "ShipArrow")
+        head.setContentsMargins(14, 9, 14, 9)
+        head.setSpacing(14)
+        self.arrow = label("▸", "MutedText")
+        self.arrow.setFixedWidth(COLS["arrow"])
         head.addWidget(self.arrow)
+
         title = QVBoxLayout()
         title.setSpacing(2)
         name = QHBoxLayout()
-        name.setSpacing(10)
-        name.addWidget(_label(row.name, "ShipName"))
+        name.setSpacing(8)
+        name.addWidget(label(row.name, "RowName"))
         if tier:
-            name.addWidget(_label(tier.upper(), "ShipTier"))
+            name.addWidget(Badge(tier))
         name.addStretch(1)
         title.addLayout(name)
         if match is not None:
             hits = [f"{c.name} ×{c.qty}" for c in row.components if match(c)]
-            title.addWidget(_label("Matches: " + ", ".join(hits), "ShipMatch"))
+            hit = label("Has " + ", ".join(hits), "MatchText")
+            hit.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            title.addWidget(hit)
         head.addLayout(title, stretch=1)
-        if not row.in_sheet:
-            head.addWidget(_label("not in spreadsheet", "ShipMuted"))
-        else:
-            head.addWidget(self._stat("FEE", _money(row.fee)))
-            head.addWidget(self._stat("COMPONENTS", _money(row.components_value)))
-            head.addWidget(self._stat("CARGO", _money(row.cargo_value)))
-            net = self._stat("NET", _money(row.net), "ShipNet")
-            if row.unconfirmed_value:
-                net.setToolTip(f"+{_money(row.unconfirmed_value)} more in parts the spreadsheet "
-                               "hasn't recorded coming off this ship")
-            head.addWidget(net)
-        layout.addWidget(self.header)
 
+        if not row.in_sheet:
+            head.addWidget(label("Not in the spreadsheet yet", "MutedText"))
+        else:
+            head.addWidget(_cell(_money(row.fee), COLS["fee"]))
+            head.addWidget(_cell(_money(row.components_value), COLS["components"]))
+            head.addWidget(_cell(_money(row.cargo_value), COLS["cargo"],
+                                 "RowValue" if row.cargo_value else "RowValueDim"))
+            net = QWidget()
+            net.setFixedWidth(COLS["net"])
+            nrow = QHBoxLayout(net)
+            nrow.setContentsMargins(0, 0, 0, 0)
+            nrow.setSpacing(10)
+            nrow.addStretch(1)
+            gross = row.components_value + row.cargo_value
+            if gross > 0:
+                nrow.addWidget(kit.StackedBar(
+                    [(row.components_value, PALETTE["info"]), (row.cargo_value, PALETTE["hue_industry"])],
+                    width=84, scale=gross / top if top else 1,
+                    tip=f"Components {_money(row.components_value)} · cargo {_money(row.cargo_value)}"))
+            value = label(_money(row.net), "RowKey", align=Qt.AlignRight | Qt.AlignVCenter)
+            value.setMinimumWidth(74)
+            if best:
+                value.setProperty("tone", "success")
+                value.setToolTip("The best net value in this list")
+            if row.unconfirmed_value:
+                value.setToolTip(f"+{_money(row.unconfirmed_value)} more in parts the spreadsheet "
+                                 "hasn't recorded coming off this ship")
+            nrow.addWidget(value)
+            head.addWidget(net)
+        v.addWidget(self.header)
         if expanded:
             self._set_open(True)
-
-    @staticmethod
-    def _stat(caption: str, value: str, name: str = "ShipStat") -> QWidget:
-        box = QWidget()
-        v = QVBoxLayout(box)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
-        v.addWidget(_label(caption, "ShipCaption", align=Qt.AlignRight))
-        v.addWidget(_label(value, name, align=Qt.AlignRight))
-        box.setMinimumWidth(92)
-        return box
 
     def _set_open(self, on: bool) -> None:
         self._open = on
         self.header.setProperty("open", on)
-        self.header.style().unpolish(self.header)
-        self.header.style().polish(self.header)
+        kit.repolish(self.header)
         self.arrow.setText("▾" if on else "▸")
         if on and self._detail is None:
             self._detail = self._build_detail()
@@ -156,90 +187,86 @@ class ShipCard(QFrame):
     # -- expanded body --------------------------------------------------------
     def _build_detail(self) -> QWidget:
         row = self.row
-        body = QWidget(objectName="ShipDetail")
+        body = QFrame(objectName="RowDetail")
         v = QVBoxLayout(body)
-        v.setContentsMargins(40, 4, 18, 14)
+        v.setContentsMargins(46, 4, 18, 14)
         v.setSpacing(8)
-
         if row.note:
-            note = _label(row.note, "InspectorNote")
-            note.setWordWrap(True)
-            v.addWidget(note)
+            v.addWidget(label(row.note, "WarnText", wrap=True))
 
-        v.addWidget(_label("COMPONENTS", "SectionLabel"))
+        cols = QHBoxLayout()
+        cols.setSpacing(28)
+        left = QVBoxLayout()
+        left.setSpacing(6)
+        left.addWidget(kit.caps("Salvageable components"))
         grid = QGridLayout()
-        grid.setHorizontalSpacing(16)
+        grid.setHorizontalSpacing(14)
         grid.setVerticalSpacing(3)
-        heads = ["Type", "Component", "Size", "Grade", "Class", "Qty", "Sell", "Dismantle", "Salvage"]
+        heads = ["", "Component", "Type", "Size", "Grade", "Qty", "Sell", "Dismantle"]
         right = {"Size", "Qty", "Sell", "Dismantle"}
         for col, text in enumerate(heads):
-            grid.addWidget(_label(text, "SalvageHead",
-                                  align=Qt.AlignRight if text in right else None), 0, col)
+            cap = kit.caps(text)
+            if text in right:
+                cap.setAlignment(Qt.AlignRight)
+            grid.addWidget(cap, 0, col)
         for r, c in enumerate(row.components, start=1):
-            mark, style, tip = _STATE[c.salvageable]
-            dim = "SalvageCell" if c.salvageable == "yes" else "SalvageDim"
-            hit = "SalvageMatch" if self.match is not None and self.match(c) else dim
+            mark, tone, tip = _STATE[c.salvageable]
+            dim = "RowValue" if c.salvageable == "yes" else "RowValueDim"
+            hit = "MatchText" if self.match is not None and self.match(c) else dim
             better = _better_option(c)
-            cells = [
-                _label(c.type, hit),
-                _label(c.name, hit),
-                _label(str(c.size or ""), dim, align=Qt.AlignRight),
-                _label(c.grade, dim),
-                _label(c.family, dim),
-                _label(f"×{c.qty}", dim, align=Qt.AlignRight),
-                _label(_money(c.sell), "SalvageBest" if better == "sell" else dim,
-                       tip="Selling pays more" if better == "sell" else "",
-                       align=Qt.AlignRight),
-                _label(_money(c.dismantle), "SalvageBest" if better == "dismantle" else dim,
-                       tip="\n".join(filter(None, [
-                           "Dismantling pays more" if better == "dismantle" else "",
-                           f"Dismantles into: {c.materials_text()}" if c.materials else "",
-                       ])),
-                       align=Qt.AlignRight),
-                _label(mark, style, tip=tip, align=Qt.AlignCenter),
-            ]
-            for col, cell in enumerate(cells):
-                grid.addWidget(cell, r, col)
-        grid.setColumnStretch(len(heads), 1)
-        v.addLayout(grid)
-        v.addWidget(_label("Amber price = the better of selling or dismantling that part.",
-                           "InspectorHint"))
+            badge = Badge(mark, tone, tip=tip)
+            grid.addWidget(badge, r, 0)
+            grid.addWidget(label(c.name, hit), r, 1)
+            grid.addWidget(label(f"{c.type}" + (f" · {c.family}" if c.family else ""), dim), r, 2)
+            grid.addWidget(label(str(c.size or ""), dim, align=Qt.AlignRight), r, 3)
+            grid.addWidget(label(c.grade, dim), r, 4)
+            grid.addWidget(label(f"×{c.qty}", dim, align=Qt.AlignRight), r, 5)
+            grid.addWidget(label(_money(c.sell), "BestText" if better == "sell" else dim,
+                                 tip="Selling pays more" if better == "sell" else "", align=Qt.AlignRight), r, 6)
+            grid.addWidget(label(_money(c.dismantle), "BestText" if better == "dismantle" else dim,
+                                 tip="\n".join(filter(None, [
+                                     "Dismantling pays more" if better == "dismantle" else "",
+                                     f"Dismantles into: {c.materials_text()}" if c.materials else "",
+                                 ])), align=Qt.AlignRight), r, 7)
+        grid.setColumnStretch(1, 1)
+        left.addLayout(grid)
+        cols.addLayout(left, stretch=3)
 
-        v.addSpacing(4)
-        v.addWidget(_label("CARGO ABOARD", "SectionLabel"))
+        right_col = QVBoxLayout()
+        right_col.setSpacing(6)
+        right_col.addWidget(kit.caps("Cargo aboard"))
         if row.cargo:
             cg = QGridLayout()
-            cg.setHorizontalSpacing(16)
+            cg.setHorizontalSpacing(14)
             cg.setVerticalSpacing(3)
-            for col, text in enumerate(["Material", "SCU", "UEX avg sell / SCU", "Value"]):
-                cg.addWidget(_label(text, "SalvageHead",
-                                    align=None if col == 0 else Qt.AlignRight), 0, col)
+            for col, text in enumerate(["Material", "SCU", "Value"]):
+                cap = kit.caps(text)
+                if col:
+                    cap.setAlignment(Qt.AlignRight)
+                cg.addWidget(cap, 0, col)
             for r, c in enumerate(row.cargo, start=1):
-                cg.addWidget(_label(c.material), r, 0)
-                cg.addWidget(_label(str(c.scu), align=Qt.AlignRight), r, 1)
-                cg.addWidget(_label(_money(c.price), align=Qt.AlignRight), r, 2)
-                cg.addWidget(_label(_money(c.value), align=Qt.AlignRight), r, 3)
-            cg.setColumnStretch(4, 1)
-            v.addLayout(cg)
-            v.addWidget(_label("As observed by the spreadsheet's author — contents may vary.",
-                               "InspectorHint"))
+                cg.addWidget(label(c.material, "RowValue"), r, 0)
+                cg.addWidget(label(str(c.scu), "RowValue", align=Qt.AlignRight), r, 1)
+                cg.addWidget(label(_money(c.value), "RowValue", align=Qt.AlignRight,
+                                   tip=f"UEX average sell: {_money(c.price)} / SCU"), r, 2)
+            cg.setColumnStretch(0, 1)
+            right_col.addLayout(cg)
+            right_col.addWidget(label("As the spreadsheet's author found it; contents vary.", "MutedText", wrap=True))
         else:
-            v.addWidget(_label("None recorded." if row.in_sheet else "No data yet.", "InspectorHint"))
-
-        v.addSpacing(4)
-        v.addWidget(_label("HULL", "SectionLabel"))
-        v.addWidget(_label("RMC —    Construction Materials —    (yield database not built yet)",
-                           "InspectorHint"))
+            right_col.addWidget(label("None recorded." if row.in_sheet else "No data yet.", "MutedText"))
+        right_col.addStretch(1)
+        cols.addLayout(right_col, stretch=2)
+        v.addLayout(cols)
         return body
 
 
 # -- the view ------------------------------------------------------------------------
 
-class SalvageView(QWidget):
-    back_requested = Signal()
-
+class SalvageView(kit.ToolPage):
     def __init__(self, channel: str, parent=None):
-        super().__init__(parent)
+        super().__init__("salvage", "Salvage Claims",
+                         "Every ship a claim can spawn, with its fee, salvageable components, cargo and net value",
+                         web_url=WEB_URL, parent=parent)
         self.paths = channel_mod.resolve_channel_paths(settings.current().game_root, channel)
         self.game: dict | None = None
         self.sheet: salvage.Sheet | None = None
@@ -250,99 +277,63 @@ class SalvageView(QWidget):
         # files are read once per patch, the sheet and prices at most daily.
         self._game = datahub.GameDataWaiter("salvage", self)
         self._game.ready.connect(self._on_game_loaded)
-        self._game.progress.connect(self._show_message)
-        self._game.failed.connect(
-            lambda msg: self._show_message(f"Couldn't read Star Citizen's game data:\n\n{msg}"))
+        self._game.progress.connect(self.show_message)
+        self._game.failed.connect(lambda msg: self.show_empty(
+            "Couldn't read the game files", msg.splitlines()[0] if msg else "",
+            "Open Settings", lambda: self.window().show_tool("settings")))
         datahub.hub().updated.connect(self._on_hub_updated)
         datahub.hub().failed.connect(self._on_hub_failed)
-
         self._build_ui()
 
     def _build_ui(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 14, 20, 20)
-        outer.setSpacing(10)
-
-        bar_frame = QFrame(objectName="ToolBar")
-        bar = QHBoxLayout(bar_frame)
-        bar.setContentsMargins(10, 8, 10, 8)
-        bar.setSpacing(8)
-        back = QPushButton("←  Back", objectName="ToolButton")
-        back.setCursor(Qt.PointingHandCursor)
-        back.clicked.connect(self.back_requested.emit)
-        bar.addWidget(back)
-
-        bar.addSpacing(6)
-        bar.addWidget(QLabel("CLAIM DIFFICULTY", objectName="ConfigLabel"))
-        self.tier_combo = QComboBox(objectName="ConfigCombo")
-        self.tier_combo.setMinimumWidth(190)
-        self.tier_combo.setToolTip("Adagio salvage claim tier — each spawns ships of one size")
-        self.tier_combo.activated.connect(lambda _i: self._render())
-        bar.addWidget(self.tier_combo)
-
-        bar.addSpacing(6)
-        bar.addWidget(QLabel("SORT", objectName="ConfigLabel"))
-        self.sort_combo = QComboBox(objectName="ConfigCombo")
-        self.sort_combo.addItem("Net value", "net")
-        self.sort_combo.addItem("Name", "name")
-        self.sort_combo.activated.connect(lambda _i: self._render())
-        bar.addWidget(self.sort_combo)
-
-        bar.addStretch(1)
-        self.sources_label = QLabel("", objectName="InspectorHint")
-        # On narrow windows this line gives way first, not the controls.
-        self.sources_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.sources_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        bar.addWidget(self.sources_label)
-
-        self.sheet_btn = QPushButton("Refresh sheet", objectName="MiniButton")
-        self.sheet_btn.setToolTip("Download the community salvage spreadsheet again")
-        self.sheet_btn.setCursor(Qt.PointingHandCursor)
+        self.sheet_btn = kit.button("Refresh sheet", tip="Download the community salvage spreadsheet again")
         self.sheet_btn.clicked.connect(lambda: self._refresh("sheet"))
-        bar.addWidget(self.sheet_btn)
-
-        self.uex_btn = QPushButton("Refresh prices", objectName="MiniButton")
-        self.uex_btn.setToolTip("Fetch current average commodity prices from UEX")
-        self.uex_btn.setCursor(Qt.PointingHandCursor)
+        self.uex_btn = kit.button("Refresh prices", tip="Fetch current average commodity prices from UEX")
         self.uex_btn.clicked.connect(lambda: self._refresh("uex"))
-        bar.addWidget(self.uex_btn)
-        outer.addWidget(bar_frame)
+        self.add_action(self.sheet_btn)
+        self.add_action(self.uex_btn)
 
-        fbar_frame = QFrame(objectName="ToolBar")
-        fbar = QHBoxLayout(fbar_frame)
-        fbar.setContentsMargins(10, 6, 10, 6)
-        fbar.setSpacing(8)
-        fbar.addWidget(QLabel("FIND COMPONENT", objectName="ConfigLabel"))
-        self.family_combo = QComboBox(objectName="ConfigCombo")
-        self.type_combo = QComboBox(objectName="ConfigCombo")
-        self.size_combo = QComboBox(objectName="ConfigCombo")
-        for combo, tip in ((self.family_combo, "Component class"),
-                           (self.type_combo, "Component type"),
-                           (self.size_combo, "Component size")):
-            combo.setToolTip(tip)
-            combo.setMinimumWidth(130)
+        f = self.filters
+        self.tiers = kit.Segmented()
+        self.tiers.changed.connect(lambda _v: self._render())
+        f.add(self.tiers, "Difficulty")
+        f.add_spacing(6)
+        self.family_combo = kit.Dropdown(min_width=110, tip="Find ships with a salvageable component of this class")
+        self.type_combo = kit.Dropdown(min_width=110, tip="… of this type")
+        self.size_combo = kit.Dropdown(min_width=96, tip="… of this size")
+        for combo in (self.family_combo, self.type_combo, self.size_combo):
             combo.activated.connect(lambda _i: self._render())
-            fbar.addWidget(combo)
-        self.clear_btn = QPushButton("Clear", objectName="MiniButton")
-        self.clear_btn.setCursor(Qt.PointingHandCursor)
-        self.clear_btn.clicked.connect(self._clear_filters)
-        fbar.addWidget(self.clear_btn)
-        fbar.addSpacing(8)
-        self.result_label = QLabel("", objectName="InspectorHint")
-        fbar.addWidget(self.result_label)
-        fbar.addStretch(1)
-        outer.addWidget(fbar_frame)
+            f.add(combo)
+        self.sort_combo = kit.Dropdown([("Net value", "net"), ("Name", "name")], marks=False)
+        self.sort_combo.activated.connect(lambda _i: self._render())
+        f.add_sort(self.sort_combo)
 
-        self.scroll = QScrollArea(objectName="InspectorScroll")
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.scroll.setFrameShape(QFrame.NoFrame)
-        outer.addWidget(self.scroll, stretch=1)
-        self._show_message("Loading salvage data…")
+        self.result.clear_requested.connect(self._clear_filters)
+        self.set_help(HELP, "How net value is worked out")
+
+        self.scroll = kit.scroll_area()
+        page = QWidget()
+        self._page = QVBoxLayout(page)
+        self._page.setContentsMargins(0, 0, 6, 0)
+        self._page.setSpacing(12)
+        self.table = kit.panel()
+        tv = QVBoxLayout(self.table)
+        tv.setContentsMargins(0, 0, 0, 4)
+        tv.setSpacing(0)
+        tv.addWidget(_table_head())
+        self.rows_box = QVBoxLayout()
+        self.rows_box.setSpacing(0)
+        tv.addLayout(self.rows_box)
+        self._page.addWidget(self.table)
+        self.where = kit.Section("Where to sell")
+        self._page.addWidget(self.where)
+        self._page.addStretch(1)
+        self.scroll.setWidget(page)
+        self.set_content(self.scroll)
+        self.show_message("Loading salvage data…")
 
     # -- lifecycle ------------------------------------------------------------------
     def activate(self) -> None:
-        """Called each time the view is shown."""
         self.sheet = salvage.load_sheet()
         self.uex = salvage.load_uex()
         self._update_sources()
@@ -356,31 +347,24 @@ class SalvageView(QWidget):
         else:
             self._render()
 
-    def deactivate(self) -> None:
-        pass
-
     def _on_game_loaded(self, game: dict) -> None:
         self.game = game
-        self.tier_combo.clear()
-        for tier in game["tiers"]:
-            count = len(tier["ships"])
-            self.tier_combo.addItem(f"{tier['label']}  ·  {tier['size']} ({count})", tier["id"])
-        total = sum(len(t["ships"]) for t in game["tiers"])
-        self.tier_combo.addItem(f"All difficulties ({total})", ALL_TIERS)
-        idx = self.tier_combo.findData("Easy")
-        self.tier_combo.setCurrentIndex(max(idx, 0))
+        previous = self.tiers.value()
+        options = [(t["id"], t["label"]) for t in game["tiers"]] + [(ALL_TIERS, "All")]
+        ids = [k for k, _ in options]
+        self.tiers.set_options(options, previous if previous in ids else ("Easy" if "Easy" in ids else ids[0]))
 
         comps = [c for ship in game["ships"].values() for c in ship["components"]]
         families = sorted({c["family"] for c in comps if c["family"]})
         types = [t for t in salvage.TYPE_ORDER if any(c["type"] == t for c in comps)]
         sizes = sorted({c["size"] for c in comps if c["size"] is not None})
-        for combo, label, values, text in (
+        for combo, first, values, text in (
             (self.family_combo, "Any class", families, str),
             (self.type_combo, "Any type", types, str),
             (self.size_combo, "Any size", sizes, lambda s: f"Size {s}"),
         ):
             combo.clear()
-            combo.addItem(label, None)
+            combo.addItem(first, None)
             for value in values:
                 combo.addItem(text(value), value)
         self._render()
@@ -426,24 +410,25 @@ class SalvageView(QWidget):
         if name not in self._SOURCES.values():
             return
         self._update_sources()
-        title = "Salvage — spreadsheet" if name == "salvage_sheet" else "Salvage — UEX prices"
+        what = "spreadsheet" if name == "salvage_sheet" else "UEX prices"
         if self.isVisible():
-            QMessageBox.warning(self, title, message + "\n\nThe previous local copy is still used.")
+            self.notice.show_text(f"Couldn't update the {what}: {message.splitlines()[0] if message else 'error'}. "
+                                  "The previous copy is still used.", "warning")
 
     def _update_sources(self) -> None:
-        self.sources_label.setText(
-            f"Sheet: {_when(self.sheet.fetched if self.sheet else None)}    "
-            f"Prices: {_when(self.uex[0] if self.uex else None)}"
-        )
+        self.set_data_chip(
+            f"Sheet <b>{_when(self.sheet.fetched if self.sheet else None)}</b> · "
+            f"prices <b>{_when(self.uex[0] if self.uex else None)}</b>",
+            "When the community spreadsheet and the UEX prices were last downloaded")
         # Each source is downloaded at most once a day: the buttons say when
         # the next refresh is possible.
         h = datahub.hub()
-        for what, btn, label in (("sheet", self.sheet_btn, "Refresh sheet"), ("uex", self.uex_btn, "Refresh prices")):
+        for what, btn, text in (("sheet", self.sheet_btn, "Refresh sheet"), ("uex", self.uex_btn, "Refresh prices")):
             source = self._SOURCES[what]
             busy = h.pending(source)
             fresh = datahub.WEB_SOURCES[source].fresh()
             btn.setEnabled(not busy and not fresh)
-            btn.setText("Refreshing…" if busy else label)
+            btn.setText("Refreshing…" if busy else text)
             if fresh:
                 hours = max(1, round((datahub.WEB_SOURCES[source].max_age - h.web_age(source)) / 3600))
                 btn.setToolTip(f"Updated less than a day ago; it can be refreshed again in about {hours} h.")
@@ -451,16 +436,10 @@ class SalvageView(QWidget):
                 btn.setToolTip("Download it again (at most once a day)")
 
     # -- rendering ----------------------------------------------------------------------
-    def _show_message(self, text: str) -> None:
-        lbl = QLabel(text, objectName="InspectorHint")
-        lbl.setAlignment(Qt.AlignCenter)
-        lbl.setWordWrap(True)
-        self.scroll.setWidget(lbl)
-
     def _render(self) -> None:
         if self.game is None:
             return
-        tier_id = self.tier_combo.currentData()
+        tier_id = self.tiers.value()
         prices = self.uex[1] if self.uex else {}
         show_all = tier_id == ALL_TIERS
         tiers = [t for t in self.game["tiers"] if show_all or t["id"] == tier_id]
@@ -469,70 +448,67 @@ class SalvageView(QWidget):
             for row in salvage.build_rows(self.game, tier["id"], self.sheet, prices):
                 rows.append(row)
                 tier_of[row.stem] = tier["label"]
+        total = len(rows)
         match = self._component_filter()
-        self.clear_btn.setEnabled(match is not None)
         if match is not None:
-            total = len(rows)
             rows = [r for r in rows if any(match(c) for c in r.components)]
-            self.result_label.setText(f"{len(rows)} of {total} ships have a salvageable match")
-        else:
-            self.result_label.setText("")
         if self.sort_combo.currentData() == "name":
             rows.sort(key=lambda r: r.name)
         else:
             rows.sort(key=lambda r: (not r.in_sheet, -r.net, r.name))
+        best = max((r.net for r in rows if r.in_sheet), default=None)
+        top = max((r.components_value + r.cargo_value for r in rows if r.in_sheet), default=0)
+
+        # Result line: count, what the difficulty spawns, the component filters as chips.
+        count = f"{len(rows)} of {total} claim ships" if match is not None else f"{total} claim ships"
+        if not show_all and tiers:
+            count += f" · {tiers[0]['label']} claims spawn {tiers[0]['size'].lower()} ships"
+        self.result.set_count(count)
+        chips = []
+        for combo in (self.family_combo, self.type_combo, self.size_combo):
+            if combo.currentIndex() > 0:
+                chips.append((combo.currentText(), lambda _c=False, c=combo: (c.setCurrentIndex(0), self._render())))
+        self.result.set_chips(chips)
 
         keep = self.scroll.verticalScrollBar().value()
-        page = QWidget(objectName="Inspector")
-        v = QVBoxLayout(page)
-        v.setContentsMargins(0, 0, 8, 0)
-        v.setSpacing(6)
+        kit.clear_layout(self.rows_box)
         if not rows:
-            v.addWidget(_label("No ship at this difficulty has a matching salvageable component.",
-                               "InspectorHint", align=Qt.AlignCenter))
+            self.show_empty("No ship here has that part",
+                            "No ship at this difficulty has a matching salvageable component. Try another "
+                            "difficulty, or remove a filter.", "Clear filters", self._clear_filters)
+            return
         for row in rows:
-            card = ShipCard(row, row.stem in self.expanded, match,
-                            tier_of[row.stem] if show_all else "")
-            card.toggled.connect(self._on_card_toggled)
-            v.addWidget(card)
-        v.addSpacing(10)
-        v.addWidget(self._footer())
-        v.addStretch(1)
-        page.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-        self.scroll.setWidget(page)
+            w = ShipRowWidget(row, row.stem in self.expanded, best=row.in_sheet and row.net == best and row.net > 0, top=top,
+                              match=match, tier=tier_of[row.stem] if show_all else "")
+            w.toggled.connect(self._on_row_toggled)
+            self.rows_box.addWidget(w)
+        self._fill_where()
+        self.show_content()
         self.scroll.verticalScrollBar().setValue(keep)
 
-    def _on_card_toggled(self, stem: str, on: bool) -> None:
+    def _on_row_toggled(self, stem: str, on: bool) -> None:
         if on:
             self.expanded.add(stem)
         else:
             self.expanded.discard(stem)
 
-    def _footer(self) -> QWidget:
-        box = QFrame(objectName="SidePanel")
-        v = QVBoxLayout(box)
-        v.setContentsMargins(16, 12, 16, 12)
-        v.setSpacing(4)
+    def _fill_where(self) -> None:
+        sec = self.where
+        while sec.v.count() > 1:
+            item = sec.v.takeAt(1)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                kit.clear_layout(item.layout())
         if self.sheet and self.sheet.where_to_sell:
-            v.addWidget(_label("WHERE TO SELL", "SectionLabel"))
             for what, where in self.sheet.where_to_sell:
-                lbl = _label(f"<b>{what}</b> — {where}", "InspectorText")
-                lbl.setWordWrap(True)
-                v.addWidget(lbl)
-            v.addSpacing(6)
+                sec.add(label(f"<b>{what}</b> · {where}", "BodyText", wrap=True, rich=True))
         if self.sheet and self.sheet.unmatched:
-            warn = _label("Spreadsheet ship names not recognised (ignored): "
-                          + ", ".join(self.sheet.unmatched), "InspectorNote")
-            warn.setWordWrap(True)
-            v.addWidget(warn)
+            sec.add(label("Spreadsheet ship names not recognised (ignored): " + ", ".join(self.sheet.unmatched),
+                          "WarnText", wrap=True))
         src = QHBoxLayout()
-        src.setSpacing(6)
-        src.addWidget(_label("Components from the game files · salvage data from the community "
-                             "spreadsheet · commodity prices from UEX (average sell).",
-                             "InspectorHint"), stretch=1)
-        open_sheet = QPushButton("Open spreadsheet", objectName="MiniButton")
-        open_sheet.setCursor(Qt.PointingHandCursor)
-        open_sheet.clicked.connect(lambda: osutil.open_url(salvage.SHEET_URL))
-        src.addWidget(open_sheet)
-        v.addLayout(src)
-        return box
+        src.setSpacing(8)
+        src.addWidget(label("Components from the game files · salvage data from the community spreadsheet · "
+                            "commodity prices from UEX (average sell).", "MutedText", wrap=True), stretch=1)
+        src.addWidget(kit.button("Open spreadsheet ↗", "ghost", lambda: osutil.open_url(salvage.SHEET_URL)))
+        sec.v.addLayout(src)

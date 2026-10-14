@@ -17,6 +17,7 @@ datas = [
     (str(assets / "app_icon.png"), "assets"),
     (str(assets / "icons" / "*.png"), "assets/icons"),
     (str(assets / "icons" / "glyphs" / "*.png"), "assets/icons/glyphs"),
+    (str(assets / "fonts" / "*"), "assets/fonts"),        # Inter (OFL), loaded by app.theme
     (str(ROOT / "CHANGELOG.md"), "."),     # What's new (app.changelog)
     (str(assets / "ships.json"), "assets"),  # ship catalogue snapshot (app.ships)
 ]

@@ -1,39 +1,113 @@
-"""Colour palette and stylesheet, derived from the background wallpaper
+"""Colour palette, type and stylesheet, derived from the background wallpaper
 (Fankit SC_26, the Corsair): dark umber ground, slate sky, warm sand light
 and the gold stripes on the hull.
 
-Tokens are named by role, not hue, so the same palette can drive the
-launcher and the in-game overlay:
-  panel*   translucent "glass" behind every piece of text
-  accent*  gold — primary action, selection, key numbers
-  info*    sky steel — links, bars, confirmations, secondary highlights
-  text*    warm off-white → muted; muted stays readable on panels
+The colour roles are the website's (sc-toolbox.com, assets/styles/tokens.css),
+so a colour means the same thing in the launcher, the overlay and the site:
+  accent   amber: the brand and the ONE primary action of a view (START, Add
+           ships, Save), and "new" (an update, unseen changes). Nothing else.
+  info     steel: selection and focus (active filter, rail item, checked box,
+           switch on), links, neutral data bars.
+  success  you, a match, the best value: owned, completed, the best claim.
+  warning  needs attention but isn't broken (game update in progress).
+  danger   errors, failed missions, destructive actions.
+  text*    primary → secondary → muted; muted never carries a fact alone.
+  hue_*    categories (star systems, mission kinds), shown outlined so they
+           never read as a status.
+Hierarchy comes from size and weight, not colour.
 """
 
+from pathlib import Path
+
 PALETTE = {
-    "bg_panel": "rgba(20, 24, 28, 0.80)",
-    "bg_panel_strong": "rgba(16, 19, 23, 0.90)",
+    "bg_panel": "rgba(20, 24, 28, 0.82)",
+    "bg_panel_strong": "rgba(16, 19, 23, 0.92)",
     "bg_panel_solid": "#15181c",
-    "bg_hover": "rgba(255, 255, 255, 0.08)",
+    "bg_hover": "rgba(255, 255, 255, 0.07)",
     "bg_input": "rgba(255, 255, 255, 0.06)",
     "border": "rgba(218, 197, 164, 0.16)",
     "border_strong": "rgba(218, 197, 164, 0.30)",
+    "border_hover": "rgba(218, 197, 164, 0.45)",
     "accent": "#e3a33b",
     "accent_dim": "#8a6524",
     "accent_soft": "rgba(227, 163, 59, 0.18)",
     "info": "#8db4cf",
     "info_dim": "#4d6a80",
+    "info_soft": "rgba(141, 180, 207, 0.14)",
     "text_primary": "#f3ede2",
     "text_secondary": "#cfc6b6",
     "text_muted": "#a39a8a",
     "danger": "#e26a55",
-    "ok": "#9cc48c",
+    "danger_soft": "rgba(226, 106, 85, 0.14)",
+    "success": "#9cc48c",
+    "success_soft": "rgba(156, 196, 140, 0.16)",
+    "warning": "#e0954f",
+    "warning_soft": "rgba(224, 149, 79, 0.14)",
+    # categories (outlined badges)
+    "hue_stanton": "#79c3d6",
+    "hue_pyro": "#ef9a6a",
+    "hue_nyx": "#b9a3f0",
+    "hue_combat": "#ea8a9a",
+    "hue_hauling": "#8fd0a8",
+    "hue_industry": "#d9c27a",
+    "hue_search": "#a9b8f5",
+    "hue_racing": "#f0a3d6",
+    "hue_trade": "#c3d98a",
+    "hue_event": "#e6a0e6",
 }
+# Older names, still used by some views.
+PALETTE["ok"] = PALETTE["success"]
+PALETTE["selected_soft"] = PALETTE["info_soft"]
+
+RARITY = {"Common": "#9a958c", "Uncommon": "#7cc47f", "Rare": "#5fa8e8",
+          "Epic": "#b98ae8", "Legendary": "#e8935a"}
+SYSTEM_HUES = {"stanton": "hue_stanton", "pyro": "hue_pyro", "nyx": "hue_nyx"}
+
+# Type scale (px) and spacing steps: the website's.
+FS = {"2xs": 11, "xs": 12, "sm": 13, "md": 14, "lg": 15, "xl": 16, "2xl": 18, "3xl": 20, "4xl": 24}
+SPACE = (4, 8, 12, 16, 24, 32)
+FONT_FAMILY = "Inter"
+FONT_WEIGHTS = ("Regular", "Medium", "SemiBold", "Bold", "ExtraBold")
+
+
+def hue(name: str | None) -> str:
+    """A category's colour by star system or hue name; muted when unknown."""
+    key = SYSTEM_HUES.get((name or "").lower(), f"hue_{(name or '').lower()}")
+    return PALETTE.get(key, PALETTE["text_muted"])
+
+
+_fonts_installed = False
+
+
+def install_fonts() -> None:
+    """Loads the bundled Inter (SIL OFL) and makes it the app font, with
+    tabular figures so numbers line up in columns. Needs a QApplication."""
+    global _fonts_installed
+    if _fonts_installed:
+        return
+    from PySide6.QtGui import QFont, QFontDatabase
+    from PySide6.QtWidgets import QApplication
+
+    from app import config
+
+    app = QApplication.instance()
+    if app is None:
+        return
+    _fonts_installed = True
+    loaded = False
+    for weight in FONT_WEIGHTS:
+        path = Path(config.ASSETS_DIR) / "fonts" / f"Inter-{weight}.ttf"
+        loaded |= QFontDatabase.addApplicationFont(str(path)) >= 0
+    font = QFont(FONT_FAMILY if loaded else app.font().family())
+    font.setPixelSize(FS["sm"])
+    font.setFeature(QFont.Tag("tnum"), 1)
+    font.setHintingPreference(QFont.PreferNoHinting)
+    app.setFont(font)
+
 
 STYLESHEET = """
 QWidget {{
     color: {text_primary};
-    font-family: "Inter", "Segoe UI", sans-serif;
     font-size: 13px;
 }}
 
@@ -78,7 +152,7 @@ QWidget {{
 }}
 #TitleUpdate:hover {{
     background: {accent_soft};
-    border: 1px solid {accent};
+    border: 1px solid {border_hover};
 }}
 
 #UpdateProgress {{
@@ -110,7 +184,7 @@ QWidget {{
 }}
 #TitleAccount:hover {{
     background: {accent_soft};
-    border: 1px solid {accent};
+    border: 1px solid {border_hover};
 }}
 #TitleAccount[signedIn="true"] {{
     color: {text_primary};
@@ -222,7 +296,7 @@ QMenu::item {{
     border-radius: 5px;
 }}
 QMenu::item:selected {{
-    background: {accent_dim};
+    background: {info_soft};
     color: {text_primary};
 }}
 QMenu::separator {{
@@ -245,8 +319,8 @@ QMenu::separator {{
     padding: 8px 10px;
     color: {text_primary};
 }}
-#ConfigCombo:hover {{
-    border: 1px solid {accent};
+#ConfigCombo:hover, #ConfigCombo:focus {{
+    border: 1px solid {border_hover};
 }}
 #ConfigCombo::drop-down {{
     subcontrol-origin: padding;
@@ -263,7 +337,7 @@ QMenu::separator {{
 #ConfigCombo QAbstractItemView {{
     background: {bg_panel_solid};
     border: 1px solid {border};
-    selection-background-color: {accent_dim};
+    selection-background-color: {info_soft};
     color: {text_primary};
     outline: none;
 }}
@@ -284,7 +358,7 @@ QMenu::separator {{
     background: {bg_hover};
 }}
 #InlineComboList::item:selected {{
-    background: {accent_dim};
+    background: {info_soft};
     color: {text_primary};
 }}
 
@@ -294,7 +368,7 @@ QMenu::separator {{
     padding-top: 2px;
 }}
 #ConfigHelp[warn="true"] {{
-    color: {accent};
+    color: {warning};
 }}
 
 #SectionLabel {{
@@ -341,12 +415,12 @@ QFrame#Divider {{
 }}
 #ToolButton:hover {{
     background: {bg_hover};
-    border-left: 2px solid {accent};
+    border-left: 2px solid {info};
     color: {text_primary};
 }}
 #ToolButton:checked {{
-    background: {accent_soft};
-    border-left: 2px solid {accent};
+    background: {info_soft};
+    border-left: 2px solid {info};
     color: {text_primary};
 }}
 
@@ -366,8 +440,8 @@ QFrame#Divider {{
     border-radius: 10px;
 }}
 #ToolTile:hover {{
-    background: {accent_soft};
-    border: 1px solid {accent};
+    background: {bg_hover};
+    border: 1px solid {border_hover};
 }}
 #ToolTile:disabled {{
     background: {bg_panel};
@@ -416,29 +490,37 @@ QFrame#Divider {{
 #Segment {{
     background: {bg_input};
     border: 1px solid {border};
+    border-left: none;
     color: {text_secondary};
-    font-weight: 700;
-    letter-spacing: 1px;
-    font-size: 11px;
-    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 6px 12px;
 }}
 #Segment[pos="first"] {{
-    border-top-left-radius: 6px;
-    border-bottom-left-radius: 6px;
+    border-left: 1px solid {border};
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
 }}
 #Segment[pos="last"] {{
-    border-top-right-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}}
+#Segment[pos="only"] {{
+    border-left: 1px solid {border};
+    border-radius: 8px;
 }}
 #Segment[compact="true"] {{
     padding: 3px 9px;
-    font-size: 10px;
-    letter-spacing: 0.5px;
+    font-size: 11px;
+}}
+#Segment:hover {{
+    background: {bg_hover};
+    color: {text_primary};
 }}
 #Segment:checked {{
-    background: {accent_soft};
+    background: {info_soft};
     color: {text_primary};
-    border: 1px solid {accent};
+    border: 1px solid {info_dim};
 }}
 
 #Inspector, #InspectorScroll, #InspectorScroll > QWidget > QWidget {{
@@ -463,13 +545,13 @@ QFrame#Divider {{
     border-radius: 10px;
 }}
 #ShipCard[acquired="pledge"] {{
-    border: 2px solid {accent_dim};
+    border: 2px solid {border};
 }}
 #ShipCard[acquired="ingame"] {{
     border: 2px solid {info_dim};
 }}
 #ShipCard[acquired="pledge"]:hover {{
-    border: 2px solid {accent};
+    border: 2px solid {border_hover};
 }}
 #ShipCard[acquired="ingame"]:hover {{
     border: 2px solid {info};
@@ -494,8 +576,8 @@ QFrame#Divider {{
     padding: 1px 6px;
 }}
 #ShipCard[acquired="pledge"] #AcquiredTag {{
-    color: {accent};
-    background: {accent_soft};
+    color: {text_secondary};
+    background: {bg_input};
 }}
 #ShipCard[acquired="ingame"] #AcquiredTag {{
     color: {info};
@@ -532,13 +614,13 @@ QFrame#Divider {{
     letter-spacing: 1px;
 }}
 #LoadoutCount, #LoadoutSize {{
-    color: {accent};
+    color: {text_primary};
     font-size: 12px;
     font-weight: 700;
 }}
 #AcquiredTag[acquired="pledge"] {{
-    color: {accent};
-    background: {accent_soft};
+    color: {text_secondary};
+    background: {bg_input};
 }}
 #AcquiredTag[acquired="ingame"] {{
     color: {info};
@@ -548,17 +630,17 @@ QFrame#Divider {{
 #StatsNotice {{
     color: {text_primary};
     font-size: 12px;
-    background: {accent_soft};
-    border-left: 3px solid {accent};
+    background: {info_soft};
+    border: 1px solid {info_dim};
     border-radius: 4px;
     padding: 8px 10px;
 }}
 #InspectorNote {{
-    color: {accent};
+    color: {warning};
     font-size: 12px;
 }}
 #PromptLabel {{
-    color: {accent};
+    color: {info};
     font-size: 18px;
     font-weight: 600;
     padding: 6px 0;
@@ -582,8 +664,8 @@ QFrame#Divider {{
     color: {text_primary};
 }}
 #MiniButton:checked {{
-    background: {accent_soft};
-    border: 1px solid {accent};
+    background: {info_soft};
+    border: 1px solid {info_dim};
     color: {text_primary};
 }}
 #MiniDanger:hover {{
@@ -612,7 +694,7 @@ QFrame#Divider {{
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }}
 #ActionList::item:selected, #ActionList::item:hover {{
-    background: {accent_dim};
+    background: {info_soft};
 }}
 
 #ShipCard {{
@@ -627,7 +709,7 @@ QFrame#Divider {{
 }}
 #ShipHeader:hover {{
     background: {bg_input};
-    border-left: 2px solid {accent};
+    border-left: 2px solid {info};
 }}
 #ShipHeader[open="true"] {{
     border-left: 2px solid {info};
@@ -660,7 +742,7 @@ QFrame#Divider {{
     font-size: 13px;
 }}
 #ShipNet {{
-    color: {accent};
+    color: {text_primary};
     font-size: 14px;
     font-weight: 700;
 }}
@@ -679,7 +761,7 @@ QFrame#Divider {{
     font-size: 12px;
 }}
 #SalvageBest {{
-    color: {accent};
+    color: {success};
     font-size: 12px;
     font-weight: 700;
 }}
@@ -707,7 +789,7 @@ QFrame#Divider {{
     font-weight: 700;
 }}
 #SalvageMaybe {{
-    color: {accent};
+    color: {warning};
     font-weight: 700;
 }}
 #SalvageNo {{
@@ -723,10 +805,8 @@ QFrame#Divider {{
 }}
 #CigNotice {{
     color: {text_secondary};
-    font-size: 9px;
-    background: {bg_panel};
-    border-radius: 6px;
-    padding: 4px 8px;
+    font-size: 10px;
+    background: transparent;
 }}
 #ConfirmPanel {{
     background: rgba(224, 90, 79, 0.10);
@@ -782,7 +862,7 @@ QFrame#Divider {{
     font-weight: 600;
 }}
 #MiningQuality {{
-    color: {accent};
+    color: {text_primary};
     font-size: 12px;
     font-weight: 700;
 }}
@@ -843,7 +923,7 @@ QMenu::item {{
     border-radius: 4px;
 }}
 QMenu::item:selected {{
-    background: {accent_soft};
+    background: {info_soft};
 }}
 QMenu::separator {{
     height: 1px;
@@ -863,7 +943,7 @@ QMessageBox QPushButton, QInputDialog QPushButton, QDialogButtonBox QPushButton 
     min-width: 72px;
 }}
 QMessageBox QPushButton:hover, QInputDialog QPushButton:hover, QDialogButtonBox QPushButton:hover {{
-    border: 1px solid {accent};
+    border: 1px solid {border_hover};
 }}
 QMessageBox QPushButton:default, QInputDialog QPushButton:default, QDialogButtonBox QPushButton:default {{
     border: 1px solid {info};
@@ -893,7 +973,7 @@ QInputDialog QLineEdit {{
 
 /* -- My Stats ------------------------------------------------------------ */
 #StatValue {{
-    color: {accent};
+    color: {text_primary};
     font-size: 20px;
     font-weight: 700;
 }}
@@ -935,8 +1015,8 @@ QInputDialog QLineEdit {{
     color: {text_primary};
 }}
 #GlyphFilter:checked {{
-    background: {accent_soft};
-    border: 1px solid {accent};
+    background: {info_soft};
+    border: 1px solid {info_dim};
     color: {text_primary};
 }}
 
@@ -954,8 +1034,8 @@ QInputDialog QLineEdit {{
     border: 1px solid {ok};
 }}
 #LiveCard[state="tracked"] {{
-    background: rgba(227, 163, 59, 0.10);
-    border: 1px solid {accent_dim};
+    background: {info_soft};
+    border: 1px solid {info_dim};
 }}
 #LiveCard[state="failed"] {{
     background: rgba(226, 106, 85, 0.10);
@@ -1003,7 +1083,7 @@ QInputDialog QLineEdit {{
     font-size: 12px;
 }}
 #LiveValue {{
-    color: {accent};
+    color: {text_primary};
     font-size: 16px;
     font-weight: 700;
 }}
@@ -1062,8 +1142,8 @@ QInputDialog QLineEdit {{
     color: {text_primary};
 }}
 #OverlayTool:checked {{
-    background: {accent_soft};
-    border: 1px solid {accent};
+    background: {info_soft};
+    border: 1px solid {info_dim};
     color: {text_primary};
 }}
 #OverlayIcon {{
@@ -1101,12 +1181,434 @@ QInputDialog QLineEdit {{
     width: 10px;
     margin: -3px 0;
 }}
+
+/* == kit (app.ui.kit) =================================================== */
+#ToolPage, #KitScroll, #KitScroll > QWidget > QWidget, #ResultLine {{
+    background: transparent;
+}}
+#Panel, #FilterBar {{
+    background: {bg_panel};
+    border: 1px solid {border};
+    border-radius: 12px;
+}}
+#FilterBar {{
+    background: {bg_panel_strong};
+}}
+#PanelRow {{
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(218, 197, 164, 0.08);
+}}
+#PanelRow:hover {{
+    background: {bg_hover};
+}}
+#PanelRow[open="true"] {{
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: none;
+}}
+#RowDetail {{
+    background: rgba(255, 255, 255, 0.03);
+    border: none;
+    border-bottom: 1px solid rgba(218, 197, 164, 0.08);
+}}
+#TableHead {{
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid {border};
+}}
+#PageTitle {{
+    color: {text_primary};
+    font-size: 20px;
+    font-weight: 700;
+}}
+#PageSubtitle {{
+    color: {text_secondary};
+    font-size: 12px;
+}}
+#DataChip {{
+    color: {text_muted};
+    font-size: 11px;
+    border: 1px solid {border};
+    border-radius: 10px;
+    padding: 3px 10px;
+}}
+#CapsLabel {{
+    color: {text_muted};
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+}}
+#BodyText {{
+    color: {text_secondary};
+    font-size: 13px;
+}}
+#MutedText {{
+    color: {text_muted};
+    font-size: 12px;
+}}
+#StrongText {{
+    color: {text_primary};
+    font-size: 13px;
+    font-weight: 600;
+}}
+#RowName {{
+    color: {text_primary};
+    font-size: 14px;
+    font-weight: 600;
+}}
+#RowValue {{
+    color: {text_secondary};
+    font-size: 13px;
+}}
+#RowValueDim {{
+    color: {text_muted};
+    font-size: 13px;
+}}
+#RowKey {{
+    color: {text_primary};
+    font-size: 15px;
+    font-weight: 800;
+}}
+#RowKey[tone="success"] {{
+    color: {success};
+}}
+#MatchText {{
+    color: {info};
+    font-size: 12px;
+}}
+#WarnText {{
+    color: {warning};
+    font-size: 12px;
+}}
+#BestText {{
+    color: {success};
+    font-size: 13px;
+    font-weight: 600;
+}}
+#CardTitle {{
+    color: {text_primary};
+    font-size: 15px;
+    font-weight: 700;
+}}
+#ChanceText {{
+    color: {success};
+    font-size: 12px;
+}}
+#RockPct, #RockName {{
+    color: {text_secondary};
+    font-size: 12px;
+}}
+#RockPctHit, #RockNameHit {{
+    color: {text_primary};
+    font-size: 12px;
+    font-weight: 700;
+}}
+#RockPctDim, #RockNameDim {{
+    color: {text_muted};
+    font-size: 12px;
+}}
+#Signature {{
+    color: {text_secondary};
+    font-size: 11px;
+}}
+#SignatureDim {{
+    color: {text_muted};
+    font-size: 11px;
+}}
+#PickRow {{
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    min-height: 26px;
+}}
+#PickRow:hover {{
+    background: {bg_hover};
+}}
+#PickRow:checked {{
+    background: {info_soft};
+}}
+#PickBox {{
+    border: 1px solid {border_strong};
+    border-radius: 3px;
+    background: transparent;
+}}
+#PickBox[on="true"] {{
+    background: {info};
+    border: 1px solid {info};
+}}
+#PickName {{
+    color: {text_secondary};
+    font-size: 12px;
+    background: transparent;
+}}
+#PickName[on="true"] {{
+    color: {text_primary};
+    font-weight: 600;
+}}
+#PickCount {{
+    color: {text_muted};
+    font-size: 11px;
+    background: transparent;
+}}
+#ResultCount {{
+    color: {text_secondary};
+    font-size: 12px;
+}}
+#FilterChip {{
+    background: {info_soft};
+    border: 1px solid {info_dim};
+    border-radius: 10px;
+    color: {text_primary};
+    font-size: 11px;
+    padding: 2px 9px;
+}}
+#FilterChip:hover {{
+    border: 1px solid {info};
+}}
+#KitButton {{
+    background: {bg_input};
+    border: 1px solid {border};
+    border-radius: 8px;
+    color: {text_secondary};
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+}}
+#KitButton:hover {{
+    background: {bg_hover};
+    border: 1px solid {border_hover};
+    color: {text_primary};
+}}
+#KitButton:checked {{
+    background: {info_soft};
+    border: 1px solid {info_dim};
+    color: {text_primary};
+}}
+#KitButton:disabled {{
+    color: {text_muted};
+    background: transparent;
+}}
+#KitButton[kind="primary"] {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {accent}, stop:1 #b07c2a);
+    border: 1px solid {accent};
+    color: #1b1712;
+    font-weight: 700;
+}}
+#KitButton[kind="primary"]:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #efb453, stop:1 {accent});
+    border: 1px solid #f6cf8a;
+}}
+#KitButton[kind="primary"]:disabled {{
+    background: {bg_input};
+    border: 1px solid {border};
+    color: {text_muted};
+}}
+#KitButton[kind="ghost"], #HelpToggle {{
+    background: transparent;
+    border: 1px solid transparent;
+    color: {info};
+    padding: 3px 6px;
+}}
+#KitButton[kind="ghost"]:hover, #HelpToggle:hover {{
+    color: {text_primary};
+    background: transparent;
+    border: 1px solid transparent;
+    text-decoration: underline;
+}}
+#HelpToggle {{
+    color: {text_muted};
+    font-size: 12px;
+    font-weight: 500;
+}}
+#HelpToggle:checked {{
+    color: {text_primary};
+    background: transparent;
+    border: 1px solid transparent;
+}}
+#ConfigCombo[set="true"] {{
+    border: 1px solid {info_dim};
+    color: {text_primary};
+}}
+#SearchField {{
+    color: {text_primary};
+}}
+#SearchField:focus, #ConfigCombo:focus {{
+    border: 1px solid {info};
+}}
+#Badge {{
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 8px;
+    color: {text_secondary};
+    background: {bg_input};
+}}
+#Badge[variant="info"] {{
+    color: {info};
+    background: {info_soft};
+}}
+#Badge[variant="success"] {{
+    color: {success};
+    background: {success_soft};
+}}
+#Badge[variant="warning"] {{
+    color: {warning};
+    background: {warning_soft};
+}}
+#Badge[variant="danger"] {{
+    color: {danger};
+    background: {danger_soft};
+}}
+#Badge[variant="accent"] {{
+    color: {accent};
+    background: {accent_soft};
+}}
+#Badge[variant="hue"] {{
+    background: transparent;
+}}
+#Rarity {{
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}}
+#EmptyState {{
+    background: {bg_panel};
+    border: 1px solid {border};
+    border-radius: 12px;
+}}
+#EmptyTitle {{
+    color: {text_primary};
+    font-size: 15px;
+    font-weight: 700;
+}}
+#EmptyText {{
+    color: {text_secondary};
+    font-size: 13px;
+}}
+#Notice, #HelpBox {{
+    background: {info_soft};
+    border: 1px solid {info_dim};
+    border-radius: 10px;
+}}
+#Notice[tone="warning"] {{
+    background: {warning_soft};
+    border: 1px solid rgba(224, 149, 79, 0.45);
+}}
+#Notice[tone="danger"] {{
+    background: {danger_soft};
+    border: 1px solid rgba(226, 106, 85, 0.45);
+}}
+#Notice[tone="success"] {{
+    background: {success_soft};
+    border: 1px solid rgba(156, 196, 140, 0.45);
+}}
+#NoticeText {{
+    color: {text_primary};
+    font-size: 12px;
+    background: transparent;
+}}
+#NoticeClose {{
+    background: transparent;
+    border: none;
+    color: {text_muted};
+    font-size: 12px;
+}}
+#NoticeClose:hover {{
+    color: {text_primary};
+}}
+#StatBig {{
+    color: {text_primary};
+    font-size: 24px;
+    font-weight: 800;
+}}
+#StatMid {{
+    color: {text_primary};
+    font-size: 18px;
+    font-weight: 800;
+}}
+#StatBig[tone="success"], #StatMid[tone="success"] {{
+    color: {success};
+}}
+#StatCaption {{
+    color: {text_muted};
+    font-size: 11px;
+}}
+#StatDelta {{
+    color: {success};
+    font-size: 11px;
+}}
+#StripCell {{
+    background: transparent;
+    border: none;
+    border-left: 1px solid {border};
+}}
+#StripCellFirst {{
+    background: transparent;
+    border: none;
+}}
+#RankName {{
+    color: {text_secondary};
+    font-size: 12px;
+}}
+#RankValue {{
+    color: {text_primary};
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 34px;
+}}
+
+/* the window: rail, footer */
+#ToolRail {{
+    background: {bg_panel};
+    border: 1px solid {border};
+    border-radius: 12px;
+}}
+#RailItem {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 10px;
+}}
+#RailItem:hover {{
+    background: {bg_hover};
+}}
+#RailItem:checked {{
+    background: {info_soft};
+    border: 1px solid {info_dim};
+}}
+#RailItem:disabled {{
+    background: transparent;
+}}
+#RailCaption {{
+    color: {text_secondary};
+    font-size: 10px;
+    font-weight: 600;
+    background: transparent;
+}}
+#RailItem:checked #RailCaption {{
+    color: {text_primary};
+}}
+#RailItem:disabled #RailCaption {{
+    color: {text_muted};
+}}
+#RailGame {{
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: {text_muted};
+}}
+#RailGame[tone="success"] {{
+    color: {success};
+}}
+#RailGame[tone="warning"] {{
+    color: {warning};
+}}
 """
 
 
 def build_stylesheet() -> str:
     from app import config
 
+    install_fonts()
     # Qt stylesheet urls want forward slashes, on Windows too.
     icons = {"chevron_down": (config.ICONS_DIR / "chevron_down.png").as_posix()}
     return STYLESHEET.format(**PALETTE, **icons)

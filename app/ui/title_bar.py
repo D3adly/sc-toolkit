@@ -19,13 +19,12 @@ def _shadow(widget: QWidget) -> QWidget:
 
 class TitleBar(QWidget):
     """Frameless-window title bar (transparent over the wallpaper): app name
-    and version + drag-to-move + account / settings / minimize / maximize /
-    close. The version opens What's new; an Update button appears next to it
+    and version + drag-to-move + account / minimize / maximize / close
+    (Settings is in the tool rail). The version opens What's new; an Update button appears next to it
     when a new version is out. The account button shows the online sign-in
     (hidden while no service is configured).
     """
 
-    settings_requested = Signal()
     whats_new_requested = Signal()
     account_requested = Signal()
 
@@ -60,13 +59,6 @@ class TitleBar(QWidget):
         self.account_btn.hide()
         layout.addWidget(_shadow(self.account_btn))
         layout.addSpacing(4)
-
-        self.settings_btn = QPushButton("⚙")
-        self.settings_btn.setObjectName("TitleBarButton")
-        self.settings_btn.setToolTip("Settings")
-        self.settings_btn.setFixedSize(28, 28)
-        self.settings_btn.clicked.connect(self.settings_requested.emit)
-        layout.addWidget(_shadow(self.settings_btn))
 
         self.minimize_btn = QPushButton("–")
         self.minimize_btn.setObjectName("TitleBarButton")

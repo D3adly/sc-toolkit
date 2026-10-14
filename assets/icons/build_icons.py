@@ -229,6 +229,32 @@ GLYPHS = {
 <path d="M82 98 A11 11 0 1 0 84 83" fill="none" stroke="url(#steel)" stroke-width="4" stroke-linecap="round"/>
 <path d="M78 78 L88 80 L82 89 Z" fill="url(#steel)"/>
 """,
+    # Play triangle in a launch ring (the launch screen, in the tool rail).
+    "launch": f"""
+<circle cx="64" cy="64" r="44" fill="none" stroke="url(#steel)" stroke-width="4" stroke-opacity="0.8"/>
+<circle cx="64" cy="64" r="34" fill="url(#goldDark)" fill-opacity="0.45"/>
+<path d="M52 40 L92 64 L52 88 Z" fill="url(#gold)" stroke="url(#gold)" stroke-width="5" stroke-linejoin="round"/>
+<path d="M52 64 L92 64 L52 88 Z" fill="url(#goldDark)" fill-opacity="0.55"/>
+""",
+    # Gear (Settings, in the tool rail).
+    "settings": f"""
+<g transform="translate(64 64)">
+  <g fill="url(#gold)">
+    <rect x="-8" y="-46" width="16" height="20" rx="3"/>
+    <rect x="-8" y="-46" width="16" height="20" rx="3" transform="rotate(45)"/>
+    <rect x="-8" y="-46" width="16" height="20" rx="3" transform="rotate(90)"/>
+    <rect x="-8" y="-46" width="16" height="20" rx="3" transform="rotate(135)"/>
+    <rect x="-8" y="-46" width="16" height="20" rx="3" transform="rotate(180)"/>
+    <rect x="-8" y="-46" width="16" height="20" rx="3" transform="rotate(225)"/>
+    <rect x="-8" y="-46" width="16" height="20" rx="3" transform="rotate(270)"/>
+    <rect x="-8" y="-46" width="16" height="20" rx="3" transform="rotate(315)"/>
+  </g>
+  <circle r="32" fill="url(#gold)"/>
+  <circle r="32" fill="url(#goldDark)" fill-opacity="0.35"/>
+  <circle r="14" fill="#14171b"/>
+  <circle r="10" fill="none" stroke="url(#steel)" stroke-width="3"/>
+</g>
+""",
 }
 
 
@@ -263,7 +289,8 @@ def main():
     from PySide6.QtGui import QGuiApplication
 
     _app = QGuiApplication(sys.argv)
-    for name in GLYPHS:
+    only = sys.argv[1:]       # names to render (default: all)
+    for name in [n for n in GLYPHS if not only or n in only]:
         big = render(name)
         if name == "app":
             big.resize((256, 256), Image.LANCZOS).save(ASSETS / "app_icon.png")

@@ -20,7 +20,7 @@ class Switch(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         on = self.isChecked()
-        track = QColor(PALETTE["accent"] if on else "#3a3f45")
+        track = QColor(PALETTE["info"] if on else "#3a3f45")
         if self.underMouse():
             track = track.lighter(115)
         p.setPen(Qt.NoPen)

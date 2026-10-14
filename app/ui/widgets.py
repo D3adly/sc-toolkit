@@ -1,7 +1,10 @@
 """Small widgets shared by several views."""
 
-from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QPainter
+import threading
+import urllib.request
+
+from PySide6.QtCore import QObject, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QAbstractButton, QLabel
 
 from app.theme import PALETTE
@@ -60,3 +63,56 @@ class Elided(QLabel):
         p.setFont(self.font())
         text = self.fontMetrics().elidedText(self.text(), Qt.ElideRight, self.width())
         p.drawText(self.rect(), int(self.alignment() | Qt.AlignVCenter), text)
+
+
+class AvatarLoader(QObject):
+    """Downloads an avatar picture off the UI thread."""
+    loaded = Signal(str, bytes)  # url, image data
+
+    def fetch(self, url: str) -> None:
+        from app import config
+
+        def work():
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    self.loaded.emit(url, resp.read(512 * 1024))
+            except OSError:
+                pass  # no avatar then; the initial stays
+        threading.Thread(target=work, daemon=True).start()
+
+
+def round_pixmap(data: bytes, size: int) -> QPixmap | None:
+    source = QPixmap()
+    if not source.loadFromData(data):
+        return None
+    source = source.scaled(size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    out = QPixmap(size, size)
+    out.fill(Qt.transparent)
+    painter = QPainter(out)
+    painter.setRenderHint(QPainter.Antialiasing)
+    clip = QPainterPath()
+    clip.addEllipse(QRectF(0, 0, size, size))
+    painter.setClipPath(clip)
+    painter.drawPixmap(0, 0, source)
+    painter.end()
+    return out
+
+
+def initial_pixmap(name: str, size: int) -> QPixmap:
+    """A steel circle with the name's first letter (until the avatar loads)."""
+    out = QPixmap(size, size)
+    out.fill(Qt.transparent)
+    p = QPainter(out)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(PALETTE["info_dim"]))
+    p.drawEllipse(QRectF(0, 0, size, size))
+    font = QFont(p.font())
+    font.setPixelSize(int(size * 0.55))
+    font.setBold(True)
+    p.setFont(font)
+    p.setPen(QColor(PALETTE["text_primary"]))
+    p.drawText(QRectF(0, 0, size, size), Qt.AlignCenter, (name[:1] or "?").upper())
+    p.end()
+    return out

@@ -213,6 +213,21 @@ class _SectionCard(kit.Section):
             tiles.setColumnStretch(c, 1)
         self.v.addLayout(tiles)
 
+        if section["title"] == "Missions":
+            # How missions ended, as bars: green completed, muted abandoned, red failed.
+            ends = {name: value for name, value, _hint in section["tiles"]}
+            rows = [(label_, _number(ends.get(key, "0")) or 0, ends.get(key, "0"))
+                    for key, label_ in (("Completed", "Completed"), ("Abandoned", "Abandoned"), ("Failed", "Failed"))]
+            if any(n for _l, n, _v in rows):
+                block = QWidget()
+                col = QVBoxLayout(block)
+                col.setContentsMargins(0, 2, 0, 0)
+                col.setSpacing(6)
+                col.addWidget(kit.caps("How they ended"))
+                col.addWidget(kit.RankList(rows, colours=[PALETTE["success"], PALETTE["text_muted"],
+                                                          PALETTE["danger"]]))
+                self.add(block)
+
         lists = [lst for lst in section.get("lists", []) if lst["rows"]]
         if section.get("filter") and lists:
             self._add_filtered(lists)

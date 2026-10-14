@@ -189,8 +189,14 @@ QWidget {{
 #TitleAccount[signedIn="true"] {{
     color: {text_primary};
     border: 1px solid transparent;
+    border-radius: 13px;
     letter-spacing: 0px;
     font-size: 12px;
+    font-weight: 600;
+    padding: 2px 10px 2px 3px;
+}}
+#TitleAccount[offline="true"] {{
+    color: {text_muted};
 }}
 #TitleAccount[signedIn="true"]:hover {{
     background: {bg_hover};
@@ -972,15 +978,14 @@ QInputDialog QLineEdit {{
 }}
 
 #OverlaySwitchBox {{
-    background: {bg_panel};
+    background: transparent;
     border: 1px solid {border};
-    border-radius: 6px;
+    border-radius: 9px;
 }}
 #OverlaySwitchLabel {{
     color: {text_primary};
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
-    letter-spacing: 2px;
 }}
 #OverlaySwitchHint {{
     color: {text_muted};
@@ -1062,9 +1067,9 @@ QInputDialog QLineEdit {{
     border: 1px solid {info};
 }}
 #LiveReward {{
-    color: #d7ecc9;
+    color: {text_primary};
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 800;
 }}
 #LiveBlueprintOwned {{
     color: {ok};
@@ -1244,7 +1249,7 @@ QInputDialog QLineEdit {{
 }}
 #OverlayMiniTimer {{
     color: {text_primary};
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
 }}
 #OverlayMiniPlace {{

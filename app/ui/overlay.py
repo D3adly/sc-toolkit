@@ -417,22 +417,33 @@ class _MinimisedBar(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent, objectName="OverlayMini")
         row = QHBoxLayout(self)
-        row.setContentsMargins(4, 2, 2, 2)
-        row.setSpacing(10)
+        row.setContentsMargins(4, 4, 2, 4)
+        row.setSpacing(8)
         grip = QLabel("⠿", objectName="OverlayGrip")
-        row.addWidget(grip)
+        row.addWidget(grip, alignment=Qt.AlignTop)
+        icon = QLabel()
+        icon.setPixmap(QIcon(str(config.ICONS_DIR / "missions.png")).pixmap(TOOL_ICON))
+        row.addWidget(icon, alignment=Qt.AlignTop)
+        text = QVBoxLayout()
+        text.setSpacing(2)
+        # The objective wraps: the bar keeps its width and grows downwards.
         self.objective = QLabel("", objectName="OverlayMiniObjective")
-        row.addWidget(self.objective)
+        self.objective.setWordWrap(True)
+        text.addWidget(self.objective)
+        meta = QHBoxLayout()
+        meta.setSpacing(8)
         self.timer = QLabel("", objectName="OverlayMiniTimer")
-        row.addWidget(self.timer)
+        meta.addWidget(self.timer)
         self.place = QLabel("", objectName="OverlayMiniPlace")
-        row.addWidget(self.place)
-        row.addStretch(1)
+        self.place.setWordWrap(True)
+        meta.addWidget(self.place, stretch=1)
+        text.addLayout(meta)
+        row.addLayout(text, stretch=1)
         expand = QPushButton("⤢", objectName="OverlayIcon")
         expand.setCursor(Qt.PointingHandCursor)
         expand.setFixedSize(30, 30)
         expand.clicked.connect(self.expand.emit)
-        row.addWidget(expand)
+        row.addWidget(expand, alignment=Qt.AlignTop)
         self._clock = QTimer(self, interval=20_000, timeout=self.refresh)
         self._feed = None
 
@@ -463,7 +474,7 @@ class _MinimisedBar(QFrame):
         if tracked is not None:
             current = tracked.current_objective
             text = current.text if current is not None else overlay_live._mission_title(tracked, None)
-            self.objective.setText("▶  " + text[:70] + ("…" if len(text) > 70 else ""))
+            self.objective.setText("▶  " + text)
             self.timer.setText(overlay_live._ago(tracked.accepted))
         elif state == "disabled":
             self.objective.setText("The live log is off (LIVE LOG in SC-Toolbox)")
@@ -474,7 +485,8 @@ class _MinimisedBar(QFrame):
         else:
             self.objective.setText("No active mission")
             self.timer.setText("")
-        self.place.setText(("· " + pretty(tr.location)) if tr.location else "")
+        self.place.setText(pretty(tr.location) if tr.location else "")
+        self.timer.setVisible(bool(self.timer.text()))
         win = self.window()
         if hasattr(win, "minimized") and win.minimized:
             QTimer.singleShot(0, win._fit_bar)
@@ -728,8 +740,15 @@ class OverlayWindow(QWidget):
         self.layout().activate()
         self.adjustSize()
         hint = self.sizeHint()
-        width = hint.width() if self.minimized else max(hint.width(), BAR_MIN_WIDTH)
-        if not self.minimized:
+        if self.minimized:
+            # Same width as the bar; the text wraps and the height follows it.
+            width = max(self._bar_width, BAR_MIN_WIDTH)
+            m = self.frame.layout().contentsMargins()
+            inner = width - m.left() - m.right() - 2
+            bar = self.mini_bar.heightForWidth(inner) if self.mini_bar.hasHeightForWidth() else -1
+            hint.setHeight(max(bar, self.mini_bar.sizeHint().height()) + m.top() + m.bottom() + 2)
+        else:
+            width = max(hint.width(), BAR_MIN_WIDTH)
             self._bar_width = width
         self.setFixedSize(width, hint.height())
         self.setMinimumSize(0, 0)

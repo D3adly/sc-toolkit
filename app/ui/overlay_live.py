@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from app.theme import PALETTE
 from app import channel as channel_mod, contracts, datahub, gamelog, ipc, settings
 from app.stats import pretty
 from app.tracker import BLUEPRINT_WINDOW_SECONDS, Mission, SessionTracker
@@ -287,27 +288,30 @@ def _rewards(m: Mission, info: dict | None) -> list[QLabel]:
     chips = []
     rep = m.rep if m.rep is not None else (info or {}).get("rep")
     if rep:
-        chips.append(_chip(f"+{rep:,} rep", tip="Reputation with the contractor"))
+        chips.append(_label(f"+{rep:,} rep", "LiveReward", "Reputation with the contractor"))
     fixed = (info or {}).get("payout") or {}
     if fixed.get("currency") == "merits":
-        chips.append(_chip(f"+{fixed['amount']:,} merits", "good"))
+        chips.append(_label(f"+{fixed['amount']:,} merits", "LiveReward"))
     for item in (info or {}).get("items") or []:
-        chips.append(_chip(f"+{item['amount']} {item['name']}", "good", "Item reward"))
+        chips.append(_label(f"+{item['amount']} {item['name']}", "LiveReward", "Item reward"))
     return chips
 
 
 def _tags(info: dict | None) -> list[QLabel]:
     if not info:
         return []
+    from app.ui.kit import Badge
+    from app.ui.missions_view import STAR_SYSTEMS, mission_hue
+
     tags = []
     if info.get("type"):
-        tags.append(_chip(info["type"], "info", "Mission type"))
+        tags.append(Badge(info["type"], hue=mission_hue(info["type"])))
+    for system in [x for x in info.get("systems") or [] if x in STAR_SYSTEMS][:2]:
+        tags.append(Badge(system, hue=system.lower()))
     for kind in info.get("combat") or []:
-        tags.append(_chip(COMBAT_TAGS[kind], "info",
-                          "The mission spawns hostile ships" if kind == "ship"
-                          else "The mission spawns hostile people on foot"))
+        tags.append(Badge(COMBAT_TAGS[kind], hue="combat"))
     if info.get("illegal"):
-        tags.append(_chip("Illegal", "bad"))
+        tags.append(Badge("Illegal", "warning"))
     return tags
 
 
@@ -373,8 +377,15 @@ def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: b
             v.addWidget(_Elided(f"▶  {current.text}", "LiveObjective"))
         elif objectives:
             v.addWidget(_Elided(f"✓  {objectives[-1].text}", "LiveMuted"))
-    _row(v, _rewards(m, info), _Elided(_contractor(m, info), "LiveMuted", "Issued by (reputation goes to them)"))
-    _row(v, _tags(info))
+    # Type and system badges, who issued it, and the reward on the right.
+    meta = QHBoxLayout()
+    meta.setSpacing(5)
+    for tag in _tags(info)[:3]:
+        meta.addWidget(tag)
+    meta.addWidget(_Elided(_contractor(m, info), "LiveMuted", "Issued by (reputation goes to them)"), stretch=1)
+    for reward in _rewards(m, info):
+        meta.addWidget(reward)
+    v.addLayout(meta)
 
     # Or how it ended
     if m.active:
@@ -393,8 +404,8 @@ def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: b
     possible = _possible_blueprints(info, owned)
     if possible:
         have = sum(1 for _n, o in possible if o)
-        v.addWidget(_label(f"Blueprints {have}/{len(possible)} owned", "LiveMuted",
-                           "Blueprints this mission can give, and how many of them you already have"))
+        v.addWidget(_label(f"Blueprints <b style='color:{PALETTE['success']}'>{have}</b> of {len(possible)} "
+                           "you have", "LiveMuted"))
     elif m.blueprint_chance:
         v.addWidget(_label("Blueprint chance", "LiveMuted"))
 

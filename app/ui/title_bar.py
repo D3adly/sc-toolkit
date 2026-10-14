@@ -1,11 +1,13 @@
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem, QWidget,
 )
 
 from app import __version__
+from app.ui.widgets import AvatarLoader, initial_pixmap, round_pixmap
 
+AVATAR = 20
 
 def _shadow(widget: QWidget) -> QWidget:
     """Soft dark halo so text stays legible straight on the wallpaper."""
@@ -53,6 +55,10 @@ class TitleBar(QWidget):
         self.set_changelog_unseen(False)
         layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
+        self._avatars: dict[str, QPixmap] = {}
+        self._avatar_wanted: set[str] = set()
+        self._avatar_loader = AvatarLoader(self)
+        self._avatar_loader.loaded.connect(self._on_avatar)
         self.account_btn = QPushButton(objectName="TitleAccount")
         self.account_btn.setCursor(Qt.PointingHandCursor)
         self.account_btn.clicked.connect(self.account_requested.emit)
@@ -88,20 +94,45 @@ class TitleBar(QWidget):
         self.version_btn.style().polish(self.version_btn)
         self.version_btn.setToolTip("What's new in SC-Toolbox")
 
-    def set_account(self, status: str, name: str = "", offline: bool = False) -> None:
-        """Mirrors the online account: hidden when off, "Sign in" when signed out, else the name."""
+    def set_account(self, status: str, name: str = "", offline: bool = False, avatar_url: str | None = None) -> None:
+        """Mirrors the online account: hidden when off, "Sign in" when signed out, else your
+        avatar and name (with "offline" when the service can't be reached)."""
         self.account_btn.setVisible(status != "off")
         if status == "signed_in":
-            self.account_btn.setText(f"● {name}" + (" (offline)" if offline else ""))
+            self.account_btn.setText(f"{name}" + ("  · offline" if offline else ""))
+            self.account_btn.setIcon(QIcon(self._avatar(name, avatar_url)))
+            self.account_btn.setIconSize(QSize(AVATAR, AVATAR))
             self.account_btn.setToolTip("Signed in to SC-Toolbox online. Click for your account.")
         elif status == "signing_in":
             self.account_btn.setText("Signing in…")
             self.account_btn.setToolTip("Finish signing in in your browser. Click to see the sign-in in Settings.")
         else:
+            self.account_btn.setIcon(QIcon())
             self.account_btn.setText("Sign in")
             self.account_btn.setToolTip("Sign in to SC-Toolbox online with Discord (opens your browser)")
         self.account_btn.setProperty("signedIn", status == "signed_in")
+        self.account_btn.setProperty("offline", offline)
+        self.account_btn.style().unpolish(self.account_btn)
         self.account_btn.style().polish(self.account_btn)
+
+    def _avatar(self, name: str, url: str | None) -> QPixmap:
+        """The round avatar: the downloaded picture once it's here, else the initial."""
+        if url and url in self._avatars:
+            return self._avatars[url]
+        if url and url not in self._avatar_wanted:
+            self._avatar_wanted.add(url)
+            self._avatar_loader.fetch(url)
+        self._pending_avatar = (name, url)
+        return initial_pixmap(name, AVATAR * 2)
+
+    def _on_avatar(self, url: str, data: bytes) -> None:
+        pix = round_pixmap(data, AVATAR * 2)
+        if pix is None:
+            return
+        self._avatars[url] = pix
+        pending = getattr(self, "_pending_avatar", None)
+        if pending and pending[1] == url and self.account_btn.property("signedIn"):
+            self.account_btn.setIcon(QIcon(pix))
 
     def set_update(self, version: str | None) -> None:
         self.update_btn.setVisible(version is not None)

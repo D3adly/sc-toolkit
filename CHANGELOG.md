@@ -13,7 +13,8 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   up in columns.
 
 - **A tool rail on the left replaces Back.** Every tool, the launch screen and Settings are one click
-  away from anywhere; the window no longer resizes when you switch. Tool pages dim the wallpaper so
+  away from anywhere, and a light at its bottom shows the game's state (Ready, Starting, Launcher,
+  In game); signed in, the title bar shows your avatar and name; the window no longer resizes when you switch. Tool pages dim the wallpaper so
   tables are easier to read.
 
 - **Salvage Claims:** one table with a single header row; the best net value is green, and a bar
@@ -45,8 +46,8 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   while the overlay has the keyboard). A line under the bar always shows whether click-through is on
   and names whatever the pointer is on, so nothing needs a tooltip. Opacity now fades only the
   background, never the text. Opacity, Hide and Settings moved into a ⋯ menu inside the overlay.
-  New: **minimise** the overlay to one line with your current objective, how long you've been on it,
-  and where you are. Mission cards show the current objective first, larger; blueprints received this
+  New: **minimise** the overlay to one line with your current objective (it wraps rather than
+  widening the overlay), how long you've been on it, and where you are. Mission cards show the current objective first, larger; blueprints received this
   session show which mission they came from.
 
 - **My Ships, Maps, Joystick Bindings, Settings and What's new** have the same header and filter

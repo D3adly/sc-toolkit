@@ -10,11 +10,9 @@ import sys
 from dataclasses import fields, replace
 from pathlib import Path
 
-import threading
-import urllib.request
 
-from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QPainter, QPainterPath, QPixmap
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QFileDialog,
     QKeySequenceEdit,
@@ -29,11 +27,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app import __version__, channel as channel_mod, config, datahub, hotkeys, portal, settings
+from app import __version__, channel as channel_mod, datahub, hotkeys, portal, settings
 from app.account_controller import AccountState, controller as account_controller
 from app.settings import Settings
 from app.theme import PALETTE
 from app.ui import kit
+from app.ui.widgets import AvatarLoader, round_pixmap
 from app.ui.widgets import Switch
 
 WINDOWS = sys.platform.startswith("win")
@@ -136,37 +135,8 @@ class _HotkeyRow:
     set_status = _PathRow.set_status
 
 
-class _AvatarLoader(QObject):
-    """Downloads an avatar picture off the UI thread."""
-    loaded = Signal(str, bytes)  # url, image data
-
-    def fetch(self, url: str) -> None:
-        def work():
-            try:
-                req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    self.loaded.emit(url, resp.read(512 * 1024))
-            except OSError:
-                pass  # no avatar then; the initial stays
-        threading.Thread(target=work, daemon=True).start()
-
-
-def _round_pixmap(data: bytes, size: int) -> QPixmap | None:
-    source = QPixmap()
-    if not source.loadFromData(data):
-        return None
-    source = source.scaled(size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-    out = QPixmap(size, size)
-    out.fill(Qt.transparent)
-    painter = QPainter(out)
-    painter.setRenderHint(QPainter.Antialiasing)
-    clip = QPainterPath()
-    clip.addEllipse(QRectF(0, 0, size, size))
-    painter.setClipPath(clip)
-    painter.drawPixmap(0, 0, source)
-    painter.end()
-    return out
-
+_AvatarLoader = AvatarLoader
+_round_pixmap = round_pixmap
 
 class SettingsView(kit.ToolPage):
     saved = Signal()

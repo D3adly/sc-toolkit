@@ -336,7 +336,8 @@ class MainWindow(QMainWindow):
         from app.account_controller import controller as account_controller
         account = account_controller()
         account.changed.connect(lambda st: self.title_bar.set_account(
-            st.status, st.profile.display_name if st.profile else "", st.offline))
+            st.status, st.profile.display_name if st.profile else "", st.offline,
+            st.profile.avatar_url if st.profile else None))
         title_bar.account_requested.connect(self._on_account_clicked)
         if start_overlay:
             account.restore()
@@ -576,7 +577,7 @@ class MainWindow(QMainWindow):
     def _update_overlay_hint(self) -> None:
         on = settings.current().overlay_enabled
         show, click = hotkeys.label("toggle-overlay"), hotkeys.label("toggle-clickthrough")
-        self.overlay_hint.setText(f"{show} shows it, {click} click-through" if on else "off")
+        self.overlay_hint.setText(f"{show} show · {click} click-through" if on else "Off")
 
     def _set_gamelog_enabled(self, on: bool) -> None:
         if on != settings.current().gamelog_live_enabled:
@@ -592,7 +593,7 @@ class MainWindow(QMainWindow):
 
     def _update_gamelog_hint(self, state: str | None = None) -> None:
         state = state or self.gamelog.state
-        self.gamelog_hint.setText({"waiting": "waiting for game", "reading": "reading"}.get(state, "off"))
+        self.gamelog_hint.setText({"waiting": "Waiting for the game", "reading": "Reading Game.log"}.get(state, "Off"))
 
     def read_log_history(self, kinds, output: str = gamelog.OUTPUT_EVENTS, on_done=None,
                          on_failed=None, **options) -> gamelog.HistoryJob:
@@ -732,7 +733,7 @@ class MainWindow(QMainWindow):
         """Enables/labels everything that depends on the configured install."""
         s = settings.current()
         has_game = self.channel is not None
-        self.config_label.setText("LAUNCH WITH" + (f" ({self.channel})" if has_game else ""))
+        self.config_label.setText("LAUNCH WITH" + (f" · {self.channel}" if has_game else ""))
         self.start_btn.setEnabled(has_game and self._mode == "start")
         if not has_game:
             self.start_btn.setToolTip("Set your Star Citizen LIVE folder in Settings (gear icon)")
@@ -748,6 +749,7 @@ class MainWindow(QMainWindow):
             btn.setEnabled(has_game)
         for key in NEEDS_GAME:
             self.rail.set_enabled(key, has_game, "" if has_game else "Set your Star Citizen folder in Settings")
+        self._update_game_state()
         glass = s.gameglass
         self.gameglass_btn.setEnabled(glass is not None)
         self.gameglass_btn.setToolTip("" if glass else "Set the GameGlass path in Settings to enable")
@@ -805,6 +807,19 @@ class MainWindow(QMainWindow):
         self.status_label.setText("" if text == "Idle" else text)
         self.status_label.setVisible(text != "Idle" and bool(text))
 
+    def _update_game_state(self) -> None:
+        """The light at the bottom of the rail: is the game ready, starting, running?"""
+        if self.channel is None:
+            self.rail.set_game_state("SET UP", "warning")
+        elif self._mode == "ingame":
+            self.rail.set_game_state("IN GAME", "success")
+        elif self._mode == "close":
+            self.rail.set_game_state("LAUNCHER", "warning")
+        elif self.controller.busy:
+            self.rail.set_game_state("STARTING", "warning")
+        else:
+            self.rail.set_game_state("READY", "success")
+
     def _set_start_enabled(self, enabled: bool) -> None:
         self.start_btn.setEnabled(enabled and self.channel is not None)
 
@@ -820,6 +835,7 @@ class MainWindow(QMainWindow):
         self.start_btn.setProperty("mode", mode)
         self.start_btn.style().unpolish(self.start_btn)
         self.start_btn.style().polish(self.start_btn)
+        self._update_game_state()
 
     def _on_start_clicked(self) -> None:
         if self._mode == "close":
@@ -833,6 +849,7 @@ class MainWindow(QMainWindow):
         self.start_btn.setEnabled(False)
         self.busy_bar.setVisible(True)
         self.controller.start(self.channel, self._selected_backup())
+        self._update_game_state()
 
     def _on_session_started(self) -> None:
         self.busy_bar.setVisible(False)
@@ -900,7 +917,7 @@ class MainWindow(QMainWindow):
 
     def _build_overlay_switch(self) -> QWidget:
         box, self.overlay_hint, self.overlay_switch = self._switch_box(
-            "IN-GAME OVERLAY",
+            "Overlay",
             "Missions, session status, Maps, Mining and Salvage in a small window on top of the game "
             "(run Star Citizen in Borderless mode). Hotkeys and more in Settings.",
             settings.current().overlay_enabled, self._set_overlay_enabled)
@@ -909,7 +926,7 @@ class MainWindow(QMainWindow):
 
     def _build_gamelog_switch(self) -> QWidget:
         box, self.gamelog_hint, self.gamelog_switch = self._switch_box(
-            "LIVE LOG",
+            "Live log",
             "Follows Star Citizen's Game.log while you play (from the start of the "
             "current game session) so tools can react to contracts, payouts and more.",
             settings.current().gamelog_live_enabled, self._set_gamelog_enabled)

@@ -533,8 +533,9 @@ class RankList(QWidget):
     expand in place. rows: [(name, number, shown value)]."""
 
     def __init__(self, rows: list[tuple[str, float, str]], limit: int = 5, colour: str | None = None,
-                 bar_width: int = 110, parent=None):
+                 bar_width: int = 110, colours: list[str] | None = None, parent=None):
         super().__init__(parent)
+        self.colours = colours          # one per row (e.g. completed / abandoned / failed)
         self.rows = rows
         self.limit = limit
         self.colour = colour
@@ -565,7 +566,8 @@ class RankList(QWidget):
             lbl = label(name, "RankName", tip=name)
             lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             grid.addWidget(lbl, r, 0)
-            grid.addWidget(Bar(number / peak, self.colour, self.bar_width), r, 1, Qt.AlignVCenter)
+            colour = self.colours[r] if self.colours and r < len(self.colours) else self.colour
+            grid.addWidget(Bar(number / peak, colour, self.bar_width), r, 1, Qt.AlignVCenter)
             grid.addWidget(label(value, "RankValue", align=Qt.AlignRight | Qt.AlignVCenter), r, 2)
         grid.setColumnStretch(0, 1)
         self._v.insertWidget(0, self._grid_host)
@@ -792,7 +794,7 @@ class ToolRail(QFrame):
 
     def set_game_state(self, text: str, tone: str) -> None:
         """tone: success (running), warning (busy), "" (idle: shows nothing)."""
-        self.game.setText(f"●<br>{text}" if text else "")
+        self.game.setText(f"<span style='font-size:14px'>●</span><br>{text}" if text else "")
         self.game.setProperty("tone", tone)
         repolish(self.game)
 

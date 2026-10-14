@@ -837,7 +837,7 @@ QFrame#Divider {{
     background: transparent;
 }}
 #SettingsOk {{
-    color: {info};
+    color: {success};
     font-size: 11px;
 }}
 #SettingsBad {{
@@ -1473,6 +1473,19 @@ QInputDialog QLineEdit {{
 }}
 #ToggleChip:disabled {{
     color: {text_muted};
+}}
+#NavItem {{
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    color: {text_secondary};
+    font-size: 13px;
+    padding: 7px 10px;
+    text-align: left;
+}}
+#NavItem:hover {{
+    background: {bg_hover};
+    color: {text_primary};
 }}
 #ResultCount {{
     color: {text_secondary};

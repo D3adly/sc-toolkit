@@ -50,7 +50,7 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   session show which mission they came from.
 
 - **My Ships, Maps, Joystick Bindings, Settings and What's new** have the same header and filter
-  bar as the other tools. My Ships shows fleet totals (pledged, in game, in concept, cargo) and your
+  bar as the other tools. Settings has a short list of its sections on the left. My Ships shows fleet totals (pledged, in game, in concept, cargo) and your
   filters as removable chips. Joystick Bindings asks before leaving with unsaved changes.
 
 - **My Stats:** new *Last 30 days* and *Last 7 days* periods next to All time and Last session, four

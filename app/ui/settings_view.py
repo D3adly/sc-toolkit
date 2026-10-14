@@ -344,7 +344,24 @@ class SettingsView(kit.ToolPage):
         hub.status.connect(self._on_data_status)
         hub.refreshed.connect(self._on_data_refreshed)
         sections.addStretch(1)
-        outer.addWidget(scroll, stretch=1)
+        # A short list of the sections on the left; a click scrolls to one.
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        nav = kit.panel()
+        nav.setFixedWidth(150)
+        nv = QVBoxLayout(nav)
+        nv.setContentsMargins(6, 8, 6, 8)
+        nv.setSpacing(2)
+        for title, target in (("Game", panel), ("Overlay", overlay_panel), ("Online account", self._account_panel),
+                              ("Updates", updates_panel), ("Game data", data_panel)):
+            btn = QPushButton(title, objectName="NavItem")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda _c=False, t=target: scroll.verticalScrollBar().setValue(t.y()))
+            nv.addWidget(btn)
+        nv.addStretch(1)
+        row.addWidget(nav, alignment=Qt.AlignTop)
+        row.addWidget(scroll, stretch=1)
+        outer.addLayout(row, stretch=1)
 
         about = QLabel(
             f"SC-Toolbox v{__version__} · GPL-3.0 · "

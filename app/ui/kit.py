@@ -250,6 +250,7 @@ class Segmented(QWidget):
             btn = QPushButton(text, objectName="Segment")
             btn.setCheckable(True)
             btn.setCursor(Qt.PointingHandCursor)
+            btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
             btn.setProperty("compact", self.compact)
             if i == 0:
                 btn.setProperty("pos", "first")
@@ -282,6 +283,8 @@ class Dropdown(QComboBox):
                  marks: bool = True, parent=None):
         super().__init__(parent, objectName="ConfigCombo")
         self._marks = marks
+        self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.setMinimumContentsLength(8)
         for text, data in items:
             self.addItem(text, data)
         if min_width:
@@ -349,6 +352,17 @@ class FilterBar(QFrame):
         self.row.addWidget(caps("Sort"))
         self.row.addWidget(combo)
         return combo
+
+    def resizeEvent(self, event):
+        """Short on room (the minimum window width): the CAPS captions go first,
+        the controls stay whole."""
+        super().resizeEvent(event)
+        caps_labels = [w for w in self.findChildren(QLabel, "CapsLabel") if w.parent() is self]
+        for w in caps_labels:
+            w.setVisible(True)
+        if self.row.sizeHint().width() > self.width():
+            for w in caps_labels:
+                w.setVisible(False)
 
     def add_right(self, widget: QWidget) -> QWidget:
         if not self._has_stretch:
@@ -424,7 +438,11 @@ class EmptyState(QFrame):
         self.text = label(text, "EmptyText", align=Qt.AlignCenter, wrap=True)
         self.text.setMaximumWidth(520)
         v.addWidget(self.title)
-        v.addWidget(self.text, alignment=Qt.AlignHCenter)
+        line = QHBoxLayout()
+        line.addStretch(1)
+        line.addWidget(self.text, stretch=8)
+        line.addStretch(1)
+        v.addLayout(line)
         self.action = button(action or "", "secondary")
         self.action.setVisible(bool(action))
         self._slot = slot

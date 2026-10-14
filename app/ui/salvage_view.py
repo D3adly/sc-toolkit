@@ -299,8 +299,9 @@ class SalvageView(kit.ToolPage):
         self.add_action(self.uex_btn)
 
         f = self.filters
-        self.tiers = kit.Segmented()
-        self.tiers.changed.connect(lambda _v: self._render())
+        self.tiers = kit.Dropdown(marks=False, tip="Adagio salvage claim difficulty: each spawns ships of one size")
+        self.tiers.setMinimumContentsLength(16)
+        self.tiers.activated.connect(lambda _i: self._render())
         f.add(self.tiers, "Difficulty")
         f.add_spacing(6)
         self.family_combo = kit.Dropdown(min_width=110, tip="Find ships with a salvageable component of this class")
@@ -354,10 +355,13 @@ class SalvageView(kit.ToolPage):
 
     def _on_game_loaded(self, game: dict) -> None:
         self.game = game
-        previous = self.tiers.value()
-        options = [(t["id"], t["label"]) for t in game["tiers"]] + [(ALL_TIERS, "All")]
-        ids = [k for k, _ in options]
-        self.tiers.set_options(options, previous if previous in ids else ("Easy" if "Easy" in ids else ids[0]))
+        previous = self.tiers.currentData()
+        self.tiers.clear()
+        for t in game["tiers"]:
+            self.tiers.addItem(f"{t['label']} · {t['size']} ({len(t['ships'])})", t["id"])
+        self.tiers.addItem(f"All difficulties ({sum(len(t['ships']) for t in game['tiers'])})", ALL_TIERS)
+        index = self.tiers.findData(previous if previous is not None else "Easy")
+        self.tiers.setCurrentIndex(max(index, 0))
 
         comps = [c for ship in game["ships"].values() for c in ship["components"]]
         families = sorted({c["family"] for c in comps if c["family"]})
@@ -444,7 +448,7 @@ class SalvageView(kit.ToolPage):
     def _render(self) -> None:
         if self.game is None:
             return
-        tier_id = self.tiers.value()
+        tier_id = self.tiers.currentData()
         prices = self.uex[1] if self.uex else {}
         show_all = tier_id == ALL_TIERS
         tiers = [t for t in self.game["tiers"] if show_all or t["id"] == tier_id]

@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from app.channel import PERSISTENT_CHANNELS
 from app.theme import PALETTE
 from app import channel as channel_mod, contracts, datahub, gamelog, ipc, settings
 from app.stats import pretty
@@ -46,6 +47,7 @@ class LiveFeed(QObject):
         # Blueprints received before this session, per channel (LIVE, PTU…):
         # each channel is its own game universe.
         self.owned_by_channel: dict[str, set[str]] = {}
+        self.online_owned: set[str] = set()       # blueprint keys (app.owned), already matched
         self.enabled = settings.load().gamelog_live_enabled
         self._wanted = False                # a live tab has been opened
         self._lookups_started = False
@@ -96,6 +98,9 @@ class LiveFeed(QObject):
         def work():
             root = settings.current().game_root
             try:
+                from app import owned
+
+                self.online_owned = owned.online_owned()
                 history = gamelog.read_history(root, ["blueprint"])
                 for e in history:
                     self.owned_by_channel.setdefault(e.channel.upper(), set()).add(e.data.get("name", ""))
@@ -123,6 +128,22 @@ class LiveFeed(QObject):
         if self._lookups_started:
             self._lookups_started = False
             self._load_lookups()
+
+    def owned_for(self, channel: str | None) -> set[str]:
+        """Blueprints owned before this session: LIVE and HOTFIX share one
+        universe (and, with Sync online, the online collection counts)."""
+        ch = (channel or "LIVE").upper()
+        if ch in PERSISTENT_CHANNELS:
+            names = set().union(*(self.owned_by_channel.get(c, set()) for c in PERSISTENT_CHANNELS))
+            return names | self.online_owned
+        return self.owned_by_channel.get(ch, set())
+
+    def reload_owned(self) -> None:
+        """app.sync fetched the online collection (sent by the launcher)."""
+        from app import owned
+
+        self.online_owned = owned.online_owned()
+        self.changed.emit()
 
     def contract(self, m: Mission) -> dict | None:
         if self.contracts is None or not (m.contract_id or m.contract):
@@ -522,7 +543,7 @@ class MissionsPanel(_LivePanel):
             return
         f = feed()
         tr = f.tracker
-        before = f.owned_by_channel.get((tr.channel or "LIVE").upper(), set())
+        before = f.owned_for(tr.channel)
         owned = {blueprint_key(n) for n in before} | {blueprint_key(n) for _t, n, _m in tr.blueprints}
         v = self._new_page()
 

@@ -427,6 +427,8 @@ class HangarView(kit.ToolPage):
         self.result.clear_requested.connect(self._clear_filters)
         self.status_label = kit.label("", "MutedText")
         self.result.extra.addWidget(self.status_label)
+        self.sync_label = kit.label("", "MutedText")
+        self.result.extra.addWidget(self.sync_label)
 
         body_widget = QWidget()
         body = QHBoxLayout(body_widget)
@@ -590,11 +592,34 @@ class HangarView(kit.ToolPage):
         v.addLayout(row)
         side.addWidget(self.edit_panel)
 
+    # -- sync (app.sync) ----------------------------------------------------------
+    def attach_sync(self, sync) -> None:
+        self.sync = sync
+        sync.hangar_updated.connect(self._on_synced)
+        sync.status.connect(lambda text, _tone: self.sync_label.setText(
+            "" if text in ("Off", "Sign in to sync") else f"sc-toolbox.com: {text}"))
+
+    def _on_synced(self) -> None:
+        """Online changes arrived (or the signed-in account changed): show them,
+        unless an edit is open (it would be lost)."""
+        if self.side.isVisible() and self._editing:
+            return
+        self.entries = hangar.load()
+        if self._details is not None and not any(e.id == self._details for e in self.entries):
+            self._close_details()
+        elif self._details is None:
+            self._render()
+
     # -- lifecycle --------------------------------------------------------------
     def activate(self) -> None:
+        self.entries = hangar.load()
         self._render()
+        if getattr(self, "sync", None) is not None:
+            self.sync.hangar_opened()
 
     def deactivate(self) -> None:
+        if getattr(self, "sync", None) is not None:
+            self.sync.hangar_closed()
         self._close_side()
         if self._details is not None:
             self._close_details()

@@ -4,6 +4,24 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
 
 ## Unreleased
 
+- **New: Sync online** (signed in, under Live log and in Settings → Online account). It keeps
+  sc-toolbox.com up to date, and sc-toolbox.com is where everything is kept:
+  - **Stats and blueprints:** at start, every LIVE and HOTFIX game session the website doesn't have
+    yet (or has an older copy of) goes up, as a summary (counts, finished missions, blueprints
+    received; never log lines). While you play, the current session follows: within seconds of a
+    new blueprint, otherwise every few minutes and when the game closes. Sending a session again
+    replaces it, so nothing is ever counted twice, and nothing online is removed when this PC has
+    fewer logs (after a reinstall, or when the game deleted old ones).
+  - **Blueprints you have** (Mission Database, overlay) now also count your online collection: ones
+    received before a reinstall, and ones you marked owned on the website.
+  - **My Ships syncs both ways.** Edit it in the launcher or on the website; per ship the newer edit
+    wins. The first sync pairs ships both sides already have, one for one (two Cutters here and one
+    online make two, not three), and after a reinstall your hangar comes back from the website. Each
+    account has its own list; signed out, the launcher keeps a local one.
+  - Sync needs the live log: turning it on turns the live log on, turning the live log off stops
+    sync. It needs permissions older sign-ins don't have: *Sign in again* under the switch.
+  - HOTFIX counts as the same game universe as LIVE for blueprints (another build of LIVE).
+
 - **A new look, the same on every tool.** Every tool now has the same layout: a header with what it's
   for and where its data comes from, one filter bar, a result line with the count and your active
   filters (click ✕ on one to remove it, or *Clear filters*), then the results. Explanations that used

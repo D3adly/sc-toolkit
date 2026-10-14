@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.channel import PERSISTENT_CHANNELS
 from app import channel as channel_mod, contracts as contracts_mod, datahub, gamelog, settings
 from app.ui import kit
 from app.ui.kit import Badge, label
@@ -36,7 +37,7 @@ PAGE = 60                      # cards shown before "Show more"
 CARD_MIN_WIDTH = 300
 CARD_HEIGHT = 168
 DETAIL_WIDTH = 400
-BLUEPRINT_CHANNELS = ("LIVE", "")
+BLUEPRINT_CHANNELS = PERSISTENT_CHANNELS   # LIVE and HOTFIX share one universe
 STAR_SYSTEMS = ("Stanton", "Pyro", "Nyx")      # "systems" in the data also holds some places
 
 # Limited-time events, by the generator or sub-generator ("handler") their
@@ -141,6 +142,9 @@ class _OwnedLoader(QObject):
                         owned.add(contracts_mod.blueprint_key(e.data.get("name", "")))
             except Exception:
                 traceback.print_exc()
+            from app import owned as owned_mod
+
+            owned |= owned_mod.online_owned()       # Sync online: the website's collection too
             self.loaded.emit(owned)
         threading.Thread(target=work, daemon=True).start()
 

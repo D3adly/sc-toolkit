@@ -10,6 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CHANNELS = ["LIVE", "HOTFIX", "PTU", "EPTU", "TECH-PREVIEW"]
+# Channels that play in the same persistent universe: HOTFIX runs another build of LIVE with the
+# same characters, items and blueprints. Their stats are synced online and their blueprints count
+# as owned ("" = a log with no channel folder, treated as LIVE).
+PERSISTENT_CHANNELS = ("LIVE", "HOTFIX", "")
 
 
 def resolve_ci(base: Path, *components: str) -> Path:

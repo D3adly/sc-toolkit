@@ -24,6 +24,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from app.channel import PERSISTENT_CHANNELS
 from app import gamelog
 from app.tracker import REFINERY_REMINDER_SECONDS, Mission, SessionTracker
 
@@ -140,7 +141,7 @@ def guess_blueprint_type(name: str) -> str:
 
 # Blueprints belong to one game universe: those received on PTU, EPTU or
 # Tech Preview don't exist on LIVE (and test builds have other items).
-BLUEPRINT_CHANNELS = ("LIVE", "")
+BLUEPRINT_CHANNELS = PERSISTENT_CHANNELS   # LIVE and HOTFIX share one universe
 
 
 # -- computing -----------------------------------------------------------------
@@ -234,7 +235,7 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
         ],
     })
 
-    # Blueprints, grouped by the game's blueprint categories; LIVE only.
+    # Blueprints, grouped by the game's blueprint categories; LIVE and HOTFIX only.
     blueprints = [e for e in kind("blueprint") if e.channel.upper() in BLUEPRINT_CHANNELS]
     elsewhere = len(kind("blueprint")) - len(blueprints)
     live_sessions = [s for s in sessions if s.channel.upper() in BLUEPRINT_CHANNELS and s.started]
@@ -264,10 +265,10 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
     if single:
         since = "in this game session"
     elif live_sessions:
-        since = f"since {_date(min(s.started for s in live_sessions))} (your oldest LIVE log)"
+        since = f"since {_date(min(s.started for s in live_sessions))} (your oldest LIVE or HOTFIX log)"
     else:
-        since = "in your LIVE logs"
-    notice = (f"This is not your blueprint collection. It's a log of the blueprints you received on LIVE "
+        since = "in your LIVE and HOTFIX logs"
+    notice = (f"This is not your blueprint collection. It's a log of the blueprints you received on LIVE or HOTFIX "
               f"{since}, read from the game's \"Received Blueprint\" notifications. Blueprints from before "
               "that, from deleted logs or another PC aren't in it, and a game wipe can remove ones listed here.")
     if elsewhere:
@@ -277,7 +278,7 @@ def _scope(events: list[gamelog.Event], sessions: list[gamelog.LogSession], cont
         "title": "Blueprints",
         "notice": notice,
         "tiles": [
-            ("Received", _n(len(blueprints)), "Blueprint notifications in your LIVE logs"),
+            ("Received", _n(len(blueprints)), "Blueprint notifications in your LIVE and HOTFIX logs"),
             ("Different", _n(len(names)), ""),
             ("From missions", _n(sum(len(m.blueprints) for m in live_completed)),
              "Received within seconds of completing a mission"),

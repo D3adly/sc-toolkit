@@ -29,13 +29,12 @@ import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 
 from app import __version__, config
 
 SERVICE_URL = "https://sc-toolbox.com"
 CLIENT_ID = "sc-toolkit-launcher"
-SCOPES = "profile orgs events"
+SCOPES = "profile orgs events hangar stats blueprints"   # hangar/stats/blueprints: Sync online
 KEYRING_SERVICE = "SC-Toolkit online"  # unchanged by the SC-Toolbox rename: keeps stored sign-ins
 PROFILE_FILE = config.USER_CONFIG_DIR / "account.json"
 SIGN_IN_TIMEOUT = 300  # seconds to finish signing in in the browser
@@ -53,6 +52,10 @@ class SignedOut(PortalError):
 
 class Unreachable(PortalError):
     """The service couldn't be reached (offline, or it's down)."""
+
+
+class InsufficientScope(PortalError):
+    """The sign-in predates a permission this needs (e.g. Sync online): sign in again."""
 
 
 # -- the service ---------------------------------------------------------------
@@ -83,17 +86,21 @@ class Profile:
     avatar_url: str | None = None
     rsi_handle: str | None = None
     service: str = ""
+    account_id: str = ""        # the service's user id: keys this account's synced data here
 
     @classmethod
     def from_me(cls, me: dict, service: str) -> Profile:
         rsi = me.get("rsi") or {}
-        return cls(me.get("displayName") or "?", me.get("avatarUrl"), rsi.get("handle"), service)
+        return cls(me.get("displayName") or "?", me.get("avatarUrl"), rsi.get("handle"), service,
+                   me.get("id") or "")
 
 
 def load_profile() -> Profile | None:
     try:
         data = json.loads(PROFILE_FILE.read_text())
-        return Profile(**{k: data.get(k) for k in ("display_name", "avatar_url", "rsi_handle", "service")})
+        profile = Profile(**{k: data.get(k) for k in ("display_name", "avatar_url", "rsi_handle", "service")})
+        profile.account_id = data.get("account_id") or ""
+        return profile
     except (OSError, ValueError, TypeError):
         return None
 
@@ -155,7 +162,8 @@ def _keyring_message(exc: Exception) -> str:
 
 # -- HTTP ----------------------------------------------------------------------
 
-def _request(method: str, url: str, *, form: dict | None = None, token: str | None = None) -> tuple[int, dict]:
+def _request(method: str, url: str, *, form: dict | None = None, token: str | None = None,
+             body: dict | None = None) -> tuple[int, dict]:
     headers = {
         "Accept": "application/json",
         "User-Agent": f"{config.USER_AGENT}/{__version__}",
@@ -165,6 +173,9 @@ def _request(method: str, url: str, *, form: dict | None = None, token: str | No
     if form is not None:
         data = urllib.parse.urlencode(form).encode()
         headers["Content-Type"] = "application/x-www-form-urlencoded"
+    elif body is not None:
+        data = json.dumps(body).encode()
+        headers["Content-Type"] = "application/json"
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
@@ -349,16 +360,19 @@ class Session:
         store_refresh_token(self.service, self._refresh_token)
 
     # -- API -----------------------------------------------------------------------
-    def api(self, method: str, path: str) -> dict:
-        """Calls /api/v1{path}. A 401 means the token was revoked meanwhile: refresh once and retry."""
+    def api(self, method: str, path: str, body: dict | None = None) -> dict:
+        """Calls /api/v1{path} (with a JSON `body`). A 401 means the token was revoked meanwhile:
+        refresh once and retry. A 403 insufficient_scope: the sign-in lacks a permission."""
         for attempt in (0, 1):
-            status, data = _request(method, f"{self.service}/api/v1{path}", token=self.access_token())
+            status, data = _request(method, f"{self.service}/api/v1{path}", token=self.access_token(), body=body)
             if status == 401 and attempt == 0:
                 with self._lock:
                     self._access_token = None
                 continue
             if status == 401:
                 raise SignedOut("Your sign-in has expired. Sign in again.")
+            if status == 403 and data.get("code") == "insufficient_scope":
+                raise InsufficientScope("Sign in again to give SC-Toolbox the permission for this.")
             if status >= 400:
                 raise PortalError(data.get("detail") or data.get("error") or f"Request failed ({status}).")
             return data

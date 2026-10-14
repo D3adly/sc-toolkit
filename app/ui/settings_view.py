@@ -141,6 +141,13 @@ _round_pixmap = round_pixmap
 class SettingsView(kit.ToolPage):
     saved = Signal()
     open_overlay_requested = Signal()
+    sync_toggled = Signal(bool)
+
+    def set_sync(self, on: bool) -> None:
+        """Mirrors the launch screen's switch."""
+        self.sync_switch.blockSignals(True)
+        self.sync_switch.setChecked(on)
+        self.sync_switch.blockSignals(False)
 
     def __init__(self, parent=None):
         super().__init__("settings", "Settings", "Where your game is, the overlay's keys, your online account "
@@ -384,15 +391,33 @@ class SettingsView(kit.ToolPage):
             row.addWidget(btn, alignment=Qt.AlignVCenter)
         grid.addLayout(row, 1, 1)
 
+        self.sync_title = QLabel("Sync online", objectName="SlotTitle")
+        grid.addWidget(self.sync_title, 2, 0, Qt.AlignTop)
+        sync_row = QHBoxLayout()
+        sync_row.setSpacing(12)
+        self.sync_switch = Switch()
+        self.sync_switch.setChecked(settings.current().sync_enabled)
+        self.sync_switch.toggled.connect(self.sync_toggled.emit)
+        sync_row.addWidget(self.sync_switch, alignment=Qt.AlignTop)
+        self.sync_note = QLabel(
+            "Keeps sc-toolbox.com up to date: each game session's stats and the blueprints you receive "
+            "(LIVE and HOTFIX, read from your game logs; never the log lines themselves), and My Ships "
+            "both ways. Online keeps everything, also when this PC has less after a reinstall. Turns "
+            "on the live log, which it needs.", objectName="InspectorHint")
+        self.sync_note.setWordWrap(True)
+        sync_row.addWidget(self.sync_note, stretch=1)
+        self.sync_widgets = (self.sync_title, self.sync_switch, self.sync_note)
+        grid.addLayout(sync_row, 2, 1)
+
         note = QLabel(
             "Optional. Signing in links the launcher to your SC-Toolbox account (orgs, events, and "
-            "soon keeping your stats). You sign in with Discord in your browser; the launcher never "
-            "sees a password, and keeps the sign-in in your system's password store. Everything else "
-            "works without an account.",
+            "Sync online). You sign in with Discord in your browser; the launcher never sees a "
+            "password, and keeps the sign-in in your system's password store. Everything else works "
+            "without an account.",
             objectName="InspectorHint",
         )
         note.setWordWrap(True)
-        grid.addWidget(note, 2, 0, 1, 2)
+        grid.addWidget(note, 3, 0, 1, 2)
 
         self._avatar_url: str | None = None
         self._avatar_loader = _AvatarLoader(self)
@@ -424,6 +449,8 @@ class SettingsView(kit.ToolPage):
         self.sign_in_btn.setVisible(state.status == "signed_out")
         self.cancel_btn.setVisible(state.status == "signing_in")
         self.sign_out_btn.setVisible(signed_in)
+        for w in self.sync_widgets:
+            w.setVisible(signed_in)
 
         avatar_url = profile.avatar_url if signed_in and profile else None
         if avatar_url != self._avatar_url:

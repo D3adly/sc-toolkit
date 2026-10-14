@@ -237,6 +237,7 @@ class MainWindow(QMainWindow):
         self.resize(self.WIDTH, self.HEIGHT)
         self.setMinimumSize(1100, 720)
 
+        self.sync = None                     # app.sync.SyncController (live runs only)
         self.channel = channel_mod.pick_default_channel(settings.current().game_root)
         self._mode = "start"  # "start" | "close"
         self._combo_backups: list[BackupInfo] = []
@@ -343,7 +344,12 @@ class MainWindow(QMainWindow):
             st.status, st.profile.display_name if st.profile else "", st.offline,
             st.profile.avatar_url if st.profile else None))
         title_bar.account_requested.connect(self._on_account_clicked)
+        account.changed.connect(self._on_account_for_sync)
         if start_overlay:
+            from app.sync import SyncController
+
+            self.sync = SyncController(self.gamelog, self)
+            self.sync.status.connect(self._on_sync_status)
             account.restore()
 
     # -- game files and web data (app.datahub) -----------------------------------
@@ -586,6 +592,8 @@ class MainWindow(QMainWindow):
     def _set_gamelog_enabled(self, on: bool) -> None:
         if on != settings.current().gamelog_live_enabled:
             settings.apply(replace(settings.current(), gamelog_live_enabled=on))
+        if not on and self.sync_switch.isChecked():
+            self.sync_switch.setChecked(False)       # sync follows the live log
         if not self._start_overlay:
             return
         # The overlay's live tabs run their own reader behind the same switch.
@@ -718,6 +726,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(_section_label("IN GAME"))
         layout.addWidget(self._build_overlay_switch())
         layout.addWidget(self._build_gamelog_switch())
+        layout.addWidget(self._build_sync_switch())
 
         layout.addSpacing(10)
         self.status_label = QLabel("")
@@ -943,6 +952,45 @@ class MainWindow(QMainWindow):
             settings.current().overlay_enabled, self._set_overlay_enabled)
         self._update_overlay_hint()
         return box
+
+    def _build_sync_switch(self) -> QWidget:
+        """Sync online: shown while signed in. Needs the live log, so it turns it on
+        (and turning the live log off turns sync off)."""
+        box, self.sync_hint, self.sync_switch = self._switch_box(
+            "Sync online",
+            "Keeps sc-toolbox.com up to date: your stats and blueprints from your game logs, and My "
+            "Ships both ways. Online keeps everything, also when this PC has less.",
+            settings.current().sync_enabled, self._set_sync_enabled)
+        self.sync_box = box
+        self.sync_hint.setTextFormat(Qt.RichText)
+        self.sync_hint.linkActivated.connect(lambda _l: self._sign_in_again())
+        box.setVisible(False)
+        return box
+
+    def _set_sync_enabled(self, on: bool) -> None:
+        if on and not self.gamelog_switch.isChecked():
+            self.gamelog_switch.setChecked(True)     # sync reads the live log
+        if self.sync is not None:
+            self.sync.set_enabled(on)
+        elif on != settings.current().sync_enabled:
+            settings.apply(replace(settings.current(), sync_enabled=on))
+
+    def _on_sync_status(self, text: str, tone: str) -> None:
+        colour = {"success": PALETTE["success"], "warning": PALETTE["warning"], "danger": PALETTE["danger"],
+                  "info": PALETTE["info"]}.get(tone, PALETTE["text_muted"])
+        if text.startswith("Sign in again"):
+            # The sign-in predates the sync permissions (or expired): one click to renew it.
+            self.sync_hint.setText(f"<a href='signin' style='color:{colour}'>{text}</a>")
+        else:
+            self.sync_hint.setText(f"<span style='color:{colour}'>{text}</span>")
+
+    def _sign_in_again(self) -> None:
+        from app.account_controller import controller as account_controller
+
+        account_controller().sign_in()
+
+    def _on_account_for_sync(self, state) -> None:
+        self.sync_box.setVisible(state.status == "signed_in")
 
     def _build_gamelog_switch(self) -> QWidget:
         box, self.gamelog_hint, self.gamelog_switch = self._switch_box(
@@ -1191,6 +1239,8 @@ class MainWindow(QMainWindow):
             from app.ui.hangar_view import HangarView
 
             view = HangarView()
+            if self.sync is not None:
+                view.attach_sync(self.sync)
         elif key == "maps":
             from app.ui.maps_view import MapsView
 
@@ -1231,6 +1281,8 @@ class MainWindow(QMainWindow):
             self.settings_view.back_requested.connect(self._show_main)
             self.settings_view.saved.connect(self._on_settings_saved)
             self.settings_view.open_overlay_requested.connect(self._open_overlay)
+            self.settings_view.sync_toggled.connect(self.sync_switch.setChecked)
+            self.sync_switch.toggled.connect(self.settings_view.set_sync)
             self.stack.addWidget(self.settings_view)
         if self.stack.currentWidget() is not self.settings_view:
             self._switch_to("settings", self.settings_view)

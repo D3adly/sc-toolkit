@@ -1053,6 +1053,7 @@ def run(parent_pid: int | None, layer_shell: bool = False) -> int:
         "live-log-on": lambda: _live_feed().set_enabled(True),
         "live-log-off": lambda: _live_feed().set_enabled(False),
         "game-data-updated": lambda: (overlay.reload_game_data(), _live_feed().reload_lookups()),
+        "owned-updated": lambda: _live_feed().reload_owned(),
         "quit": app.quit,
     }
     server.command.connect(lambda cmd: actions.get(cmd, lambda: None)())

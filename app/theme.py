@@ -1701,7 +1701,7 @@ QInputDialog QLineEdit {{
 
 /* the window: rail, footer */
 #ToolRail {{
-    background: {bg_panel};
+    background: {bg_panel_strong};
     border: 1px solid {border};
     border-radius: 12px;
 }}
@@ -1740,6 +1740,9 @@ QInputDialog QLineEdit {{
 }}
 #RailGame[tone="success"] {{
     color: {success};
+}}
+#RailGame[tone="info"] {{
+    color: {info};
 }}
 #RailGame[tone="warning"] {{
     color: {warning};

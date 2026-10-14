@@ -13,8 +13,9 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   up in columns.
 
 - **A tool rail on the left replaces Back.** Every tool, the launch screen and Settings are one click
-  away from anywhere, and a light at its bottom shows the game's state (Ready, Starting, Launcher,
-  In game); signed in, the title bar shows your avatar and name; the window no longer resizes when you switch. Tool pages dim the wallpaper so
+  away from anywhere, and a light at its bottom shows the game's state: Ready, Launcher (the
+  RSI Launcher is open) or In game. It follows the running programs, also when you started the game
+  without SC-Toolbox or before it, and START says so instead of trying to launch a second copy; signed in, the title bar shows your avatar and name; the window no longer resizes when you switch. Tool pages dim the wallpaper so
   tables are easier to read.
 
 - **Salvage Claims:** one table with a single header row; the best net value is green, and a bar

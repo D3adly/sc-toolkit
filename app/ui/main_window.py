@@ -29,6 +29,7 @@ from app import (
 )
 from app.backup import BackupInfo
 from app import hotkeys
+from app import process
 from app.launch import LaunchController
 from app.overlay_host import OverlayHost
 from app.patchwatch import PatchWatcher
@@ -241,6 +242,7 @@ class MainWindow(QMainWindow):
         self._combo_backups: list[BackupInfo] = []
 
         self.controller = LaunchController(self)
+        self.game_watcher = process.GameWatcher(self)
         self.gamelog = gamelog.LiveReader(lambda: settings.current().game_root, self)
         self.controller.status_changed.connect(self._set_status)
         self.controller.session_started.connect(self._on_session_started)
@@ -330,6 +332,8 @@ class MainWindow(QMainWindow):
         if start_overlay and settings.current().gamelog_live_enabled:
             self.gamelog.start()
         self._setup_updates(live=start_overlay)
+        self.game_watcher.changed.connect(self._update_game_state)
+        self.game_watcher.start()
         self._setup_data(live=start_overlay)
         # The online account (optional): the title bar mirrors it; a sign-in kept in the keyring is
         # picked up at startup.
@@ -807,18 +811,34 @@ class MainWindow(QMainWindow):
         self.status_label.setText("" if text == "Idle" else text)
         self.status_label.setVisible(text != "Idle" and bool(text))
 
-    def _update_game_state(self) -> None:
-        """The light at the bottom of the rail: is the game ready, starting, running?"""
+    def _update_game_state(self, *_args) -> None:
+        """The light at the bottom of the rail, from the running processes
+        (app.process.GameWatcher): Ready, Launcher (the RSI Launcher runs) or
+        Game (Star Citizen runs), whoever started them."""
+        state = getattr(self, "game_watcher", None) and self.game_watcher.state
         if self.channel is None:
             self.rail.set_game_state("SET UP", "warning")
-        elif self._mode == "ingame":
-            self.rail.set_game_state("IN GAME", "success")
-        elif self._mode == "close":
-            self.rail.set_game_state("LAUNCHER", "warning")
+        elif state == process.GAME:
+            self.rail.set_game_state("IN GAME", "info")
+        elif state == process.LAUNCHER:
+            self.rail.set_game_state("LAUNCHER", "info")
         elif self.controller.busy:
-            self.rail.set_game_state("STARTING", "warning")
+            self.rail.set_game_state("STARTING", "info")
         else:
             self.rail.set_game_state("READY", "success")
+        self._sync_start_button(state)
+
+    def _sync_start_button(self, state: str | None) -> None:
+        """Game or RSI Launcher started outside SC-Toolbox (or before it):
+        START can't launch now, and says why."""
+        if self.controller.busy or self._mode != "start":
+            return
+        running = state in (process.GAME, process.LAUNCHER)
+        self.start_btn.setEnabled(not running and self.channel is not None)
+        self.start_btn.setText({process.GAME: "IN GAME", process.LAUNCHER: "LAUNCHER OPEN"}.get(state, "START"))
+        self.start_btn.setToolTip("Star Citizen is running" if state == process.GAME else
+                                  "The RSI Launcher is open: start the game from it, or close it to "
+                                  "launch with SC-Toolbox" if state == process.LAUNCHER else "")
 
     def _set_start_enabled(self, enabled: bool) -> None:
         self.start_btn.setEnabled(enabled and self.channel is not None)

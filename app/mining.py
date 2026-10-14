@@ -382,3 +382,57 @@ def build(game, progress) -> dict:
         "resources": {k: v for k, v in resources.items() if k in used},
         "quality": quality,
     }
+
+
+# -- where you are (from the live log) -------------------------------------------------
+
+_BODY_RE = re.compile(r"^(stanton|pyro|nyx)(\d+[a-z]?)?(?:_(l\d))?(?![a-z0-9])")
+_REST_STOP_RE = re.compile(r"^rr_(hur|cru|arc|mic|p\d)_(l\d|leo)")
+_REST_STOP_BODIES = {"hur": "stanton1", "cru": "stanton2", "arc": "stanton3", "mic": "stanton4"}
+_SYSTEM_RE = re.compile(r"(?:^|_)(stanton|pyro|nyx)(?:_|$)")
+
+
+def place_from_log(location: str) -> tuple[str | None, str | None]:
+    """A Game.log location ("Stanton1a_HurdynMining_HDMSBezdek", "RR_HUR_L1",
+    "RR_P3_LEO", "Nyx_Levski", "OOC_Stanton_4_Microtech") → (system id,
+    star-map body id as the mining data uses them: "stanton1a",
+    "stanton1_l1", "pyro3"), either None when it can't tell."""
+    s = (location or "").strip().lower()
+    if not s:
+        return None, None
+    m = _REST_STOP_RE.match(s)
+    if m:
+        planet = _REST_STOP_BODIES.get(m.group(1)) or f"pyro{m.group(1)[1:]}"
+        body = planet if m.group(2) == "leo" else f"{planet}_{m.group(2)}"
+        return re.match(r"[a-z]+", planet).group(0), body
+    m = re.match(r"^ooc_(stanton|pyro|nyx)_(\d+[a-z]?)", s)
+    if m:
+        return m.group(1), m.group(1) + m.group(2)
+    m = _BODY_RE.match(s)
+    if m:
+        body = None
+        if m.group(2):
+            body = m.group(1) + m.group(2) + (f"_{m.group(3)}" if m.group(3) else "")
+        return m.group(1), body
+    m = re.match(r"^rr_jp_(stanton|pyro|nyx)", s)
+    if m:
+        return m.group(1), None
+    m = _SYSTEM_RE.search(s)
+    return (m.group(1), None) if m else (None, None)
+
+
+def nearby(locations: list[dict], body: str | None) -> list[str]:
+    """Mining location ids around a body, nearest first: the body itself,
+    then what orbits its planet (its moons, Lagrange points), then the
+    planet."""
+    if not body:
+        return []
+    ids = [l["id"] for l in locations]
+    planet = re.match(r"(stanton|pyro|nyx)\d+", body)
+    out = [body] if body in ids else []
+    if planet:
+        p = planet.group(0)
+        out += [i for i in ids if i not in out and i != p and re.match(rf"{p}(?:[a-z]|_)", i)]
+        if p in ids and p not in out:
+            out.append(p)
+    return out

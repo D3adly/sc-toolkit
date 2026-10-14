@@ -66,7 +66,8 @@ class _ImageLoader(QObject):
 
 class ZoomView(QGraphicsView):
     """An image you can zoom (wheel, around the cursor) and pan (drag).
-    Double-click toggles between fit-to-window and 100 %."""
+    Double-click toggles between fit and 100 %. Fitting shows the whole page,
+    or (fit_mode "width") fills the width and starts at the top."""
 
     zoom_changed = Signal(float)
 
@@ -83,6 +84,7 @@ class ZoomView(QGraphicsView):
         self.setFrameShape(QFrame.NoFrame)
         self.setStyleSheet("background: transparent;")
         self._fitted = True
+        self.fit_mode = "page"
 
     def set_pixmap(self, pixmap: QPixmap) -> None:
         self._item.setPixmap(pixmap)
@@ -99,9 +101,19 @@ class ZoomView(QGraphicsView):
         if not self.has_image():
             return
         self.resetTransform()
-        self.fitInView(self.scene().sceneRect(), Qt.KeepAspectRatio)
+        rect = self.scene().sceneRect()
+        if self.fit_mode == "width" and rect.width() > 0:
+            factor = self.viewport().width() / rect.width()
+            self.scale(factor, factor)
+            self.verticalScrollBar().setValue(self.verticalScrollBar().minimum())
+        else:
+            self.fitInView(rect, Qt.KeepAspectRatio)
         self._fitted = True
         self.zoom_changed.emit(self.zoom())
+
+    def fit_to(self, mode: str) -> None:
+        self.fit_mode = mode
+        self.fit()
 
     def actual_size(self) -> None:
         self.set_zoom(1.0)

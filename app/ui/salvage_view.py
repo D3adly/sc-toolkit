@@ -137,13 +137,17 @@ class ShipRowWidget(QWidget):
         title.setSpacing(2)
         name = QHBoxLayout()
         name.setSpacing(8)
-        name.addWidget(label(row.name, "RowName"))
+        name_label = label(row.name, "RowName", wrap=compact)
+        name.addWidget(name_label, stretch=1 if compact else 0)
         if tier:
             name.addWidget(Badge(tier))
-        if flag:
+        if flag and not compact:
             name.addWidget(Badge(flag, "info"))
-        name.addStretch(1)
+        if not compact:
+            name.addStretch(1)
         title.addLayout(name)
+        if flag and compact:
+            title.addWidget(Badge(flag, "info"))
         if match is not None:
             hits = [f"{c.name} ×{c.qty}" for c in row.components if match(c)]
             hit = label("Has " + ", ".join(hits), "MatchText")

@@ -4,6 +4,28 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
 
 ## Unreleased
 
+- **Overlay: panels follow your game** (with LIVE LOG on). **Salvage** opens on your active
+  claim: its difficulty, with the claim's ship open and marked *Your claim*. **Mining** opens on
+  the system you're in, with where you are and the places around it first (*You're here*, *Near
+  you*). **Maps** suggests the guides for your missions and location (for example Tactical Strike
+  Groups at a TSG station). A line at the top of each says what it follows, with *Stop* to turn
+  it off for that panel (remembered); nothing switches while the pointer is over the panel, it
+  waits until it leaves. **Missions:** the possible blueprints you don't have yet stand out,
+  named on the card and listed first when you open it.
+- **Overlay: sizing and no cut-off text.** New **Settings → Overlay size** (90–150 %), apart
+  from the launcher's own size; *Automatic* makes it larger on 1440p (115 %) and 4K (150 %)
+  screens. Mission titles and objectives wrap instead of being cut off. **Session** fits its
+  height to what it shows and lines up its labels and values, with the times of blueprints and
+  recent moments on the right. **Maps** fills the panel's width (scroll down the guide; *Fit*
+  switches to the whole page), widens the panel for landscape guides, and **L** or ⤢ shows a
+  guide large, over most of the screen (Esc goes back).
+- **Overlay: placing it.** Drag it by its bar or status line (not only the ⠿ grip); it snaps
+  to the screen's edges. **⋯ → Move to** puts it in a corner or the middle of a side in one
+  click, **⋯ → Reset position** (also *Reset its position* in Settings) brings it back, e.g.
+  after changing monitors. A panel opens towards the free side of the screen, so a bar at the
+  bottom or on the right opens upwards or leftwards and never goes off-screen; the position is
+  kept per screen setup.
+
 - **Overlay: Mining and Salvage in the new look**, built from the same parts as the launcher's tools:
   - **Mining:** pick an ore and the places list straight away, best first, each with how many of
     its rocks carry the ore (with a bar to compare) and the best average quality there. A place

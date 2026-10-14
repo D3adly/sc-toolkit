@@ -21,12 +21,10 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.channel import PERSISTENT_CHANNELS
-from app.theme import PALETTE
 from app import channel as channel_mod, contracts, datahub, gamelog, ipc, settings
 from app.stats import pretty
 from app.tracker import BLUEPRINT_WINDOW_SECONDS, Mission, SessionTracker
 from app.ui.overlay_panels import _Clickable, _ScrollPanel, _label, _log
-from app.ui.widgets import Elided as _Elided
 
 RENDER_DELAY_MS = 250      # coalesces the burst of events when catching up
 CLOCK_MS = 30_000          # refreshes "12 min ago" style times
@@ -263,10 +261,33 @@ class _LivePanel(_ScrollPanel):
     def _build(self) -> None:
         raise NotImplementedError
 
+    def _fit(self, tool: str) -> None:
+        """Auto-height panels: the window fits the page down to (and with)
+        self._fit_anchor; what's below it is a scroll away."""
+        page, anchor, win = self.scroll.widget(), getattr(self, "_fit_anchor", None), self.window()
+        if page is None or anchor is None or not hasattr(win, "fit_height"):
+            return
+        # From the size hints, not the widgets' geometry: a page shorter than its
+        # content squeezes its rows, so their geometry would only shrink it more.
+        layout = page.layout()
+        margins = layout.contentsMargins()
+        width = self.scroll.viewport().width() - margins.left() - margins.right()
+        bottom = margins.top()
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            w = item.widget()
+            if item.spacerItem() is not None or (w is not None and w.isHidden()):
+                continue
+            bottom += (item.heightForWidth(width) if item.hasHeightForWidth() else item.sizeHint().height())
+            bottom += layout.spacing()
+            if w is anchor:
+                break
+        win.fit_height(tool, bottom + margins.bottom() + 2 * self.scroll.frameWidth() + 6)
+
 
 # -- Missions ------------------------------------------------------------------------
 REWARD_SECONDS = 60        # a completed mission stays in the active list (green) this long
-CARD_HEIGHT = 134          # every mission block's collapsed height; expanded is never smaller
+CARD_HEIGHT = 134          # a mission block's least height (titles and objectives wrap, so it can grow)
 FLASH_RECENT_SECONDS = 20  # an objective change this recent (log time) is new to the player
 FLASH_MS = 700             # the tracked mission's one blink
 COMBAT_TAGS = {"ship": "Ship combat", "fps": "FPS combat"}
@@ -355,19 +376,16 @@ def _possible_blueprints(info: dict | None, owned: set[str]) -> list[tuple[str, 
 def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: bool, toggle,
                   state: str = "", flash: bool = False, reward_age: float | None = None) -> QFrame:
     """Every mission looks the same: title, contractor, rewards, tags, the
-    next objective (or how it ended), blueprints owned out of possible.
-    A click expands it in place (objectives, details, blueprints); it never
-    gets smaller than the collapsed block."""
+    next objective (or how it ended), the possible blueprints you don't have
+    yet. Nothing is cut off: titles and objectives wrap. A click expands it in
+    place (objectives, details, blueprints)."""
     card = _Clickable(objectName="LiveCard")
     card.clicked.connect(toggle)
     if state:
         card.setProperty("state", state)
     if flash:
         card.setProperty("flash", "true")
-    if expanded:
-        card.setMinimumHeight(CARD_HEIGHT)
-    else:
-        card.setFixedHeight(CARD_HEIGHT)
+    card.setMinimumHeight(CARD_HEIGHT)
     v = QVBoxLayout(card)
     v.setContentsMargins(10, 8, 10, 8)
     v.setSpacing(3)
@@ -379,8 +397,7 @@ def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: b
     if info and info.get("description"):
         tip = "<p style='white-space:pre-wrap'>" + html.escape(info["description"][:1500]) + "</p>"
     title = _mission_title(m, info)
-    head.addWidget(_label(title, "LiveTitle", tip, wrap=True) if expanded else _Elided(title, "LiveTitle", tip or title),
-                   stretch=1)
+    head.addWidget(_label(title, "LiveTitle", tip, wrap=True), stretch=1)
     if m.active:
         head.addWidget(_label(_ago(m.accepted), "LiveMuted", "Time since you accepted it"), alignment=Qt.AlignTop)
     elif m.outcome == "Complete":
@@ -395,15 +412,16 @@ def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: b
     current = m.current_objective
     if m.active:
         if current is not None:
-            v.addWidget(_Elided(f"▶  {current.text}", "LiveObjective"))
+            v.addWidget(_label(f"▶  {current.text}", "LiveObjective", wrap=True))
         elif objectives:
-            v.addWidget(_Elided(f"✓  {objectives[-1].text}", "LiveMuted"))
+            v.addWidget(_label(f"✓  {objectives[-1].text}", "LiveMuted", wrap=True))
     # Type and system badges, who issued it, and the reward on the right.
     meta = QHBoxLayout()
     meta.setSpacing(5)
     for tag in _tags(info)[:3]:
         meta.addWidget(tag)
-    meta.addWidget(_Elided(_contractor(m, info), "LiveMuted", "Issued by (reputation goes to them)"), stretch=1)
+    meta.addWidget(_label(_contractor(m, info), "LiveMuted", "Issued by (reputation goes to them)", wrap=True),
+                   stretch=1)
     for reward in _rewards(m, info):
         meta.addWidget(reward)
     v.addLayout(meta)
@@ -413,7 +431,7 @@ def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: b
         pass
     elif m.outcome == "Complete":
         if m.blueprints:
-            v.addWidget(_Elided("Blueprint: " + ", ".join(m.blueprints), "LiveGood"))
+            v.addWidget(_label("Blueprint: " + ", ".join(m.blueprints), "LiveGood", wrap=True))
         elif reward_age is not None and reward_age < BLUEPRINT_WINDOW_SECONDS and (
                 m.blueprint_chance or (info or {}).get("blueprints")):
             v.addWidget(_label("Blueprint: checking…", "LiveMuted"))   # the notice follows by a few seconds
@@ -424,9 +442,17 @@ def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: b
 
     possible = _possible_blueprints(info, owned)
     if possible:
-        have = sum(1 for _n, o in possible if o)
-        v.addWidget(_label(f"Blueprints <b style='color:{PALETTE['success']}'>{have}</b> of {len(possible)} "
-                           "you have", "LiveMuted"))
+        missing = [n for n, o in possible if not o]
+        if missing and not expanded:
+            # What you'd get that you don't have yet: named, the reason to run it.
+            names = ", ".join(missing[:3]) + (f" +{len(missing) - 3} more" if len(missing) > 3 else "")
+            v.addWidget(_label(f"<b>{len(missing)} new blueprint{'s' if len(missing) != 1 else ''}</b> "
+                               f"possible: {html.escape(names)}", "LiveGood", wrap=True))
+        elif missing:
+            v.addWidget(_label(f"<b>{len(missing)} of {len(possible)}</b> possible blueprints you don't have yet",
+                               "LiveGood"))
+        else:
+            v.addWidget(_label(f"You have all {len(possible)} possible blueprints", "LiveMuted"))
     elif m.blueprint_chance:
         v.addWidget(_label("Blueprint chance", "LiveMuted"))
 
@@ -448,12 +474,12 @@ def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: b
     _details(v, info)
     if possible:
         chance = max((pool.get("chance") or 0) for pool in info["blueprints"])
-        v.addWidget(_label(f"POSSIBLE BLUEPRINTS · {sum(1 for _n, o in possible if o)}/{len(possible)} OWNED",
-                           "LiveGroup", f"The mission can give one of these on completion ({chance:.0%} chance in "
-                           "the game data). ✓ = you already received it (from your logs)."))
-        for name, have in possible:
-            v.addWidget(_label(f"✓  {name}" if have else f"•  {name}",
-                               "LiveBlueprintOwned" if have else "LiveText", wrap=True))
+        v.addWidget(_label(f"POSSIBLE BLUEPRINTS · {sum(1 for _n, o in possible if not o)} NEW", "LiveGroup"))
+        v.addWidget(_label(f"One of these on completion ({chance:.0%} chance in the game data). New ones first; "
+                           "✓ you have already.", "LiveMuted", wrap=True))
+        for name, have in sorted(possible, key=lambda p: p[1]):
+            v.addWidget(_label(f"✓  {name}" if have else f"＋  {name}",
+                               "LiveMuted" if have else "LiveGood", wrap=True))
     return card
 
 
@@ -588,45 +614,50 @@ class MissionsPanel(_LivePanel):
 
         # The window fits the collapsed list; opening a card scrolls instead.
         if not self._expanded:
-            QTimer.singleShot(0, self._fit)
+            QTimer.singleShot(0, lambda: self._fit("missions"))
 
     def _card(self, m: Mission, state: str, owned: set[str], reward_age: float | None = None) -> QFrame:
         return _mission_card(m, feed().contract(m), owned, expanded=m.id in self._expanded,
                              toggle=lambda mid=m.id: self._toggle(mid), state=state,
                              flash=m.id in self._flash_until, reward_age=reward_age)
 
-    def _fit(self) -> None:
-        """Active missions (collapsed) fit without scrolling; the finished
-        ones below are a scroll away."""
-        page, anchor, win = self.scroll.widget(), getattr(self, "_fit_anchor", None), self.window()
-        if page is None or anchor is None or not hasattr(win, "fit_height"):
-            return
-        # Measured from the layout, not the widgets' geometry (not placed yet
-        # right after a render): everything above the anchor, plus the anchor.
-        layout = page.layout()
-        margins = layout.contentsMargins()
-        bottom = margins.top()
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if item.widget() is None:
-                continue
-            hint = item.widget().sizeHint().height()
-            if item.widget().hasHeightForWidth():
-                hint = item.widget().heightForWidth(self.scroll.viewport().width() - margins.left() - margins.right())
-            bottom += hint + layout.spacing()
-            if item.widget() is anchor:
-                break
-        win.fit_height("missions", bottom + margins.bottom() + 2 * self.scroll.frameWidth() + 14)
-
 
 # -- Session -------------------------------------------------------------------------
-def _status_row(grid: QGridLayout, row: int, name: str, value: QWidget | str) -> None:
-    grid.addWidget(_label(name, "LiveMuted"), row, 0, alignment=Qt.AlignTop)
-    widget = _label(value, "LiveText", wrap=True) if isinstance(value, str) else value
-    grid.addWidget(widget, row, 1)
+def _pairs(rows: list[tuple[str, QWidget | str]], value_name: str = "LiveText") -> QGridLayout:
+    """Label / value rows, the labels in one column, the values in the next."""
+    grid = QGridLayout()
+    grid.setContentsMargins(0, 0, 0, 0)
+    grid.setHorizontalSpacing(12)
+    grid.setVerticalSpacing(3)
+    grid.setColumnMinimumWidth(0, 110)
+    grid.setColumnStretch(1, 1)
+    for r, (name, value) in enumerate(rows):
+        grid.addWidget(_label(name, "LiveMuted"), r, 0, alignment=Qt.AlignTop)
+        grid.addWidget(_label(value, value_name, wrap=True) if isinstance(value, str) else value, r, 1)
+    return grid
+
+
+def _timed(text: str, when: datetime | None, name: str, sub: str = "") -> QWidget:
+    """A list line: the text (wrapping) left, its time right-aligned."""
+    row = QWidget()
+    h = QHBoxLayout(row)
+    h.setContentsMargins(0, 0, 0, 0)
+    h.setSpacing(10)
+    col = QVBoxLayout()
+    col.setSpacing(0)
+    col.addWidget(_label(text, name, wrap=True))
+    if sub:
+        col.addWidget(_label(sub, "LiveMuted", wrap=True))
+    h.addLayout(col, stretch=1)
+    h.addWidget(_label(_clock(when), "LiveMuted"), alignment=Qt.AlignTop | Qt.AlignRight)
+    return row
 
 
 class SessionPanel(_LivePanel):
+    """Where you are (ship, location, monitored space, quantum target), this
+    session's numbers, the blueprints you received (and from what) and the
+    recent moments. Its height follows its content."""
+
     def _build(self) -> None:
         if self._state_message():
             return
@@ -635,62 +666,53 @@ class SessionPanel(_LivePanel):
 
         head = "NOW" if feed().state == "reading" else "LAST SESSION (GAME CLOSED)"
         v.addWidget(_label(head, "SectionLabel"))
-        status = QGridLayout()
-        status.setHorizontalSpacing(10)
-        status.setVerticalSpacing(3)
-        status.setColumnStretch(1, 1)
-        _status_row(status, 0, "Ship", tr.ship or "—")
-        _status_row(status, 1, "Location", pretty(tr.location) if tr.location else "—")
-        row = 2
+        rows: list[tuple[str, QWidget | str]] = [("Ship", tr.ship or "—"),
+                                                  ("Location", pretty(tr.location) if tr.location else "—")]
         if tr.comm_down or tr.monitored is not None:
-            space = QHBoxLayout()
-            space.setContentsMargins(0, 0, 0, 0)
+            space = QWidget()
+            sh = QHBoxLayout(space)
+            sh.setContentsMargins(0, 0, 0, 0)
             if tr.comm_down:
-                space.addWidget(_chip("COMMS DOWN", "bad", "Monitored space is down (comm array offline)"))
+                sh.addWidget(_chip("COMMS DOWN", "bad"))
+                sh.addWidget(_label("comm array offline", "LiveMuted"))
             else:
-                space.addWidget(_chip("MONITORED" if tr.monitored else "UNMONITORED",
-                                      "info" if tr.monitored else "bad"))
-            space.addStretch(1)
-            space_w = QWidget()
-            space_w.setLayout(space)
-            _status_row(status, row, "Space", space_w)
-            row += 1
+                sh.addWidget(_chip("MONITORED" if tr.monitored else "UNMONITORED",
+                                   "info" if tr.monitored else "bad"))
+            sh.addStretch(1)
+            rows.append(("Space", space))
         if tr.qt_target:
-            _status_row(status, row, "Quantum to", pretty(tr.qt_target))
-        v.addLayout(status)
+            rows.append(("Quantum to", pretty(tr.qt_target)))
+        v.addLayout(_pairs(rows))
 
         v.addWidget(_label("THIS SESSION", "SectionLabel"))
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(6)
         playing = (tr.last_time - tr.started) if tr.started and tr.last_time else None
-        tiles = [
-            ("Played", f"{int(playing.total_seconds() // 3600)}h {int(playing.total_seconds() // 60 % 60):02d}m"
+        numbers = [
+            ("Played", f"{int(playing.total_seconds() // 3600)} h {int(playing.total_seconds() // 60 % 60):02d} min"
              if playing else "—"),
             ("Missions done", f"{tr.completed}" + (f" · {tr.failed} failed" if tr.failed else "")),
             ("Rep earned", f"{tr.rep_earned:,}"),
             ("Quantum jumps", str(tr.qt_jumps)),
             ("Deaths", str(tr.deaths) + (f" · {tr.incapacitated} downed" if tr.incapacitated else "")),
-            ("Refinery orders done", str(tr.refinery_done)),
+            ("Refinery orders", str(tr.refinery_done)),
         ]
-        for i, (name, value) in enumerate(tiles):
-            box = QVBoxLayout()
-            box.setSpacing(0)
-            box.addWidget(_label(value, "LiveValue"))
-            box.addWidget(_label(name, "LiveMuted"))
-            grid.addLayout(box, i // 2, i % 2)
-        v.addLayout(grid)
+        self._fit_anchor = QWidget()
+        self._fit_anchor.setLayout(_pairs(numbers, "LiveValue"))
+        v.addWidget(self._fit_anchor)
 
         if tr.blueprints:
             v.addWidget(_label(f"BLUEPRINTS · {len(tr.blueprints)}", "SectionLabel"))
             for when, name, source in reversed(tr.blueprints[-8:]):
-                v.addWidget(_label(f"{_clock(when)}  {name}", "LiveGood", wrap=True))
-                if source:           # inline: the overlay has no tooltips
-                    v.addWidget(_label(f"        from {source}", "LiveMuted", wrap=True))
+                # The source inline: the overlay has no tooltips.
+                self._fit_anchor = _timed(name, when, "LiveGood", f"from {source}" if source else "")
+                v.addWidget(self._fit_anchor)
 
         if tr.feed:
             v.addWidget(_label("RECENT", "SectionLabel"))
-            for item in tr.feed:
+            for i, item in enumerate(tr.feed):
                 name = {"good": "LiveGood", "bad": "LiveBad"}.get(item.kind, "LiveText")
-                v.addWidget(_label(f"{_clock(item.time)}  {item.text}", name, wrap=True))
+                line = _timed(item.text, item.time, name)
+                v.addWidget(line)
+                if i < 4:
+                    self._fit_anchor = line     # the window fits a few recent lines; the rest scroll
         v.addStretch(1)
+        QTimer.singleShot(0, lambda: self._fit("session"))

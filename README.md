@@ -134,7 +134,7 @@ A small always-on-top bar with five tabs, picked by icon:
 
 - **Missions** (needs LIVE LOG): every mission shows its contractor, reputation and
   item rewards, its type (with Ship combat / FPS combat when it spawns enemies), the
-  next objective and how many of its possible blueprints you own. Click one for its
+  next objective and the possible blueprints you don't have yet. Click one for its
   objectives, details and blueprint list. The mission whose objective just changed is
   highlighted and moves to the top. Finished missions follow: completed ones, then
   failed or abandoned ones in red.
@@ -142,9 +142,15 @@ A small always-on-top bar with five tabs, picked by icon:
   space. It also shows what you've done this session (time played, missions,
   reputation, quantum jumps, deaths, refinery orders), blueprints received and recent
   moments.
-- **Maps**, **Mining** and **Salvage**: compact versions of the launcher tools.
+- **Maps**, **Mining** and **Salvage**: compact versions of the launcher tools. With
+  LIVE LOG on they follow your game: Salvage opens on your active claim's difficulty
+  with its ship open, Mining on your system with the places around you first, and Maps
+  suggests the guides for your missions and location. Each has a *Stop* switch, and
+  nothing moves while the pointer is over the panel. Maps shows a guide filling the
+  panel's width; **L** (or ⤢) shows it large, Esc goes back.
 
-Picking a tab opens its panel underneath; picking it again folds it back to the bar.
+Picking a tab opens its panel underneath (keys 1–5 while the overlay has the keyboard);
+picking it again folds it back to the bar.
 
 Switch it on with **IN-GAME OVERLAY** under *IN GAME* in the launcher's left panel. While
 it's off, nothing runs and the hotkeys do nothing. Then:
@@ -157,8 +163,12 @@ it's off, nothing runs and the hotkeys do nothing. Then:
 Change the keys in **Settings → In-game overlay hotkeys**: an F-key, Insert, Home, End,
 Page Up/Down, Pause or Scroll Lock on its own, or a letter/digit with Ctrl, Alt or Meta.
 **Settings → In-game overlay → Open the overlay** opens it too. The tray menu has the same actions. Drag the overlay by its
-bar, resize it from its bottom-right corner, and set its opacity with the slider; its
-position, size and opacity are remembered.
+bar (it snaps to the screen's edges), or put it in a corner from **⋯ → Move to**; resize it
+from its bottom-right corner. A panel opens towards the free side of the screen (from a
+bar at the bottom, upwards), so it never ends up off-screen; **⋯ → Reset position** (or
+*Reset its position* in Settings) brings it back after changing monitors. Its position
+(per screen setup), sizes and background opacity are remembered. **Settings → Overlay
+size** scales its text and controls (90–150 %; Automatic picks by your screen).
 
 - **Run the game in Borderless mode** (Graphics → Window Mode). Nothing but injected
   overlays can draw over exclusive fullscreen.

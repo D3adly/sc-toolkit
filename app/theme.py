@@ -1146,6 +1146,15 @@ QInputDialog QLineEdit {{
 #PanelRow[flagged="true"] {{
     border-left: 2px solid {info};
 }}
+#FollowLine {{
+    background: {info_soft};
+    border-radius: 6px;
+}}
+#FollowText {{
+    color: {text_secondary};
+    font-size: 12px;
+    background: transparent;
+}}
 #RowDetail {{
     background: rgba(255, 255, 255, 0.03);
     border: none;

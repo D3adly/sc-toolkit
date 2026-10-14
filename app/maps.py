@@ -15,6 +15,8 @@ are hash/token-based and not guaranteed permanently stable — if a link
 ever 404s, re-check the index page above for the current one.
 """
 
+import re
+
 GUIDES_INDEX_URL = "https://mrkraken.space/one-page-guides/"
 
 # (display title, [(page label, direct image URL), ...], source post URL)
@@ -138,3 +140,31 @@ GUIDES = [
         "https://robertsspaceindustries.com/community-hub/post/vanduul-tech-smugglers-one-page-guide-4-4-0-wegEjvpy1Bcl7",
     ),
 ]
+
+
+# What makes a guide worth suggesting in the overlay: words in the active
+# missions' titles and contract names, or in where you are (the log's
+# location names, e.g. "Nyx_TSG_QVExtractionStation_010").
+GUIDE_KEYWORDS = {
+    "Hathor Laser Guide [4.1.0]": ("hathor",),
+    "Onyx Companion Guide [4.3.1]": ("onyx",),
+    "Rock Breaker Companion Guide [4.7 RC]": ("rock break", "rockbreak", "rock crack", "rockcrack"),
+    "Storm Breaker Guide": ("storm break", "stormbreak"),
+    "Tactical Strike Groups [4.8]": ("strike group", "tsg"),
+    "Tactical Strike Groups – Trench Runner Map": ("trench run", "trenchrun"),
+    "Vanduul-Tech Smugglers [4.4.0]": ("vanduul", "smuggl"),
+}
+
+
+def suggested_guides(texts) -> list[str]:
+    """Titles of the guides whose keywords appear in any of `texts`."""
+    blob = " ".join(t.lower() for t in texts if t)
+    blob_words = re.sub(r"[_\-]", " ", blob)
+    out = []
+    for title, words in GUIDE_KEYWORDS.items():
+        for w in words:
+            pattern = rf"(?<![a-z]){re.escape(w)}" if len(w) <= 4 else re.escape(w)
+            if re.search(pattern, blob_words) or (len(w) > 4 and w.replace(" ", "") in blob.replace("_", "")):
+                out.append(title)
+                break
+    return out

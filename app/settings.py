@@ -30,6 +30,7 @@ class Settings:
     overlay_enabled: bool = False                # in-game overlay (and its hotkeys) on/off
     hotkey_overlay: str = "F7"                   # show / hide the overlay
     hotkey_clickthrough: str = "F8"              # overlay click-through on/off
+    overlay_scale: str = ""                      # overlay text and controls, %: "" = automatic (by screen)
     gamelog_live_enabled: bool = False           # follow Game.log while playing (app.gamelog)
     sync_enabled: bool = False                   # Sync online (app.sync): needs the live log and a sign-in
     update_check: bool = True                    # look for a new SC-Toolbox once a day (app.updater)

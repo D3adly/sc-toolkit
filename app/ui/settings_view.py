@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from app import __version__, channel as channel_mod, datahub, hotkeys, portal, settings
 from app.account_controller import AccountState, controller as account_controller
+from app.overlay_host import OVERLAY_SCALES, auto_overlay_scale
 from app.settings import Settings
 from app.theme import PALETTE
 from app.ui import kit
@@ -250,7 +251,17 @@ class SettingsView(kit.ToolPage):
         open_btn.setCursor(Qt.PointingHandCursor)
         open_btn.setToolTip("Switches the overlay on if it's off, and shows it")
         open_btn.clicked.connect(self.open_overlay_requested.emit)
-        ogrid.addWidget(open_btn, 2, 0, 1, 2, Qt.AlignLeft)
+        reset_btn = QPushButton("Reset its position", objectName="MiniButton")
+        reset_btn.setCursor(Qt.PointingHandCursor)
+        reset_btn.setToolTip("Puts the overlay back in the top right corner of your main screen "
+                             "(e.g. when it's off-screen after changing monitors)")
+        reset_btn.clicked.connect(self._reset_overlay_position)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(8)
+        buttons.addWidget(open_btn)
+        buttons.addWidget(reset_btn)
+        buttons.addStretch(1)
+        ogrid.addLayout(buttons, 2, 0, 1, 2)
         note = QLabel(
             "Hotkeys: they work while Star Citizen has focus, as long as the overlay is switched on. "
             "Click a field and press the new key: an "
@@ -265,6 +276,21 @@ class SettingsView(kit.ToolPage):
         self.hotkey_rows: dict[str, _HotkeyRow] = {}
         for i, (action, (field, title)) in enumerate(hotkeys.ACTIONS.items()):
             self.hotkey_rows[field] = _HotkeyRow(ogrid, 4 + i, title, defaults[field], self._validate)
+        row = 4 + len(hotkeys.ACTIONS)
+        ogrid.addWidget(QLabel("Overlay size", objectName="SlotTitle"), row, 0, Qt.AlignTop)
+        scale_box = QVBoxLayout()
+        scale_box.setSpacing(4)
+        self.overlay_scale = kit.Dropdown(marks=False)
+        self.overlay_scale.addItem("", "")          # Automatic: its text says what that is (activate)
+        for value in OVERLAY_SCALES:
+            self.overlay_scale.addItem(f"{value} %", str(value))
+        self.overlay_scale.setMinimumContentsLength(28)
+        scale_box.addWidget(self.overlay_scale, alignment=Qt.AlignLeft)
+        scale_hint = QLabel("Text and controls of the overlay, apart from the launcher's own size. "
+                            "Automatic picks by your screen (larger on 1440p and 4K).", objectName="InspectorHint")
+        scale_hint.setWordWrap(True)
+        scale_box.addWidget(scale_hint)
+        ogrid.addLayout(scale_box, row, 1)
         sections.addWidget(overlay_panel)
 
         self._scroll = scroll
@@ -536,6 +562,8 @@ class SettingsView(kit.ToolPage):
             row.set_value(getattr(s, field))
         self.update_check.setChecked(s.update_check)
         self.update_prereleases.setChecked(s.update_prereleases)
+        self.overlay_scale.setItemText(0, f"Automatic ({auto_overlay_scale()} % on this screen)")
+        self.overlay_scale.setCurrentIndex(max(0, self.overlay_scale.findData(s.overlay_scale)))
         if first_run:
             self.intro.show_text("Welcome! Point SC-Toolbox at your Star Citizen install to get started. "
                                  "Try <b>Auto-detect</b> first: it checks the usual install locations.", "info")
@@ -639,6 +667,13 @@ class SettingsView(kit.ToolPage):
         self.save_btn.setEnabled(live_err is None and hotkeys_ok and not (
             Path(self.backups.value).is_file() if self.backups.value else False))
 
+    def _reset_overlay_position(self) -> None:
+        from app import ipc
+        from app.ui import overlay
+
+        if not ipc.send(ipc.OVERLAY, "reset-position"):
+            overlay.reset_saved_position()
+
     def _save(self) -> None:
         settings.apply(replace(
             settings.current(),
@@ -649,6 +684,7 @@ class SettingsView(kit.ToolPage):
             rsi_log_path=self.rsi_log.value,
             update_check=self.update_check.isChecked(),
             update_prereleases=self.update_prereleases.isChecked(),
+            overlay_scale=self.overlay_scale.currentData() or "",
             **{field: hotkeys.format_combo(*hotkeys.parse(row.value))
                for field, row in self.hotkey_rows.items()},
         ))

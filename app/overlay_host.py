@@ -159,8 +159,33 @@ def overlay_command() -> list[str]:
     return [python, "-m", "app.main", *args]
 
 
+OVERLAY_SCALES = (90, 100, 110, 125, 135, 150)
+
+
+def auto_overlay_scale() -> int:
+    """The overlay's size (%) when the setting is Automatic: readable from a
+    gaming distance. By the screen's height as Qt sees it (after the
+    desktop's own scaling): 1440p 115 %, 4K 150 %, smaller 100 %."""
+    from PySide6.QtGui import QGuiApplication
+
+    screen = QGuiApplication.primaryScreen() if QGuiApplication.instance() else None
+    height = screen.geometry().height() if screen else 1080
+    return 150 if height >= 2000 else 115 if height >= 1350 else 100
+
+
+def overlay_scale() -> int:
+    from app import settings
+
+    value = settings.current().overlay_scale
+    return int(value) if value.isdigit() else auto_overlay_scale()
+
+
 def overlay_environment() -> QProcessEnvironment:
     env = QProcessEnvironment.systemEnvironment()
+    scale = overlay_scale()
+    if scale != 100 and not env.contains("QT_SCALE_FACTOR"):
+        # Qt scales the whole overlay (text, controls, icons) by this, on top of the desktop's scaling.
+        env.insert("QT_SCALE_FACTOR", f"{scale / 100:g}")
     mode = _layer_shell_mode()
     if mode:
         if mode == "bundled":

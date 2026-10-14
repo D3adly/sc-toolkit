@@ -687,3 +687,40 @@ def build_rows(game: dict, tier_id: str, sheet: Sheet | None, prices: dict[str, 
             components=comps, cargo=cargo,
         ))
     return rows
+
+
+# -- the claim you're on (from the live log) -----------------------------------------
+
+_CLAIM_TITLE_RE = re.compile(r"Claim #(\d+):\s*(.+?)\s+Salvage Rights", re.I)
+_CLAIM_TIER_RE = re.compile(r"_Salvage_([A-Za-z]+?)(?:_\d+)?$")
+
+
+def claim_of(title: str, contract: str) -> dict | None:
+    """A salvage claim mission → {number, ship, tier}, from its title ("Claim
+    #72212: Crusader C2 Hercules Starlifter Salvage Rights") and contract
+    ("Adaigo_Stanton1_Lawful_Salvage_Hard_0"); None for any other mission."""
+    m = _CLAIM_TITLE_RE.search(title or "")
+    if not m:
+        return None
+    tier = _CLAIM_TIER_RE.search(contract or "")
+    return {"number": m.group(1), "ship": m.group(2).strip(), "tier": tier.group(1) if tier else ""}
+
+
+def claim_ship(game: dict, tier_id: str, ship: str) -> str | None:
+    """The stem of the claim's ship among a tier's ships. The log names it in
+    full ("Crusader C2 Hercules Starlifter"), the game data maybe shorter
+    ("Crusader C2 Hercules"): exact, else the longest name contained in the
+    other, else the most words in common."""
+    tier = next((t for t in game.get("tiers", []) if t["id"] == tier_id), None)
+    stems = tier["ships"] if tier else list(game.get("ships", {}))
+    want = " ".join(ship.lower().split())
+    names = {s: " ".join(game["ships"].get(s, {}).get("name", s).lower().split()) for s in stems}
+    for stem, name in names.items():
+        if name == want:
+            return stem
+    inside = [(len(n), s) for s, n in names.items() if n and (n in want or want in n)]
+    if inside:
+        return max(inside)[1]
+    words = set(want.split())
+    best = max(((len(words & set(n.split())), s) for s, n in names.items()), default=(0, None))
+    return best[1] if best[0] >= 2 else None

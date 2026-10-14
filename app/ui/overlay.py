@@ -16,7 +16,13 @@ is a popup window that flickers). Picking a tool expands its panel
 underneath; picking it again collapses back to the bar. Minimised, the
 overlay is one line: the current objective, how long you've been on it,
 where you are. The opacity fades the background only, never the text.
-Position, opacity and each tool's size are remembered.
+
+Placing it (#56): drag the bar (anywhere on it but its buttons) and it
+snaps to the screen's edges; ⋯ has quick positions and Reset position. The
+bar keeps its place, and a panel opens towards the free side of the screen
+(a bar in the lower half opens upwards, in the right half leftwards), so it
+never ends up off-screen; positions are kept per screen setup. Opacity,
+each tool's size and whether it follows the game are remembered too.
 """
 
 from __future__ import annotations
@@ -57,8 +63,12 @@ TOOL_ICON = QSize(20, 20)
 BAR_MIN_WIDTH = 400
 # Tools whose panel height follows their content (see fit_height); the
 # user's own resizing only changes their width.
-AUTO_HEIGHT_TOOLS = {"missions"}
+AUTO_HEIGHT_TOOLS = {"missions", "session"}
 AUTO_HEIGHT_MAX = 0.7        # of the screen's height, then the panel scrolls
+SNAP = 28                    # px: dragged this close to a screen edge, it snaps to it
+EDGE = 10                    # px: the gap to the screen edge when snapped or placed
+LARGE = 0.9                  # Maps' large view: this much of the screen
+MAX_GUIDE_WIDTH = 0.62       # a landscape guide widens the panel up to this much of the screen
 
 MIN_OPACITY, MAX_OPACITY = 30, 100
 
@@ -159,6 +169,7 @@ class _ResizeGrip(QSizeGrip):
         if event.button() == Qt.LeftButton:
             win = self._overlay()
             self._start = (event.globalPosition().toPoint(), win.size())
+            win._manual = True             # the size moves the bar's home, not the other way round
             event.accept()
 
     def mouseMoveEvent(self, event):
@@ -174,6 +185,11 @@ class _ResizeGrip(QSizeGrip):
 
     def mouseReleaseEvent(self, event):
         self._start = None
+        win = self._overlay()
+        if getattr(win, "_manual", False):
+            win._manual = False
+            win._home = win._home_from(win.geometry())
+            win._save_home()
         event.accept()
 
 
@@ -222,6 +238,20 @@ def _load_state() -> dict:
         return json.loads(STATE_FILE.read_text())
     except (OSError, ValueError):
         return {}
+
+
+def reset_saved_position() -> None:
+    """Forgets where the overlay was (e.g. off-screen after changing
+    monitors); the next start puts it in its default place. For when it
+    isn't running (the launcher's Settings); a running one: "reset-position"."""
+    state = _load_state()
+    for key in ("positions", "pos", "layer_pos"):
+        state.pop(key, None)
+    try:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STATE_FILE.write_text(json.dumps(state, indent=2))
+    except OSError:
+        pass
 
 
 class _InputShield(QWidget):
@@ -354,7 +384,7 @@ class _InlineMenu(QFrame):
     def __init__(self, overlay: "OverlayWindow"):
         super().__init__(overlay, objectName="OverlayMenu")
         self.overlay = overlay
-        self.setFixedWidth(250)
+        self.setFixedWidth(270)
         v = QVBoxLayout(self)
         v.setContentsMargins(6, 6, 6, 6)
         v.setSpacing(2)
@@ -374,6 +404,24 @@ class _InlineMenu(QFrame):
         v.addLayout(row)
         self.ct = self._item(v, "Click-through", hotkey_label("toggle-clickthrough"), overlay.toggle_click_through)
         self._item(v, "Minimise to one line", "", lambda: overlay.set_minimized(True))
+        sep = QFrame(objectName="OverlayMenuSep")
+        sep.setFixedHeight(1)
+        v.addWidget(sep)
+        # Quick positions: the bar to a corner or the middle of a side.
+        pos = QHBoxLayout()
+        pos.setContentsMargins(9, 2, 4, 2)
+        pos.setSpacing(3)
+        pos.addWidget(QLabel("Move to", objectName="OverlayMenuText"), stretch=1)
+        for where, glyph, name in (("tl", "↖", "top left"), ("tr", "↗", "top right"), ("ml", "◂", "left, middle"),
+                                   ("mr", "▸", "right, middle"), ("bl", "↙", "bottom left"),
+                                   ("br", "↘", "bottom right")):
+            btn = QPushButton(glyph, objectName="OverlayStep")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda _c=False, w=where: (overlay._show_menu(False), overlay.move_to(w)))
+            overlay._hint(btn, f"<b>Move</b> the overlay to the screen's {name}")
+            pos.addWidget(btn)
+        v.addLayout(pos)
+        self._item(v, "Reset position", "", overlay.reset_position)
         sep = QFrame(objectName="OverlayMenuSep")
         sep.setFixedHeight(1)
         v.addWidget(sep)
@@ -515,7 +563,12 @@ class OverlayWindow(QWidget):
         self.state = _load_state()
         self.tool: str | None = None
         self.click_through = False
-        self._anchor: QPoint | None = None   # where the overlay belongs (see moveEvent)
+        self._anchor: QPoint | None = None   # where the window belongs (see moveEvent)
+        self._home: QPoint | None = None     # where the bar sits; the window is placed from it (_place)
+        self._bar_size = QSize(BAR_MIN_WIDTH, 84)   # the collapsed bar (set by _fit_bar)
+        self._large: QSize | None = None     # Maps' large view: the size to go back to
+        self._manual = False                 # resizing by the grip (see _ResizeGrip)
+        self._placing = False
         self._shield: _InputShield | None = None
         self._bar_width = 440   # the collapsed bar's width (set by _collapse)
         self._resizing = False
@@ -528,10 +581,9 @@ class OverlayWindow(QWidget):
             QShortcut(QKeySequence(str(i)), self, activated=lambda t=tool: self.select_tool(t, force=True),
                       context=Qt.WindowShortcut)
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self._escape, context=Qt.WindowShortcut)
-        pos = self.state.get(self._pos_key)
-        if pos:
-            self._anchor = QPoint(*pos)
-            self.move(self._anchor)
+        QShortcut(QKeySequence("L"), self, activated=lambda: self.tool == "maps" and self.toggle_large(),
+                  context=Qt.WindowShortcut)
+        self._home = self._saved_home()
         self._collapse()
         if self.state.get("minimized"):
             self.set_minimized(True)
@@ -552,15 +604,167 @@ class OverlayWindow(QWidget):
             self.menu.set_opacity(value)
 
     def keep_inside(self) -> None:
-        """Layer-shell: back inside the surface if it's off-screen (e.g. shown
-        on a smaller screen than last time)."""
-        if self._host is None or self._host.width() <= 0:
+        """Layer-shell: the surface changed size (another screen): place it again."""
+        if self._host is not None and self._host.width() > 0:
+            self._home = self._saved_home() or self._home
+            self._place()
+
+    # -- where it sits ------------------------------------------------------------------
+    def _area(self, point: QPoint | None = None) -> QRect:
+        """The screen it's on (X11, screen coordinates), or the layer-shell surface."""
+        if self._host is not None:
+            screen = self._host.screen() or QApplication.primaryScreen()
+            w = self._host.width() if self._host.width() > 0 else screen.geometry().width()
+            h = self._host.height() if self._host.height() > 0 else screen.geometry().height()
+            return QRect(0, 0, w, h)
+        if point is None:
+            point = (self._home or self.pos()) + QPoint(self._bar_size.width() // 2, 12)
+        screen = QApplication.screenAt(point) or QApplication.primaryScreen()
+        return screen.geometry()
+
+    def _setup_key(self) -> str:
+        """Positions are kept per screen setup (adding or moving a monitor starts afresh)."""
+        if self._host is not None:
+            area = self._area()
+            return f"layer {area.width()}x{area.height()}"
+        rects = sorted((s.geometry() for s in QApplication.screens()), key=lambda g: (g.x(), g.y()))
+        return " ".join(f"{g.x()},{g.y()},{g.width()}x{g.height()}" for g in rects)
+
+    def _saved_home(self) -> QPoint | None:
+        pos = (self.state.get("positions") or {}).get(self._setup_key()) or self.state.get(self._pos_key)
+        home = QPoint(*pos) if pos else None
+        return home if home is not None and self._reachable(home) else None
+
+    def _reachable(self, home: QPoint) -> bool:
+        grab = home + QPoint(self._bar_size.width() // 2, 12)
+        if self._host is not None:
+            return self._area().contains(grab)
+        return any(s.geometry().contains(grab) for s in QApplication.screens())
+
+    def _save_home(self) -> None:
+        if self._home is None:
             return
-        x = min(max(0, self.x()), max(0, self._host.width() - self.width()))
-        y = min(max(0, self.y()), max(0, self._host.height() - 40))
-        if (x, y) != (self.x(), self.y()):
-            self._anchor = QPoint(x, y)
-            self.move(self._anchor)
+        pos = [self._home.x(), self._home.y()]
+        self.state.setdefault("positions", {})[self._setup_key()] = pos
+        self.state[self._pos_key] = pos
+        self._save_timer.start()
+
+    def _default_home(self, area: QRect) -> QPoint:
+        return QPoint(area.right() + 1 - self._bar_size.width() - EDGE, area.top() + EDGE)
+
+    def _place(self) -> None:
+        """Moves the window where it belongs for its size: the bar stays at
+        its home and the panel opens towards the screen's free side; the
+        large view is centred. Never (partly) off-screen."""
+        if self._placing or self._manual:
+            return
+        area = self._area(self._home + QPoint(self._bar_size.width() // 2, 12) if self._home else None)
+        if self._home is None or not self._reachable(self._home):
+            area = self._area(QApplication.primaryScreen().geometry().center()) if self._host is None else area
+            self._home = self._default_home(area)
+        size = self.size()
+        if self._large is not None:
+            x = area.x() + (area.width() - size.width()) // 2
+            y = area.y() + (area.height() - size.height()) // 2
+        else:
+            home, bar = self._home, self._bar_size
+            x, y = home.x(), home.y()
+            if home.x() + bar.width() / 2 > area.center().x():
+                x = home.x() + bar.width() - size.width()
+            if home.y() > area.center().y():       # the bar's top in the lower half (the middle opens down)
+                y = home.y() + bar.height() - size.height()
+        x = max(area.left(), min(x, area.right() + 1 - size.width()))
+        y = max(area.top(), min(y, area.bottom() + 1 - size.height()))
+        target = QPoint(x, y)
+        self._anchor = target
+        if self.pos() != target:
+            self._placing = True
+            self.move(target)
+            self._placing = False
+
+    def _home_from(self, rect: QRect) -> QPoint:
+        """The bar's home for a window at `rect` (after dragging or resizing it)."""
+        area, bar = self._area(rect.center()), self._bar_size
+        x = rect.x() if rect.center().x() <= area.center().x() else rect.right() + 1 - bar.width()
+        y = rect.y() if rect.bottom() + 1 - bar.height() <= area.center().y() else rect.bottom() + 1 - bar.height()
+        return QPoint(x, y)
+
+    def _snap(self, p: QPoint) -> QPoint:
+        """A dragged position, snapped to the screen's edges and kept on it."""
+        w, h = self.width(), self.height()
+        area = self._area(p + QPoint(w // 2, 12))
+        x, y = p.x(), p.y()
+        if abs(x - area.left()) < SNAP:
+            x = area.left() + EDGE
+        elif abs(area.right() + 1 - (x + w)) < SNAP:
+            x = area.right() + 1 - w - EDGE
+        if abs(y - area.top()) < SNAP:
+            y = area.top() + EDGE
+        elif abs(area.bottom() + 1 - (y + h)) < SNAP:
+            y = area.bottom() + 1 - h - EDGE
+        x = max(area.left(), min(x, area.right() + 1 - w))
+        y = max(area.top(), min(y, area.bottom() + 1 - h))
+        return QPoint(x, y)
+
+    def move_to(self, where: str) -> None:
+        """Quick positions: tl, tr (top), ml, mr (middle of a side), bl, br."""
+        area, bar = self._area(), self._bar_size
+        xs = {"l": area.left() + EDGE, "r": area.right() + 1 - bar.width() - EDGE}
+        ys = {"t": area.top() + EDGE, "m": area.center().y() - bar.height() // 2,
+              "b": area.bottom() + 1 - bar.height() - EDGE}
+        self._home = QPoint(xs[where[1]], ys[where[0]])
+        self._place()
+        self._save_home()
+
+    def reset_position(self) -> None:
+        self._home = None
+        area = self._area() if self._host is not None else QApplication.primaryScreen().geometry()
+        self._home = self._default_home(area)
+        self._place()
+        self._save_home()
+
+    # -- per tool ------------------------------------------------------------------------
+    def follows(self, tool: str) -> bool:
+        """Whether a data panel follows the game (#54); on unless turned off."""
+        return bool((self.state.get("follow") or {}).get(tool, True))
+
+    def set_follows(self, tool: str, on: bool) -> None:
+        self.state.setdefault("follow", {})[tool] = on
+        self._save_timer.start()
+
+    def toggle_large(self) -> None:
+        """Maps: most of the screen, centred (L or ⤢); again or Esc: back."""
+        if self.tool != "maps" or self.minimized:
+            return
+        if self._large is None:
+            self._remember_size()
+            self._large = self.size()
+            area = self._area()
+            self._resizing = True
+            self.resize(int(area.width() * LARGE), int(area.height() * LARGE))
+            self._resizing = False
+        else:
+            self._exit_large()
+        self._place()
+
+    def _exit_large(self) -> None:
+        if self._large is not None:
+            size, self._large = self._large, None
+            self._resizing = True
+            self.resize(size)
+            self._resizing = False
+
+    def fit_aspect(self, tool: str, viewer: QWidget, ratio: float) -> None:
+        """A guide just opened (Maps): a landscape one widens the panel so it
+        fills the panel's height, within MAX_GUIDE_WIDTH of the screen; a
+        portrait one keeps the width (it fills it and scrolls)."""
+        if tool != self.tool or self._large is not None or ratio <= 1.05:
+            return
+        area = self._area()
+        want = int(viewer.height() * ratio) + (self.width() - viewer.width())
+        width = max(self.minimumWidth(), min(want, int(area.width() * MAX_GUIDE_WIDTH)))
+        if abs(width - self.width()) > 8:
+            self.resize(width, self.height())
 
     def is_shown(self) -> bool:
         return (self._host if self._host is not None else self).isVisible()
@@ -660,6 +864,7 @@ class OverlayWindow(QWidget):
             if not force:
                 self._collapse()
             return
+        self._exit_large()
         if self.tool:
             self._remember_size()
         size = self.state.get("sizes", {}).get(tool)
@@ -724,6 +929,7 @@ class OverlayWindow(QWidget):
         self._collapse()
 
     def _collapse(self) -> None:
+        self._exit_large()
         if self.tool:
             self._remember_size()
         self.tool = None
@@ -750,6 +956,7 @@ class OverlayWindow(QWidget):
         else:
             width = max(hint.width(), BAR_MIN_WIDTH)
             self._bar_width = width
+            self._bar_size = QSize(width, hint.height())
         self.setFixedSize(width, hint.height())
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
@@ -760,6 +967,8 @@ class OverlayWindow(QWidget):
         if on == self.minimized:
             return
         self._show_menu(False)
+        if on:
+            self._exit_large()
         if on and self.tool:
             self._remember_size()
         self.minimized = on
@@ -784,6 +993,8 @@ class OverlayWindow(QWidget):
     def _escape(self) -> None:
         if self.menu.isVisible():
             self._show_menu(False)
+        elif self._large is not None:
+            self.toggle_large()
         elif self.tool:
             self._collapse()
 
@@ -855,20 +1066,16 @@ class OverlayWindow(QWidget):
         """Shows it with the mouse and keyboard (the game lets go of the
         pointer once it loses focus); in click-through mode it's shown
         without taking focus, so the game keeps it."""
-        pos = self.state.get(self._pos_key)
-        if pos:
-            self._anchor = QPoint(*pos)
+        # The screen setup may have changed while hidden: its own position, or back on screen.
+        self._home = self._saved_home() or (self._home if self._home and self._reachable(self._home) else None)
         if self._host is not None:
             self.show()
-            if self._anchor is not None:
-                self.move(self._anchor)
             self._host.present(passive=self.click_through)
-            self.keep_inside()
+            self._place()
             return
         self.show()
         self.raise_()
-        if self._anchor is not None:
-            self.move(self._anchor)
+        self._place()
         self._update_shield()
         if not self.click_through:
             self.activateWindow()
@@ -936,7 +1143,7 @@ class OverlayWindow(QWidget):
         self._save_timer.start()
 
     def _remember_size(self) -> None:
-        if self.tool:
+        if self.tool and self._large is None:
             sizes = self.state.setdefault("sizes", {})
             height = self.height()
             if self.tool in AUTO_HEIGHT_TOOLS:   # its height follows the content
@@ -948,12 +1155,10 @@ class OverlayWindow(QWidget):
         # KWin places an OSD itself (bottom centre) when it's mapped and
         # whenever its size changes; any move the overlay didn't make is undone.
         super().moveEvent(event)
-        if self._anchor is not None and self.pos() != self._anchor:
+        if self._anchor is not None and self.pos() != self._anchor and not self._placing:
             self.move(self._anchor)
             return
         self._sync_hole()
-        self.state[self._pos_key] = [self.x(), self.y()]
-        self._save_timer.start()
 
     def _sync_hole(self) -> None:
         if self._shield is not None and self._shield.isVisible():
@@ -961,6 +1166,8 @@ class OverlayWindow(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if self.isVisible():
+            self._place()            # the bar keeps its place; the panel opens towards the free side
         self._sync_hole()
         if self.tool and not self._resizing:
             self._remember_size()
@@ -974,9 +1181,14 @@ class OverlayWindow(QWidget):
 
     # -- dragging -------------------------------------------------------------------------------
     # Moved by the app itself, not the window manager: KWin doesn't move OSDs.
+    def _drag_zone(self, pos: QPoint) -> bool:
+        """The bar, the status line and the minimised line move the overlay
+        (their buttons still click)."""
+        at = self.frame.mapFrom(self, pos)
+        return any(w.isVisible() and w.geometry().contains(at) for w in (self.header, self.status, self.mini_bar))
+
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and self.header.geometry().contains(
-                self.frame.mapFrom(self, event.position().toPoint())):
+        if event.button() == Qt.LeftButton and self._large is None and self._drag_zone(event.position().toPoint()):
             self._drag = event.globalPosition().toPoint() - self.pos()
             if self._host is not None:   # surface coordinates (Wayland has no global ones)
                 self._drag = event.position().toPoint()
@@ -987,10 +1199,14 @@ class OverlayWindow(QWidget):
     def mouseMoveEvent(self, event):
         if getattr(self, "_drag", None) is not None:
             if self._host is not None:
-                self._anchor = self.mapToParent(event.position().toPoint()) - self._drag
+                p = self.mapToParent(event.position().toPoint()) - self._drag
             else:
-                self._anchor = event.globalPosition().toPoint() - self._drag
+                p = event.globalPosition().toPoint() - self._drag
+            self._anchor = self._snap(p)
+            self._placing = True
             self.move(self._anchor)
+            self._placing = False
+            self._home = self._home_from(QRect(self._anchor, self.size()))
             event.accept()
             return
         super().mouseMoveEvent(event)
@@ -998,6 +1214,7 @@ class OverlayWindow(QWidget):
     def mouseReleaseEvent(self, event):
         if getattr(self, "_drag", None) is not None:
             self._drag = None
+            self._save_home()
             event.accept()
             return
         super().mouseReleaseEvent(event)
@@ -1050,6 +1267,7 @@ def run(parent_pid: int | None, layer_shell: bool = False) -> int:
         "show": overlay.show_overlay,
         "hide": overlay.hide_overlay,
         "toggle-clickthrough": overlay.toggle_click_through,
+        "reset-position": overlay.reset_position,
         "live-log-on": lambda: _live_feed().set_enabled(True),
         "live-log-off": lambda: _live_feed().set_enabled(False),
         "game-data-updated": lambda: (overlay.reload_game_data(), _live_feed().reload_lookups()),

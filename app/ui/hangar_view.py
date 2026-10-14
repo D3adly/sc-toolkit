@@ -1,8 +1,8 @@
 """My Ships: the player's hangar as a grid of ship cards (app.hangar), with
 an Add / Edit side panel over the ship catalogue (app.ships).
 
-Cards: gold outline = pledged (store), steel-blue = bought in game; ships
-still in concept show their loaners. The Erkul button opens Erkul's ship
+Cards: a badge says how you got it (Pledge, or In game in steel) and
+whether it's still in concept, which then shows its loaners. The Erkul button opens Erkul's ship
 pop-out for released ships. Clicking a card opens its details page: stats
 and default loadout from the game files (app.shipdata).
 """
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from app import channel as channel_mod, config, datahub, hangar, osutil, settings, shipdata, ships
 from app.hangar import INGAME, PLEDGE, Entry
 from app.theme import PALETTE
+from app.ui import kit
 from app.ui.widgets import Elided
 
 CARD_WIDTH = 252
@@ -86,8 +87,7 @@ class _ShipCard(QFrame):
     def __init__(self, entry: Entry, ship: ships.Ship | None, parent=None):
         super().__init__(parent)
         self.entry, self.ship = entry, ship
-        self.setObjectName("ShipCard")
-        self.setProperty("acquired", entry.acquired)
+        self.setObjectName("HangarCard")
         self.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("Open its stats and default loadout")
@@ -105,41 +105,42 @@ class _ShipCard(QFrame):
         body.setContentsMargins(12, 4, 12, 0)
         body.setSpacing(3)
         ship_name = ship.name if ship else entry.ship_name
-        body.addWidget(Elided(entry.name or ship_name, "ShipName"))
+        body.addWidget(Elided(entry.name or ship_name, "CardTitle"))
         details = [ship.manufacturer, ship.role, ship.size] if ship else []
         if entry.name:
             details.insert(0, ship_name)
-        body.addWidget(Elided("  ·  ".join(d for d in details if d), "InspectorHint"))
+        body.addWidget(Elided("  ·  ".join(d for d in details if d), "MutedText"))
 
         tags = QHBoxLayout()
         tags.setSpacing(6)
-        tags.addWidget(_label(hangar.ACQUIRED.get(entry.acquired, entry.acquired).upper(), "AcquiredTag"))
+        tags.addWidget(kit.Badge(hangar.ACQUIRED.get(entry.acquired, entry.acquired),
+                                 "info" if entry.acquired == INGAME else "neutral"))
         if ship and ship.concept:
-            tags.addWidget(_label("IN CONCEPT", "ConceptTag"))
+            tags.addWidget(kit.Badge("In concept", "warning", tip="Not flyable yet"))
         if entry.insurance:
-            tags.addWidget(Elided(entry.insurance, "InspectorHint"))
+            tags.addWidget(Elided(entry.insurance, "MutedText"))
         tags.addStretch(1)
         if ship and ship.cargo:
-            tags.addWidget(_label(f"{ship.cargo:,} SCU", "CargoTag"))
+            tags.addWidget(_label(f"{ship.cargo:,} SCU", "StrongText"))
         body.addLayout(tags)
         # One more line, always there so the cards line up: loaners or notes.
         if ship and ship.concept and ship.loaners:
-            extra = Elided("Loaner: " + ", ".join(ship.loaners), "LoanerLine")
+            extra = Elided("Loaner: " + ", ".join(ship.loaners), "BodyText")
         else:
-            extra = Elided(entry.notes, "InspectorHint")
+            extra = Elided(entry.notes, "MutedText")
         body.addWidget(extra)
         body.addStretch(1)
 
         actions = QHBoxLayout()
         actions.setSpacing(6)
         if ship and ship.erkul_url:
-            erkul = _mini("Erkul")
+            erkul = kit.button("Erkul")
             erkul.setIcon(QIcon(str(config.ICONS_DIR / "erkul.png")))
             erkul.setToolTip("Open this ship on erkul.games")
             erkul.clicked.connect(lambda: osutil.open_url(ship.erkul_url))
             actions.addWidget(erkul)
         actions.addStretch(1)
-        edit = _mini("Edit")
+        edit = kit.button("Edit")
         edit.setToolTip("Change how you got it, its name, insurance or notes, or remove it")
         edit.clicked.connect(lambda: self.edit_requested.emit(entry.id))
         actions.addWidget(edit)
@@ -291,7 +292,7 @@ class _DetailsPage(QScrollArea):
             erkul.setIcon(QIcon(str(config.ICONS_DIR / "erkul.png")))
             erkul.clicked.connect(lambda: osutil.open_url(ship.erkul_url))
             buttons.addWidget(erkul)
-        edit = _mini("Edit")
+        edit = kit.button("Edit")
         edit.clicked.connect(lambda: self.edit_requested.emit(entry.id))
         buttons.addWidget(edit)
         buttons.addStretch(1)
@@ -377,11 +378,11 @@ class _DetailsPage(QScrollArea):
             _cover(self.image, path)
 
 
-class HangarView(QWidget):
-    back_requested = Signal()
-
+class HangarView(kit.ToolPage):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__("hangar", "My Ships",
+                         "The ships you pledged or bought in game, with their stats and default loadouts",
+                         web_url="https://sc-toolbox.com/app/hangar", parent=parent)
         self.catalogue = ships.load()
         self.entries = hangar.load()
         self._cards: list[_ShipCard] = []
@@ -403,72 +404,36 @@ class HangarView(QWidget):
 
     # -- layout ---------------------------------------------------------------
     def _build_ui(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 14, 20, 20)
-        outer.setSpacing(10)
+        self.back_btn = kit.button("←  All my ships", "ghost", lambda: self._back())
+        self.back_btn.hide()
+        self.add_action(self.back_btn)
+        self.add_btn = kit.button("Add ships", "primary", self._open_add)
+        self.add_action(self.add_btn)
+        self.set_data_chip(f"Ship list: <a style='color:{PALETTE['info']}' href='{WIKI_URL}'>Star Citizen Wiki</a>")
+        self.data_chip.setOpenExternalLinks(True)
 
-        bar_frame = QFrame(objectName="ToolBar")
-        bar = QHBoxLayout(bar_frame)
-        bar.setContentsMargins(10, 8, 10, 8)
-        bar.setSpacing(8)
-        back = QPushButton("←  Back", objectName="ToolButton")
-        back.setCursor(Qt.PointingHandCursor)
-        back.setToolTip("Back to your hangar from a ship, else to the launcher")
-        back.clicked.connect(self._back)
-        bar.addWidget(back)
-        bar.addSpacing(6)
-        bar.addWidget(QLabel("MY SHIPS", objectName="ConfigLabel"))
-        bar.addSpacing(6)
-        self.search = QLineEdit(objectName="SearchField")
-        self.search.setPlaceholderText("Search your ships")
-        self.search.setClearButtonEnabled(True)
-        self.search.setMinimumWidth(150)
-        self.search.setMaximumWidth(220)
+        f = self.filters
+        self.search = f.add_search("Search your ships", 220)
         self.search.textChanged.connect(lambda _t: self._render())
-        bar.addWidget(self.search)
-        bar.addStretch(1)
-        self.sort_label = QLabel("SORT", objectName="ConfigLabel")
-        bar.addWidget(self.sort_label)
-        self.sort = self._combo(SORTS)
-        bar.addWidget(self.sort)
-        self.add_btn = QPushButton("Add ships", objectName="StartButtonSmall")
-        self.add_btn.setCursor(Qt.PointingHandCursor)
-        self.add_btn.clicked.connect(self._open_add)
-        bar.addWidget(self.add_btn)
-        outer.addWidget(bar_frame)
-
-        fbar_frame = self.filter_bar = QFrame(objectName="ToolBar")
-        fbar = QHBoxLayout(fbar_frame)
-        fbar.setContentsMargins(10, 6, 10, 6)
-        fbar.setSpacing(8)
-        fbar.addWidget(QLabel("SHOW", objectName="ConfigLabel"))
         self.role_filter = self._combo([("All roles", "")] + [(r, r) for r in ships.ROLES])
         self.size_filter = self._combo([("All sizes", "")] + [(s, s) for s in ships.SIZES])
-        self.acquired_filter = self._combo([("Any purchase", ""), ("Pledge", PLEDGE), ("In-game", INGAME)])
-        self.status_filter = self._combo([("Any status", ""), ("Flight-ready", ships.FLIGHT_READY),
+        self.acquired_filter = self._combo([("Pledge or in game", ""), ("Pledge", PLEDGE), ("In game", INGAME)])
+        self.status_filter = self._combo([("Any status", ""), ("Flight ready", ships.FLIGHT_READY),
                                           ("In concept", ships.IN_CONCEPT)])
         for combo in (self.role_filter, self.size_filter, self.acquired_filter, self.status_filter):
-            fbar.addWidget(combo)
-        fbar.addSpacing(8)
-        self.summary = _label("", "InspectorHint")
-        fbar.addWidget(self.summary)
-        self.status_label = _label("", "InspectorHint")
-        self.status_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        fbar.addWidget(self.status_label, stretch=1)
-        credit = _label(f"Ship data: <a style='color:{PALETTE['info']}' href='{WIKI_URL}'>Star Citizen Wiki</a>",
-                        "InspectorHint")
-        credit.setOpenExternalLinks(True)
-        fbar.addWidget(credit)
-        outer.addWidget(fbar_frame)
+            f.add(combo)
+        self.sort = self._combo(SORTS, marks=False)
+        f.add_sort(self.sort)
+        self.result.clear_requested.connect(self._clear_filters)
+        self.status_label = kit.label("", "MutedText")
+        self.result.extra.addWidget(self.status_label)
 
-        body = QHBoxLayout()
-        body.setSpacing(14)
-        self.scroll = QScrollArea(objectName="InspectorScroll")
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.scroll.setFrameShape(QFrame.NoFrame)
-        self.grid_host = QWidget(objectName="Inspector")
+        body_widget = QWidget()
+        body = QHBoxLayout(body_widget)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(12)
+        self.scroll = kit.scroll_area()
+        self.grid_host = QWidget()
         self.grid = QGridLayout(self.grid_host)
         self.grid.setContentsMargins(0, 0, 0, 0)
         self.grid.setSpacing(GRID_SPACING)
@@ -476,20 +441,13 @@ class HangarView(QWidget):
         self.scroll.setWidget(self.grid_host)
         body.addWidget(self.scroll, stretch=1)
 
-        self.empty = QFrame(objectName="SidePanel")
-        ev = QVBoxLayout(self.empty)
-        ev.setContentsMargins(30, 30, 30, 30)
-        ev.addWidget(_label("YOUR HANGAR IS EMPTY", "SectionLabel"), alignment=Qt.AlignHCenter)
-        hint = _label("Add the ships you own, pledged on the store or bought in game.\n"
-                      "Ships still in concept are listed too, with their loaners.", "InspectorHint")
-        hint.setAlignment(Qt.AlignCenter)
-        ev.addWidget(hint, alignment=Qt.AlignHCenter)
-        ev.addSpacing(6)
-        empty_add = QPushButton("Add ships", objectName="StartButtonSmall")
-        empty_add.setCursor(Qt.PointingHandCursor)
-        empty_add.clicked.connect(self._open_add)
-        ev.addWidget(empty_add, alignment=Qt.AlignHCenter)
-        ev.addStretch(1)
+        self.empty_state = kit.EmptyState(
+            "Your hangar is empty",
+            "Add the ships you own, pledged on the store or bought in game. Ships still in concept are "
+            "listed too, with their loaners.", "Add ships", self._open_add)
+        self.empty_state.action.setProperty("kind", "primary")
+        kit.repolish(self.empty_state.action)
+        self.empty = self.empty_state
         body.addWidget(self.empty, stretch=1)
 
         self.details = _DetailsPage()
@@ -497,7 +455,7 @@ class HangarView(QWidget):
         self.details.hide()
         body.addWidget(self.details, stretch=1)
 
-        self.side = QFrame(objectName="SidePanel")
+        self.side = kit.panel()
         self.side.setFixedWidth(340)
         side = QVBoxLayout(self.side)
         side.setContentsMargins(16, 14, 16, 16)
@@ -506,13 +464,17 @@ class HangarView(QWidget):
         self._build_edit_panel(side)
         self.side.hide()
         body.addWidget(self.side)
-        outer.addLayout(body, stretch=1)
+        self.set_content(body_widget)
 
-    def _combo(self, items) -> QComboBox:
-        combo = QComboBox(objectName="ConfigCombo")
+    def _clear_filters(self) -> None:
+        for combo in (self.role_filter, self.size_filter, self.acquired_filter, self.status_filter):
+            combo.setCurrentIndex(0)
+        self.search.clear()
+        self._render()
+
+    def _combo(self, items, marks: bool = True) -> QComboBox:
+        combo = kit.Dropdown(items, marks=marks)
         combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-        for text, data in items:
-            combo.addItem(text, data)
         combo.activated.connect(lambda _i: self._render())
         return combo
 
@@ -713,13 +675,23 @@ class HangarView(QWidget):
         total = len(self.entries)
         pledged = sum(1 for e in self.entries if e.acquired == PLEDGE)
         concept = sum(1 for e in self.entries if (s := self.catalogue.get(e.ship)) and s.concept)
-        parts = [f"{total} ship{'s' if total != 1 else ''}", f"{pledged} pledge", f"{total - pledged} in game"]
+        cargo = sum(s.cargo or 0 for e in self.entries if (s := self.catalogue.get(e.ship)))
+        parts = [f"{total} ship{'s' if total != 1 else ''}", f"{pledged} pledged", f"{total - pledged} in game"]
         if concept:
             parts.append(f"{concept} in concept")
-        text = "  ·  ".join(parts) if total else ""
+        if cargo:
+            parts.append(f"{cargo:,} SCU cargo")
+        text = " · ".join(parts) if total else "No ships yet"
         if total and shown != total:
-            text += f"   (showing {shown})"
-        self.summary.setText(text)
+            text = f"Showing {shown} of " + text
+        self.result.set_count(text)
+        chips = []
+        for combo in (self.role_filter, self.size_filter, self.acquired_filter, self.status_filter):
+            if combo.currentIndex() > 0:
+                chips.append((combo.currentText(), lambda _c=False, c=combo: (c.setCurrentIndex(0), self._render())))
+        if self.search.text().strip():
+            chips.append((f"“{self.search.text().strip()}”", lambda _c=False: self.search.clear()))
+        self.result.set_chips(chips)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -737,13 +709,12 @@ class HangarView(QWidget):
         """A ship's page goes back to the hangar; the hangar to the launcher."""
         if self._details is not None:
             self._close_details()
-        else:
-            self.back_requested.emit()
 
     def _set_details_mode(self, on: bool) -> None:
-        """Hangar-only controls (search, sort, filters) hide on a ship's page."""
-        for widget in (self.search, self.sort_label, self.sort, self.filter_bar):
-            widget.setVisible(not on)
+        """Hangar-only controls (filters, the result line) hide on a ship's page."""
+        self.filters.setVisible(not on)
+        self.result.setVisible(not on)
+        self.back_btn.setVisible(on)
 
     def _open_details(self, entry_id: str) -> None:
         entry = next((e for e in self.entries if e.id == entry_id), None)
@@ -807,6 +778,7 @@ class HangarView(QWidget):
         self.edit_panel.hide()
         self.add_panel.show()
         self.side.show()
+        self.add_btn.hide()          # the panel's Add is the main action now
         self.empty.hide()
         self.add_status.setText("")
         self._fill_picker()
@@ -822,6 +794,7 @@ class HangarView(QWidget):
         self.add_panel.hide()
         self.edit_panel.show()
         self.side.show()
+        self.add_btn.hide()
         self.edit_title.setText((ship.name if ship else entry.ship_name).upper())
         self._check(self.edit_acquired, entry.acquired)
         self._limit_acquired(self.edit_acquired, ship)
@@ -838,7 +811,8 @@ class HangarView(QWidget):
     def _close_side(self) -> None:
         self._editing = None
         self.side.hide()
-        self.empty.setVisible(not self.entries)
+        self.add_btn.show()
+        self.empty.setVisible(not self.entries and self._details is None)
         QTimer.singleShot(0, self._relayout)
 
     def _relayout(self) -> None:

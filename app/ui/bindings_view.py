@@ -50,6 +50,7 @@ from app.bindings import ActionDef, BindingProfile, GameData
 from app.joyinput import AXIS_MAX, JoystickInput
 from app.joystick_templates import TEMPLATES, Control, DeviceSetup, InputSlot, SetupStore
 from app.theme import PALETTE
+from app.ui import kit
 
 # Scene geometry: callout column | drawing | callout column.
 COL_W = 300
@@ -289,12 +290,13 @@ class _Loader(QObject):
 
 # -- the view --------------------------------------------------------------
 
-class BindingsView(QWidget):
-    back_requested = Signal()
+class BindingsView(kit.ToolPage):
     profiles_changed = Signal()
 
     def __init__(self, channel: str, parent=None):
-        super().__init__(parent)
+        super().__init__("joystick", "Joystick Bindings",
+                         "See what every button on your stick does, rebind it by pressing it, and save "
+                         "the result as a launch profile", parent=parent)
         self.channel = channel
         self.paths = channel_mod.resolve_channel_paths(settings.current().game_root, channel)
         self.store = SetupStore()
@@ -343,56 +345,40 @@ class BindingsView(QWidget):
 
     # -- layout -------------------------------------------------------------
     def _build_ui(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 14, 20, 20)
-        outer.setSpacing(10)
-
-        bar_frame = QFrame(objectName="ToolBar")
-        bar = QHBoxLayout(bar_frame)
-        bar.setContentsMargins(10, 8, 10, 8)
-        bar.setSpacing(8)
-        back = QPushButton("←  Back")
-        back.setObjectName("ToolButton")
-        back.setCursor(Qt.PointingHandCursor)
-        back.clicked.connect(self._on_back)
-        bar.addWidget(back)
-
-        self.source_combo = QComboBox(objectName="ConfigCombo")
-        self.source_combo.setToolTip("Bindings to show and edit: the game's current ones or a saved profile")
+        f = self.filters
+        self.source_combo = kit.Dropdown(marks=False,
+                                         tip="Bindings to show and edit: the game's current ones or a saved profile")
         self.source_combo.setMinimumWidth(170)
         self.source_combo.activated.connect(self._on_source_changed)
-        bar.addWidget(self.source_combo)
-
-        bar.addSpacing(6)
+        f.add(self.source_combo, "Bindings")
+        f.add_spacing(6)
         self.stick_bar = QHBoxLayout()
         self.stick_bar.setSpacing(0)
         self.stick_group = QButtonGroup(self)
         self.stick_group.setExclusive(True)
-        bar.addLayout(self.stick_bar)
-
-        self.context_combo = QComboBox(objectName="ConfigCombo")
-        self.context_combo.setToolTip("Only show actions from this part of the game")
+        f.row.addWidget(kit.caps("Stick"))
+        f.row.addLayout(self.stick_bar)
+        f.add_spacing(6)
+        self.context_combo = kit.Dropdown(tip="Only show actions from this part of the game")
         self.context_combo.setMinimumWidth(150)
         self.context_combo.activated.connect(self._on_context_changed)
-        bar.addWidget(self.context_combo)
+        f.add(self.context_combo, "Show")
+        f.add_stretch()
+        self.result.hide()
 
-        bar.addStretch(1)
+        self.save_btn = kit.button("Save profile", "secondary", self._on_save_clicked)
+        self.add_action(self.save_btn)
 
-        self.save_btn = QPushButton("Save profile")
-        self.save_btn.setObjectName("StartButtonSmall")
-        self.save_btn.setCursor(Qt.PointingHandCursor)
-        self.save_btn.clicked.connect(self._on_save_clicked)
-        bar.addWidget(self.save_btn)
-        outer.addWidget(bar_frame)
-
-        body = QHBoxLayout()
-        body.setSpacing(14)
+        body_widget = QWidget()
+        body = QHBoxLayout(body_widget)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(12)
         self.scene = QGraphicsScene(self)
         self.diagram = DiagramView(self.scene)
         self.diagram.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         body.addWidget(self.diagram, stretch=1)
 
-        panel = QFrame(objectName="SidePanel")
+        panel = kit.panel()
         panel.setFixedWidth(330)
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(0, 0, 0, 0)
@@ -408,7 +394,7 @@ class BindingsView(QWidget):
         scroll.setWidget(self.inspector)
         panel_layout.addWidget(scroll)
         body.addWidget(panel)
-        outer.addLayout(body, stretch=1)
+        self.set_content(body_widget)
 
         self._set_placeholder("Loading bindings…")
 
@@ -489,17 +475,20 @@ class BindingsView(QWidget):
         )
         return answer == QMessageBox.Discard
 
-    def _on_back(self) -> None:
+    def can_leave(self) -> bool:
+        """Asked by the window before another tool is shown: unsaved edits
+        are kept or discarded first."""
         if self._confirm_discard():
             if self.dirty:
                 self._load_source(self.source)
-            self.back_requested.emit()
+            return True
+        return False
 
     # -- sticks ---------------------------------------------------------------
     def _rebuild_stick_buttons(self) -> None:
         for btn in self.stick_group.buttons():
             self.stick_group.removeButton(btn)
-            btn.deleteLater()
+            kit.drop(btn)
         products = self.profile.joystick_products() if self.profile else {}
         if not products:
             self.instance = None
@@ -516,7 +505,8 @@ class BindingsView(QWidget):
             product = products[inst]
             btn = QPushButton(_device_label(product, inst))
             btn.setObjectName("Segment")
-            btn.setProperty("pos", "first" if pos == 0 else "last" if pos == len(instances) - 1 else "mid")
+            btn.setProperty("pos", "only" if len(instances) == 1 else
+                            "first" if pos == 0 else "last" if pos == len(instances) - 1 else "mid")
             btn.setCheckable(True)
             btn.setToolTip(f"js{inst} · {product}")
             btn.setCursor(Qt.PointingHandCursor)
@@ -655,7 +645,10 @@ class BindingsView(QWidget):
         self._update_save_btn()
 
     def _update_save_btn(self) -> None:
+        # The view's main action only once there's something to save.
         self.save_btn.setText("Save profile •" if self.dirty else "Save profile")
+        self.save_btn.setProperty("kind", "primary" if self.dirty else "secondary")
+        kit.repolish(self.save_btn)
 
     # -- rendering ------------------------------------------------------------
     def _render(self) -> None:

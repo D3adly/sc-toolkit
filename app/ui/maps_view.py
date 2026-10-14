@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 
 from app import config, maps, osutil
 from app.theme import PALETTE
+from app.ui import kit
 
 CACHE = config.CACHE_DIR / "maps"
 TIMEOUT = 30
@@ -135,11 +136,12 @@ class ZoomView(QGraphicsView):
             self.fit()
 
 
-class MapsView(QWidget):
-    back_requested = Signal()
-
+class MapsView(kit.ToolPage):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(
+            "scmaps", "SC Maps",
+            "One-page guides by <a style='color:" + PALETTE["info"] + "; text-decoration:none' "
+            f"href='{maps.GUIDES_INDEX_URL}'>Mr Kraken</a>: all credit to the author", parent=parent)
         self._loader = _ImageLoader(self)
         self._loader.loaded.connect(self._on_loaded)
         self._loader.failed.connect(self._on_failed)
@@ -148,61 +150,36 @@ class MapsView(QWidget):
         self._fill_guides()
 
     def _build_ui(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 14, 20, 20)
-        outer.setSpacing(10)
-
-        bar_frame = QFrame(objectName="ToolBar")
-        bar = QHBoxLayout(bar_frame)
-        bar.setContentsMargins(10, 8, 10, 8)
-        bar.setSpacing(8)
-        back = QPushButton("←  Back", objectName="ToolButton")
-        back.setCursor(Qt.PointingHandCursor)
-        back.clicked.connect(self.back_requested.emit)
-        bar.addWidget(back)
-        bar.addSpacing(6)
-        bar.addWidget(QLabel("GUIDE", objectName="ConfigLabel"))
-        self.guide_combo = QComboBox(objectName="ConfigCombo")
+        self.post_btn = kit.button("Original post ↗", "ghost", self._open_post,
+                                   tip="Open the guide's post on the RSI Community Hub")
+        self.add_action(self.post_btn)
+        f = self.filters
+        self.guide_combo = kit.Dropdown(marks=False)
         self.guide_combo.setMinimumWidth(300)
         self.guide_combo.setMaxVisibleItems(20)
         self.guide_combo.currentIndexChanged.connect(self._on_guide_changed)
-        bar.addWidget(self.guide_combo)
-        self.page_label = QLabel("PAGE", objectName="ConfigLabel")
-        bar.addWidget(self.page_label)
-        self.page_combo = QComboBox(objectName="ConfigCombo")
-        self.page_combo.setMinimumWidth(240)
+        f.add(self.guide_combo, "Guide")
+        self.page_label = kit.caps("Page")
+        f.row.addWidget(self.page_label)
+        self.page_combo = kit.Dropdown(marks=False)
+        self.page_combo.setMinimumWidth(220)
         self.page_combo.currentIndexChanged.connect(self._on_page_changed)
-        bar.addWidget(self.page_combo)
-        bar.addStretch(1)
+        f.row.addWidget(self.page_combo)
+        f.add_stretch()
+        zoom = QHBoxLayout()
+        zoom.setSpacing(4)
         for text, tip, slot in (
             ("−", "Zoom out", lambda: self.viewer.zoom_by(1 / ZOOM_STEP)),
-            ("Fit", "Fit to window (double-click the image)", lambda: self.viewer.fit()),
+            ("Fit", "Fit to window (or double-click the image)", lambda: self.viewer.fit()),
             ("+", "Zoom in", lambda: self.viewer.zoom_by(ZOOM_STEP)),
             ("100%", "Actual size", lambda: self.viewer.actual_size()),
         ):
-            btn = QPushButton(text, objectName="MiniButton")
-            btn.setToolTip(tip)
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(slot)
-            bar.addWidget(btn)
-        self.zoom_label = QLabel("", objectName="InspectorHint")
+            zoom.addWidget(kit.button(text, tip=tip, slot=slot))
+        f.row.addLayout(zoom)
+        self.zoom_label = kit.label("", "MutedText", align=Qt.AlignRight | Qt.AlignVCenter)
         self.zoom_label.setMinimumWidth(44)
-        bar.addWidget(self.zoom_label)
-        self.post_btn = QPushButton("Original post ↗", objectName="MiniButton")
-        self.post_btn.setToolTip("Open the guide's post on the RSI Community Hub")
-        self.post_btn.setCursor(Qt.PointingHandCursor)
-        self.post_btn.clicked.connect(self._open_post)
-        bar.addWidget(self.post_btn)
-        outer.addWidget(bar_frame)
-
-        credit = QLabel(
-            "Community guides by <a style='color:" + PALETTE["info"] + "' "
-            f"href='{maps.GUIDES_INDEX_URL}'>Mr Kraken</a>: all credit to the author. "
-            "Scroll to zoom, drag to move, double-click to switch between fit and 100%.",
-            objectName="AboutLabel",
-        )
-        credit.setOpenExternalLinks(True)
-        outer.addWidget(credit, alignment=Qt.AlignLeft)
+        f.row.addWidget(self.zoom_label)
+        self.result.set_count("Scroll to zoom, drag to move, double-click to switch between fit and 100%.")
 
         # Solid backdrop: many guides have transparent backgrounds.
         frame = QFrame(objectName="MapFrame")
@@ -210,14 +187,14 @@ class MapsView(QWidget):
         stack.setStackingMode(QStackedLayout.StackAll)
         self.viewer = ZoomView()
         self.viewer.zoom_changed.connect(lambda z: self.zoom_label.setText(f"{z * 100:.0f}%"))
-        self.message = QLabel("", objectName="InspectorHint")
+        self.message = QLabel("", objectName="EmptyText")
         self.message.setAlignment(Qt.AlignCenter)
         self.message.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.message.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         stack.addWidget(self.viewer)
         stack.addWidget(self.message)
         stack.setCurrentWidget(self.message)   # message floats above the image
-        outer.addWidget(frame, stretch=1)
+        self.set_content(frame)
 
     # -- lifecycle ------------------------------------------------------------
     def activate(self) -> None:

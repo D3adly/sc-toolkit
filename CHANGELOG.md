@@ -23,6 +23,19 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   chance on each card. The ore you picked stands out and the other rocks fade back; the single-rock
   radar signature (RS) is bold. The resource list shows each ore's rarity and how many places have it.
 
+- **New: Mission Database** (the Missions tool). Every mission in the game files: search by name,
+  contractor or the blueprints it rewards; filter by system, type and contractor, and under *More
+  filters* by legal or illegal, events, rewards (blueprints, fixed pay, items) and the work (ship
+  or on-foot combat, cargo, repeatable, not part of a chain); sort by most rep, most blueprints,
+  quickest, easiest and more. Click a mission for its details: description, rank, rewards, cargo,
+  time, difficulty, stages and the blueprints it can give. **Blueprints you don't have** is worked out
+  from your own game logs, without signing in. Event missions are hidden until you pick the event,
+  as on the website.
+
+- **My Ships, Maps, Joystick Bindings, Settings and What's new** have the same header and filter
+  bar as the other tools. My Ships shows fleet totals (pledged, in game, in concept, cargo) and your
+  filters as removable chips. Joystick Bindings asks before leaving with unsaved changes.
+
 - **My Stats:** new *Last 30 days* and *Last 7 days* periods next to All time and Last session, four
   headline figures at the top, and the longest lists as top-5 bar charts with *Show all*.
 

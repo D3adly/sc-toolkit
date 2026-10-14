@@ -134,7 +134,7 @@ class Badge(QLabel):
             self.setStyleSheet(f"color: {c}; border: 1px solid {c};")
         if tip:
             self.setToolTip(tip)
-        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
 
 class Rarity(QLabel):

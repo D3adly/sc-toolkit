@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 
 from app import __version__, changelog, osutil, updater
 from app.theme import PALETTE
+from app.ui import kit
 
 
 def _markdown_view(object_name: str) -> QTextBrowser:
@@ -41,38 +42,25 @@ def _set_markdown(view: QTextBrowser, text: str) -> None:
         block = block.next()
 
 
-class WhatsNewView(QWidget):
-    back_requested = Signal()
+class WhatsNewView(kit.ToolPage):
     check_requested = Signal()
     install_requested = Signal()
 
     def __init__(self, parent=None):
-        super().__init__(parent)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 14, 20, 20)
+        super().__init__("launch", "What's new", f"Changes in each SC-Toolbox version (you have v{__version__})",
+                         filters=False, parent=parent)
+        self.result.hide()
+        body = QWidget()
+        outer = QVBoxLayout(body)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(10)
-
-        bar_frame = QFrame(objectName="ToolBar")
-        bar = QHBoxLayout(bar_frame)
-        bar.setContentsMargins(10, 8, 10, 8)
-        bar.setSpacing(8)
-        back = QPushButton("←  Back", objectName="ToolButton")
-        back.setCursor(Qt.PointingHandCursor)
-        back.clicked.connect(self.back_requested.emit)
-        bar.addWidget(back)
-        bar.addSpacing(8)
-        bar.addWidget(QLabel("WHAT'S NEW", objectName="ConfigLabel"))
-        bar.addStretch(1)
-        self.check_status = QLabel("", objectName="InspectorHint")
-        bar.addWidget(self.check_status)
-        self.check_btn = QPushButton("Check for updates", objectName="MiniButton")
-        self.check_btn.setCursor(Qt.PointingHandCursor)
-        self.check_btn.clicked.connect(self._on_check)
-        bar.addWidget(self.check_btn)
-        outer.addWidget(bar_frame)
+        self.check_status = QLabel("", objectName="MutedText")
+        self.actions.addWidget(self.check_status)
+        self.check_btn = kit.button("Check for updates", slot=self._on_check)
+        self.add_action(self.check_btn)
 
         # The available update: its notes, Install (or the release page).
-        self.update_panel = QFrame(objectName="SidePanel")
+        self.update_panel = kit.panel()
         upd = QVBoxLayout(self.update_panel)
         upd.setContentsMargins(20, 16, 20, 16)
         upd.setSpacing(8)
@@ -83,8 +71,7 @@ class WhatsNewView(QWidget):
         self.page_btn = QPushButton("Release page", objectName="MiniButton")
         self.page_btn.setCursor(Qt.PointingHandCursor)
         head.addWidget(self.page_btn)
-        self.install_btn = QPushButton("Install and restart", objectName="StartButtonSmall")
-        self.install_btn.setCursor(Qt.PointingHandCursor)
+        self.install_btn = kit.button("Install and restart", "primary")
         self.install_btn.clicked.connect(self.install_requested.emit)
         head.addWidget(self.install_btn)
         upd.addLayout(head)
@@ -102,7 +89,7 @@ class WhatsNewView(QWidget):
         self.update_panel.hide()
         outer.addWidget(self.update_panel)
 
-        log_panel = QFrame(objectName="SidePanel")
+        log_panel = kit.panel()
         log = QVBoxLayout(log_panel)
         log.setContentsMargins(20, 12, 8, 12)
         self.changelog = _markdown_view("ChangelogText")
@@ -110,8 +97,7 @@ class WhatsNewView(QWidget):
         log.addWidget(self.changelog)
         outer.addWidget(log_panel, stretch=1)
 
-        about = QLabel(f"You have SC-Toolbox v{__version__}", objectName="AboutLabel")
-        outer.addWidget(about, alignment=Qt.AlignRight)
+        self.set_content(body)
         self._page_url = updater.RELEASES_PAGE
         self.page_btn.clicked.connect(lambda: osutil.open_url(self._page_url))
 

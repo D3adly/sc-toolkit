@@ -1350,6 +1350,60 @@ QInputDialog QLineEdit {{
     font-size: 11px;
     background: transparent;
 }}
+#HangarCard {{
+    background: {bg_panel};
+    border: 1px solid {border};
+    border-radius: 12px;
+}}
+#HangarCard:hover {{
+    border: 1px solid {border_hover};
+}}
+#HangarCard #ShipImage {{
+    border-top-left-radius: 11px;
+    border-top-right-radius: 11px;
+}}
+#MissionCard {{
+    background: {bg_panel};
+    border: 1px solid {border};
+    border-radius: 12px;
+}}
+#MissionCard:hover {{
+    border: 1px solid {border_hover};
+}}
+#MissionCard[selected="true"] {{
+    background: rgba(25, 34, 42, 0.88);
+    border: 1px solid {info_dim};
+}}
+#StatSmall {{
+    color: {text_primary};
+    font-size: 13px;
+    font-weight: 600;
+}}
+#DetailTitle {{
+    color: {text_primary};
+    font-size: 17px;
+    font-weight: 700;
+}}
+#ToggleChip {{
+    background: {bg_input};
+    border: 1px solid {border};
+    border-radius: 13px;
+    color: {text_secondary};
+    font-size: 12px;
+    padding: 4px 11px;
+}}
+#ToggleChip:hover {{
+    border: 1px solid {border_hover};
+    color: {text_primary};
+}}
+#ToggleChip:checked {{
+    background: {info_soft};
+    border: 1px solid {info_dim};
+    color: {text_primary};
+}}
+#ToggleChip:disabled {{
+    color: {text_muted};
+}}
 #ResultCount {{
     color: {text_secondary};
     font-size: 12px;

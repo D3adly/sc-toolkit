@@ -33,6 +33,7 @@ from app import __version__, channel as channel_mod, config, datahub, hotkeys, p
 from app.account_controller import AccountState, controller as account_controller
 from app.settings import Settings
 from app.theme import PALETTE
+from app.ui import kit
 from app.ui.widgets import Switch
 
 WINDOWS = sys.platform.startswith("win")
@@ -167,42 +168,26 @@ def _round_pixmap(data: bytes, size: int) -> QPixmap | None:
     return out
 
 
-class SettingsView(QWidget):
+class SettingsView(kit.ToolPage):
     saved = Signal()
-    back_requested = Signal()
     open_overlay_requested = Signal()
 
     def __init__(self, parent=None):
-        super().__init__(parent)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 14, 20, 20)
+        super().__init__("settings", "Settings", "Where your game is, the overlay's keys, your online account "
+                         "and updates", filters=False, parent=parent)
+        self.result.hide()
+        body = QWidget()
+        outer = QVBoxLayout(body)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(10)
-
-        bar_frame = QFrame(objectName="ToolBar")
-        bar = QHBoxLayout(bar_frame)
-        bar.setContentsMargins(10, 8, 10, 8)
-        bar.setSpacing(8)
-        self.back_btn = QPushButton("←  Back", objectName="ToolButton")
-        self.back_btn.setCursor(Qt.PointingHandCursor)
-        self.back_btn.clicked.connect(self.back_requested.emit)
-        bar.addWidget(self.back_btn)
-        bar.addSpacing(8)
-        bar.addWidget(QLabel("SETTINGS", objectName="ConfigLabel"))
-        bar.addStretch(1)
-        detect = QPushButton("Auto-detect", objectName="MiniButton")
-        detect.setToolTip("Look for Star Citizen and GameGlass in their usual install locations")
-        detect.setCursor(Qt.PointingHandCursor)
+        detect = kit.button("Auto-detect", tip="Look for Star Citizen and GameGlass in their usual install locations")
         detect.clicked.connect(self._autodetect)
-        bar.addWidget(detect)
-        self.save_btn = QPushButton("Save", objectName="StartButtonSmall")
-        self.save_btn.setCursor(Qt.PointingHandCursor)
-        self.save_btn.clicked.connect(self._save)
-        bar.addWidget(self.save_btn)
-        outer.addWidget(bar_frame)
+        self.add_action(detect)
+        self.save_btn = kit.button("Save", "primary", self._save)
+        self.add_action(self.save_btn)
+        self.back_btn = QWidget()          # (no Back any more: the rail)
 
-        self.intro = QLabel("", objectName="InspectorNote")
-        self.intro.setWordWrap(True)
-        outer.addWidget(self.intro)
+        self.intro = self.notice
 
         # Scrolls when the window is too short for every section.
         scroll = QScrollArea(objectName="InspectorScroll")
@@ -215,7 +200,7 @@ class SettingsView(QWidget):
         sections.setSpacing(10)
         scroll.setWidget(content)
 
-        panel = QFrame(objectName="SidePanel")
+        panel = kit.panel()
         grid = QGridLayout(panel)
         grid.setContentsMargins(20, 18, 20, 18)
         grid.setHorizontalSpacing(18)
@@ -266,7 +251,7 @@ class SettingsView(QWidget):
         )
         sections.addWidget(panel)
 
-        overlay_panel = QFrame(objectName="SidePanel")
+        overlay_panel = kit.panel()
         ogrid = QGridLayout(overlay_panel)
         ogrid.setContentsMargins(20, 18, 20, 18)
         ogrid.setHorizontalSpacing(18)
@@ -307,7 +292,7 @@ class SettingsView(QWidget):
         self._account_panel = self._build_account_panel()
         sections.addWidget(self._account_panel)
 
-        updates_panel = QFrame(objectName="SidePanel")
+        updates_panel = kit.panel()
         ugrid = QGridLayout(updates_panel)
         ugrid.setContentsMargins(20, 18, 20, 18)
         ugrid.setHorizontalSpacing(18)
@@ -331,7 +316,7 @@ class SettingsView(QWidget):
             ugrid.addWidget(label, row, 2)
         sections.addWidget(updates_panel)
 
-        data_panel = QFrame(objectName="SidePanel")
+        data_panel = kit.panel()
         dv = QVBoxLayout(data_panel)
         dv.setContentsMargins(20, 18, 20, 18)
         dv.setSpacing(8)
@@ -365,16 +350,17 @@ class SettingsView(QWidget):
             f"SC-Toolbox v{__version__} · GPL-3.0 · "
             f"<a style='color:{PALETTE['info']}' href='https://github.com/D3adly/sc-toolkit'>"
             "github.com/D3adly/sc-toolkit</a>",
-            objectName="AboutLabel",
+            objectName="MutedText",
         )
         about.setOpenExternalLinks(True)
         outer.addWidget(about, alignment=Qt.AlignRight)
+        self.set_content(body)
 
     # -- online account ---------------------------------------------------------
     AVATAR = 44
 
     def _build_account_panel(self) -> QFrame:
-        panel = QFrame(objectName="SidePanel")
+        panel = kit.panel()
         grid = QGridLayout(panel)
         grid.setContentsMargins(20, 18, 20, 18)
         grid.setHorizontalSpacing(18)
@@ -479,7 +465,7 @@ class SettingsView(QWidget):
             self.avatar.setPixmap(pixmap)
 
     # -- lifecycle ------------------------------------------------------------
-    def activate(self, first_run: bool = False) -> None:
+    def activate(self, first_run: bool = False) -> None:  # noqa: D401 (ToolPage.activate takes no argument)
         s = settings.current()
         for row, value in ((self.live, s.live_dir), (self.launch, s.launch_path),
                            (self.gameglass, s.gameglass_path), (self.backups, s.backup_dir),
@@ -489,12 +475,11 @@ class SettingsView(QWidget):
             row.set_value(getattr(s, field))
         self.update_check.setChecked(s.update_check)
         self.update_prereleases.setChecked(s.update_prereleases)
-        self.back_btn.setVisible(not first_run)
-        self.intro.setVisible(first_run)
-        self.intro.setText(
-            "Welcome! Point the launcher at your Star Citizen install to get started. "
-            "Try Auto-detect first — it checks the usual install locations."
-        )
+        if first_run:
+            self.intro.show_text("Welcome! Point SC-Toolbox at your Star Citizen install to get started. "
+                                 "Try <b>Auto-detect</b> first: it checks the usual install locations.", "info")
+        else:
+            self.intro.hide()
         self._validate()
 
     def deactivate(self) -> None:

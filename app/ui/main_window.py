@@ -994,6 +994,9 @@ class MainWindow(QMainWindow):
         if key == "settings":
             self._show_settings()
             return
+        if key == "whatsnew":
+            self._show_whats_new()
+            return
         if key != "launch" and key in NEEDS_GAME and self.channel is None:
             key = "launch"
         view = self.stack.widget(0) if key == "launch" else self._view(key)
@@ -1001,6 +1004,9 @@ class MainWindow(QMainWindow):
 
     def _switch_to(self, key: str, view: QWidget) -> None:
         previous = self.stack.currentWidget()
+        if previous is not view and hasattr(previous, "can_leave") and not previous.can_leave():
+            self.rail.set_current(self._current)
+            return
         if previous is not view and hasattr(previous, "deactivate"):
             previous.deactivate()
         self._current = key

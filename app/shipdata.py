@@ -28,7 +28,7 @@ from app import config
 from app.datacore import DataCore
 
 CACHE = config.CACHE_DIR / "shipdata"
-FORMAT = 3
+FORMAT = 5  # 4: gunner_seats; 5: remote turrets are turrets
 
 # Loadout groups shown on the details page, by the item's AttachDef Type.
 GROUPS = [
@@ -42,6 +42,27 @@ GROUPS = [
 ]
 _GROUP_OF = {t: key for key, _title, types in GROUPS for t in types}
 _TURRET_SUBTYPES = {"MannedTurret", "PDCTurret", "RemoteTurret"}
+
+
+def _crew_turret(info: dict) -> bool:
+    """A turret, not the pilot's guns: manned turrets, PDCs, and every turret
+    a seat or console takes control of. Remote turrets are typed like plain
+    gimbal mounts (Turret/GunTurret, e.g. the Polaris's rear ones), but only
+    they carry the interaction link a seat uses to control them; the pilot's
+    own nose and ball turrets (Hornet, Arrow, Valkyrie) don't."""
+    return (info["type"] == "TurretBase" or info["subtype"] in _TURRET_SUBTYPES
+            or (info["type"] == "Turret" and info.get("linked", False)))
+
+
+_ARMED = {"WeaponGun", "MissileLauncher", "Missile"}
+
+
+def _gunner_seat(info: dict, armed: bool) -> bool:
+    """A turret a gunner sits in or operates: a crew turret with guns or
+    missiles on it (the Polaris's rear-top one only fires missiles). Not PDCs
+    (automatic), nor mining, salvage, tractor or camera turrets (unarmed:
+    their operators aren't gunners)."""
+    return _crew_turret(info) and info["subtype"] != "PDCTurret" and armed
 _GRADES = {1: "A", 2: "B", 3: "C", 4: "D"}
 
 
@@ -90,6 +111,8 @@ class _Reader:
             "size": attach.get("Size") or 0,
             "grade": _GRADES.get(attach.get("Grade"), ""),
             "class": family.group(1).strip() if family else "",
+            # A seat or console can take control of it (remote turrets; see _crew_turret).
+            "linked": "SInteractionLinkParams" in comps,
         }
         # Power / coolant / shield deltas while online.
         for state in (comps.get("ItemResourceComponentParams") or {}).get("states") or []:
@@ -128,7 +151,9 @@ class _Reader:
         self._items[cls] = info
         return info
 
-    def ship(self, cls: str) -> dict | None:
+    def ship(self, cls: str, crew: int = 0) -> dict | None:
+        """crew: the ship list's crew size (0: unknown). A one-crew vehicle
+        (the Storm tank) has no gunners: its turret is the driver's."""
         # Deep: turrets, mounts and racks nest loadouts several levels down.
         comps = _components(self.dc.record("EntityClassDefinition." + cls, max_depth=24))
         loadout = (comps.get("SEntityComponentDefaultLoadoutParams") or {}).get("loadout")
@@ -137,8 +162,21 @@ class _Reader:
         rows: dict[tuple, dict] = {}        # (group, name, size, grade) → row with a count
         totals = {"power_gen": 0.0, "power_max": 0.0, "power_min": 0.0, "coolant_gen": 0.0,
                   "shield_hp": 0.0, "shield_regen": 0.0, "shields": 0, "hydrogen_scu": 0.0,
-                  "quantum_scu": 0.0}
+                  "quantum_scu": 0.0, "gunner_seats": 0}
         stats: dict = {}
+
+        def armed(node, depth: int = 0) -> bool:
+            for entry in (node or {}).get("entries") or [] if depth < 10 else []:
+                if not isinstance(entry, dict):
+                    continue
+                cls = entry.get("entityClassName") or ""
+                ref = entry.get("entityClassReference")
+                if not cls and isinstance(ref, str) and ref.startswith("@EntityClassDefinition."):
+                    cls = ref.split(".", 1)[1]
+                info = self.item(cls) if cls else None
+                if (info and info["type"] in _ARMED) or armed(entry.get("loadout"), depth + 1):
+                    return True
+            return False
 
         def walk(node, in_turret: bool, depth: int) -> None:
             if not isinstance(node, dict) or depth > 10:
@@ -154,7 +192,9 @@ class _Reader:
                 turret = in_turret
                 if info:
                     t = info["type"]
-                    turret = in_turret or t == "TurretBase" or (t == "Turret" and info["subtype"] in _TURRET_SUBTYPES)
+                    if not in_turret and _gunner_seat(info, armed(entry.get("loadout"))):
+                        totals["gunner_seats"] += 1
+                    turret = in_turret or (crew != 1 and _crew_turret(info))
                     group = _GROUP_OF.get(t)
                     if t == "WeaponDefensive" and "ammo" in info["name"].lower():
                         group = None                # the launchers are listed, not their ammo
@@ -186,6 +226,8 @@ class _Reader:
                 walk(entry.get("loadout"), turret, depth + 1)
 
         walk(loadout, False, 0)
+        if crew:
+            totals["gunner_seats"] = min(totals["gunner_seats"], crew - 1)   # someone flies it
         stats.update({k: round(v, 2) if isinstance(v, float) else v for k, v in totals.items()})
         order = {key: i for i, (key, _t, _types) in enumerate(GROUPS)}
         loadout_rows = sorted(rows.values(), key=lambda r: (order[r["group"]], -(r["size"] or 0), r["name"]))
@@ -198,7 +240,7 @@ _SKIP = re.compile(r"(_AI_|_PU_|Template|Unmanned|_NPC|_Wreck|_Derelict|Mission|
                    r"|_Dummy|_Prop|EntitySpawner|vehicle_display|Paint_)", re.I)
 
 
-def build(game, progress, catalogue_classes: set[str]) -> dict:
+def build(game, progress, catalogue_classes: set[str], crew: dict[str, int] | None = None) -> dict:
     """Stats and default loadouts of every player vehicle in the game files
     (app.datahub.GameFiles); the hub caches them per patch, so ships that
     join the ship list later are covered without reading the files again."""
@@ -219,7 +261,7 @@ def build(game, progress, catalogue_classes: set[str]) -> dict:
     for i, cls in enumerate(sorted(set(wanted))):
         if i % 50 == 0:
             progress(f"{i}/{len(wanted)} ships")
-        data = reader.ship(cls)
+        data = reader.ship(cls, (crew or {}).get(cls.lower(), 0))
         if data:
             ships[cls.lower()] = data
     return {"ships": ships}

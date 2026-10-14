@@ -161,6 +161,14 @@ class WebSource:
         return self.age() < self.max_age
 
 
+def _build_shipdata(game: GameFiles, progress) -> dict:
+    """Ship stats for every ship in the ship list (and the rest of the player
+    vehicles), with its crew size: a one-crew vehicle's turret is the driver's."""
+    catalogue = ships.load()
+    crew = {s.class_id: s.crew for s in catalogue.ships if s.class_id}
+    return shipdata.build(game, progress, catalogue.class_ids(), crew)
+
+
 GAME_SOURCES: dict[str, GameSource] = {
     "contracts": GameSource("contracts", "missions", contracts.CACHE, "contracts", contracts.FORMAT,
                             contracts.build, contracts.Contracts, contracts.localization_key),
@@ -168,7 +176,7 @@ GAME_SOURCES: dict[str, GameSource] = {
     "salvage": GameSource("salvage", "salvage ships", salvage.CACHE, "game", salvage.GAME_FORMAT,
                           salvage.build_game_data),
     "shipdata": GameSource("shipdata", "ship stats", shipdata.CACHE, "shipdata", shipdata.FORMAT,
-                           lambda game, progress: shipdata.build(game, progress, ships.load().class_ids()),
+                           lambda game, progress: _build_shipdata(game, progress),
                            shipdata.ShipData),
 }
 

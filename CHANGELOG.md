@@ -2,6 +2,14 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
+## Unreleased
+
+- **Fix: My Ships listed remote turret guns as the pilot's.** Remote turrets (the Polaris's rear
+  ones, the Carrack's, Reclaimer's, Hercules', Redeemer's…) are typed like ordinary gun mounts in
+  the game files; their guns now show under Turrets, so the Polaris has no pilot guns. A
+  one-crew vehicle (the Storm tank) keeps its turret as the driver's weapon. (The ship data is
+  read again once after the update.)
+
 ## 0.5.0 (2026-10-14)
 
 - **Overlay: panels follow your game** (with LIVE LOG on). **Salvage** opens on your active

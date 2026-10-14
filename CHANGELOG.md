@@ -32,6 +32,23 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   from your own game logs, without signing in. Event missions are hidden until you pick the event,
   as on the website.
 
+- **The launch screen** shows each tool with one line on what it's for and a live line (how many
+  missions and locations the game has, your ship count, saved binding profiles…), plus a **Last
+  session** card: time played, missions done, blueprints and deaths. The link buttons are now a
+  compact group, and *sc-toolbox.com* has its own tile for the Blueprint and Ship databases.
+
+- **Links between tools:** from a mission's details, *Find this ore in the Mining Finder*; from the
+  Mining Finder, *Missions with this ore*; from a salvage claim ship, its page in the online Ship
+  Database. Every tool's header links to its website version.
+
+- **Overlay, easier at a glance:** the tools are labelled under their icons, with their key (1–5
+  while the overlay has the keyboard). A line under the bar always shows whether click-through is on
+  and names whatever the pointer is on, so nothing needs a tooltip. Opacity now fades only the
+  background, never the text. Opacity, Hide and Settings moved into a ⋯ menu inside the overlay.
+  New: **minimise** the overlay to one line with your current objective, how long you've been on it,
+  and where you are. Mission cards show the current objective first, larger; blueprints received this
+  session show which mission they came from.
+
 - **My Ships, Maps, Joystick Bindings, Settings and What's new** have the same header and filter
   bar as the other tools. My Ships shows fleet totals (pledged, in game, in concept, cargo) and your
   filters as removable chips. Joystick Bindings asks before leaving with unsaved changes.

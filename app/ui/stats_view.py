@@ -14,12 +14,10 @@ from PySide6.QtCore import QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
-    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,

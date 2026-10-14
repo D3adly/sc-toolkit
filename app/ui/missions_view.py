@@ -22,13 +22,11 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from app import channel as channel_mod, contracts as contracts_mod, datahub, gamelog, settings
-from app.theme import PALETTE
 from app.ui import kit
 from app.ui.kit import Badge, label
 from app.ui.widgets import Elided
@@ -124,7 +122,8 @@ def _summary(c: dict, owned: set[str]) -> dict:
         "bp_items": items,
         "missing": sum(1 for n in items if contracts_mod.blueprint_key(n) not in owned),
     }
-    m["text"] = " ".join([m["title"], m["contractor"], c.get("faction") or "", m["type"], *items]).lower()
+    resources = [(x.get("resource") or "").replace("[!]", "").strip() for x in cargo]
+    m["text"] = " ".join([m["title"], m["contractor"], c.get("faction") or "", m["type"], *items, *resources]).lower()
     return m
 
 
@@ -356,11 +355,9 @@ class _DetailPane(QFrame):
 # -- the view ------------------------------------------------------------------------
 
 class MissionsView(kit.ToolPage):
-    open_tool = Signal(str, object)        # (tool, target): links to other tools
-
     def __init__(self, channel: str, parent=None):
         super().__init__("missions", "Mission Database",
-                         "Every mission in the game: search by name, contractor or the blueprints it rewards",
+                         "Every mission in the game: search by name, contractor, cargo or the blueprints it rewards",
                          web_url=WEB_URL, parent=parent)
         self.channel = channel
         self.paths = channel_mod.resolve_channel_paths(settings.current().game_root, channel)

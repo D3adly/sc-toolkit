@@ -244,7 +244,7 @@ class _LivePanel(_ScrollPanel):
 
 # -- Missions ------------------------------------------------------------------------
 REWARD_SECONDS = 60        # a completed mission stays in the active list (green) this long
-CARD_HEIGHT = 118          # every mission block's collapsed height; expanded is never smaller
+CARD_HEIGHT = 134          # every mission block's collapsed height; expanded is never smaller
 FLASH_RECENT_SECONDS = 20  # an objective change this recent (log time) is new to the player
 FLASH_MS = 700             # the tracked mission's one blink
 COMBAT_TAGS = {"ship": "Ship combat", "fps": "FPS combat"}
@@ -365,17 +365,20 @@ def _mission_card(m: Mission, info: dict | None, owned: set[str], *, expanded: b
     head.addWidget(_label("▾" if expanded else "▸", "LiveMuted"), alignment=Qt.AlignTop)
     v.addLayout(head)
 
-    _row(v, _rewards(m, info), _Elided(_contractor(m, info), "LiveMuted", "Issued by (reputation goes to them)"))
-    _row(v, _tags(info))
-
-    # The next objective, or how it ended
+    # The next objective first: it's what you look for at a glance.
     objectives = m.visible_objectives
     current = m.current_objective
     if m.active:
         if current is not None:
-            v.addWidget(_Elided(f"○  {current.text}", "LiveText"))
+            v.addWidget(_Elided(f"▶  {current.text}", "LiveObjective"))
         elif objectives:
             v.addWidget(_Elided(f"✓  {objectives[-1].text}", "LiveMuted"))
+    _row(v, _rewards(m, info), _Elided(_contractor(m, info), "LiveMuted", "Issued by (reputation goes to them)"))
+    _row(v, _tags(info))
+
+    # Or how it ended
+    if m.active:
+        pass
     elif m.outcome == "Complete":
         if m.blueprints:
             v.addWidget(_Elided("Blueprint: " + ", ".join(m.blueprints), "LiveGood"))
@@ -649,8 +652,9 @@ class SessionPanel(_LivePanel):
         if tr.blueprints:
             v.addWidget(_label(f"BLUEPRINTS · {len(tr.blueprints)}", "SectionLabel"))
             for when, name, source in reversed(tr.blueprints[-8:]):
-                tip = f"From: {source}" if source else ""
-                v.addWidget(_label(f"{_clock(when)}  {name}", "LiveGood", tip, wrap=True))
+                v.addWidget(_label(f"{_clock(when)}  {name}", "LiveGood", wrap=True))
+                if source:           # inline: the overlay has no tooltips
+                    v.addWidget(_label(f"        from {source}", "LiveMuted", wrap=True))
 
         if tr.feed:
             v.addWidget(_label("RECENT", "SectionLabel"))

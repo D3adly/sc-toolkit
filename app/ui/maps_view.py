@@ -16,18 +16,14 @@ import urllib.request
 from PySide6.QtCore import QObject, QRectF, Qt, Signal
 from PySide6.QtGui import QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QGraphicsPixmapItem,
     QGraphicsScene,
     QGraphicsView,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QSizePolicy,
     QStackedLayout,
-    QVBoxLayout,
-    QWidget,
 )
 
 from app import config, maps, osutil

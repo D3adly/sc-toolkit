@@ -16,7 +16,7 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+    QListWidgetItem, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from app import channel as channel_mod, config, datahub, hangar, osutil, settings, shipdata, ships

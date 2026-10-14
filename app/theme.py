@@ -437,10 +437,10 @@ QFrame#Divider {{
 #ToolTile {{
     background: {bg_panel};
     border: 1px solid {border};
-    border-radius: 10px;
+    border-radius: 12px;
 }}
 #ToolTile:hover {{
-    background: {bg_hover};
+    background: {bg_panel_strong};
     border: 1px solid {border_hover};
 }}
 #ToolTile:disabled {{
@@ -448,7 +448,7 @@ QFrame#Divider {{
 }}
 #TileTitle {{
     color: {text_primary};
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     background: transparent;
 }}
@@ -457,13 +457,29 @@ QFrame#Divider {{
     font-size: 12px;
     background: transparent;
 }}
-#TileCredit {{
+#TileLive {{
     color: {text_muted};
     font-size: 11px;
     background: transparent;
+    border-top: 1px solid {border};
+    padding-top: 6px;
+    margin-top: 6px;
 }}
 #ToolTile:disabled QLabel {{
     color: {text_muted};
+}}
+#LinkChip {{
+    background: {bg_input};
+    border: 1px solid {border};
+    border-radius: 8px;
+    color: {text_secondary};
+    font-size: 12px;
+    padding: 5px 8px;
+    text-align: left;
+}}
+#LinkChip:hover {{
+    border: 1px solid {border_hover};
+    color: {text_primary};
 }}
 
 #StartButtonSmall {{
@@ -1030,8 +1046,8 @@ QInputDialog QLineEdit {{
     border: 1px solid {info_dim};
 }}
 #LiveCard[state="reward"] {{
-    background: rgba(156, 196, 140, 0.20);
-    border: 1px solid {ok};
+    background: {success_soft};
+    border: 1px solid {success};
 }}
 #LiveCard[state="tracked"] {{
     background: {info_soft};
@@ -1042,8 +1058,8 @@ QInputDialog QLineEdit {{
     border: 1px solid rgba(226, 106, 85, 0.45);
 }}
 #LiveCard[flash="true"] {{
-    background: rgba(227, 163, 59, 0.32);
-    border: 1px solid {accent};
+    background: rgba(141, 180, 207, 0.32);
+    border: 1px solid {info};
 }}
 #LiveReward {{
     color: #d7ecc9;
@@ -1052,10 +1068,14 @@ QInputDialog QLineEdit {{
 }}
 #LiveBlueprintOwned {{
     color: {ok};
-    font-size: 12px;
+    font-size: 13px;
+}}
+#LiveObjective {{
+    color: {text_primary};
+    font-size: 15px;
 }}
 #LiveGroup {{
-    color: {info};
+    color: {text_muted};
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 1.5px;
@@ -1063,24 +1083,24 @@ QInputDialog QLineEdit {{
 }}
 #LiveTitle {{
     color: {text_primary};
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
 }}
 #LiveMuted {{
     color: {text_muted};
-    font-size: 11px;
+    font-size: 12px;
 }}
 #LiveText {{
     color: {text_secondary};
-    font-size: 12px;
+    font-size: 13px;
 }}
 #LiveGood {{
     color: {ok};
-    font-size: 12px;
+    font-size: 13px;
 }}
 #LiveBad {{
     color: {danger};
-    font-size: 12px;
+    font-size: 13px;
 }}
 #LiveValue {{
     color: {text_primary};
@@ -1088,10 +1108,10 @@ QInputDialog QLineEdit {{
     font-weight: 700;
 }}
 #LiveChip {{
-    background: {accent_soft};
-    border-radius: 4px;
-    color: {accent};
-    font-size: 11px;
+    background: {bg_input};
+    border-radius: 9px;
+    color: {text_secondary};
+    font-size: 12px;
     padding: 1px 6px;
 }}
 #LiveChip[tone="info"] {{
@@ -1109,77 +1129,127 @@ QInputDialog QLineEdit {{
 
 /* -- in-game overlay ------------------------------------------------------ */
 #OverlayFrame {{
-    background: {bg_panel_strong};
+    background: rgba(16, 19, 23, 0.90);
     border: 1px solid {border_strong};
-    border-radius: 10px;
+    border-radius: 12px;
 }}
 #OverlayFrame[clickThrough="true"] {{
-    border: 1px dashed {accent_dim};
+    border: 1px dashed {text_muted};
 }}
-#OverlayHeader {{
+#OverlayHeader, #OverlayMini {{
     background: transparent;
 }}
 #OverlayGrip {{
     color: {text_muted};
     font-size: 15px;
-}}
-#OverlayTitle {{
-    color: {text_secondary};
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 2px;
+    padding: 0 4px;
 }}
 #OverlayTool {{
-    background: {bg_input};
-    border: 1px solid {border};
-    border-radius: 5px;
-    color: {text_secondary};
-    font-size: 12px;
-    padding: 3px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
 }}
 #OverlayTool:hover {{
-    border: 1px solid {info};
-    color: {text_primary};
+    background: {bg_hover};
 }}
 #OverlayTool:checked {{
     background: {info_soft};
     border: 1px solid {info_dim};
+}}
+#OverlayCaption {{
+    color: {text_secondary};
+    font-size: 10px;
+    font-weight: 600;
+    background: transparent;
+}}
+#OverlayTool:checked #OverlayCaption {{
     color: {text_primary};
+}}
+#OverlayKey {{
+    color: {text_muted};
+    font-size: 9px;
+    font-weight: 700;
+    background: transparent;
 }}
 #OverlayIcon {{
     background: transparent;
     border: none;
-    border-radius: 4px;
+    border-radius: 7px;
     color: {text_secondary};
-    font-size: 14px;
-    min-width: 24px;
-    min-height: 24px;
+    font-size: 15px;
 }}
-#OverlayIcon:hover {{
+#OverlayIcon:hover, #OverlayIcon:checked {{
     background: {bg_hover};
     color: {text_primary};
 }}
-#OverlayBanner {{
-    background: {accent_soft};
-    border-radius: 5px;
-    color: {accent};
+#OverlayStatus {{
+    color: {text_muted};
+    font-size: 12px;
+    padding: 0 6px 2px 6px;
+    background: transparent;
+}}
+#OverlayMenu {{
+    background: rgba(16, 19, 23, 0.98);
+    border: 1px solid {border_strong};
+    border-radius: 10px;
+}}
+#OverlayMenuItem {{
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    text-align: left;
+}}
+#OverlayMenuItem:hover {{
+    background: {bg_hover};
+}}
+#OverlayMenuText {{
+    color: {text_primary};
+    font-size: 13px;
+    background: transparent;
+}}
+#OverlayMenuKey {{
+    color: {text_muted};
     font-size: 11px;
-    padding: 3px 8px;
+    border: 1px solid {border_strong};
+    border-radius: 4px;
+    padding: 0 4px;
+    max-height: 18px;
+    background: transparent;
 }}
-#OverlayOpacity::groove:horizontal {{
+#OverlayMenuValue {{
+    color: {text_primary};
+    font-size: 13px;
+    font-weight: 700;
+}}
+#OverlayStep {{
     background: {bg_input};
-    border-radius: 2px;
-    height: 4px;
+    border: 1px solid {border};
+    border-radius: 6px;
+    color: {text_primary};
+    min-width: 24px;
+    min-height: 24px;
+    font-size: 13px;
 }}
-#OverlayOpacity::sub-page:horizontal {{
-    background: {accent_dim};
-    border-radius: 2px;
+#OverlayStep:hover {{
+    border: 1px solid {border_hover};
 }}
-#OverlayOpacity::handle:horizontal {{
-    background: {accent};
-    border-radius: 5px;
-    width: 10px;
-    margin: -3px 0;
+#OverlayMenuSep {{
+    background: {border};
+    margin: 3px 6px;
+}}
+#OverlayMiniObjective {{
+    color: {text_primary};
+    font-size: 14px;
+    font-weight: 600;
+}}
+#OverlayMiniTimer {{
+    color: {text_primary};
+    font-size: 14px;
+    font-weight: 800;
+}}
+#OverlayMiniPlace {{
+    color: {text_muted};
+    font-size: 13px;
 }}
 
 /* == kit (app.ui.kit) =================================================== */

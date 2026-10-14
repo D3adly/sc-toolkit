@@ -11,12 +11,13 @@ refresh buttons). Rendering always works from the local copies.
 
 from __future__ import annotations
 
+import urllib.parse
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QMessageBox,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -101,6 +102,7 @@ def _table_head() -> QWidget:
 
 class ShipRowWidget(QWidget):
     toggled = Signal(str, bool)
+    open_ship = Signal(str)
 
     def __init__(self, row: ShipRow, expanded: bool, *, best: bool, top: float = 0, match=None, tier: str = "",
                  parent=None):
@@ -257,6 +259,9 @@ class ShipRowWidget(QWidget):
         right_col.addStretch(1)
         cols.addLayout(right_col, stretch=2)
         v.addLayout(cols)
+        link = kit.button(f"{row.name} in the Ship Database ↗", "ghost",
+                          lambda: self.open_ship.emit(row.name))
+        v.addWidget(link, alignment=Qt.AlignLeft)
         return body
 
 
@@ -481,6 +486,8 @@ class SalvageView(kit.ToolPage):
             w = ShipRowWidget(row, row.stem in self.expanded, best=row.in_sheet and row.net == best and row.net > 0, top=top,
                               match=match, tier=tier_of[row.stem] if show_all else "")
             w.toggled.connect(self._on_row_toggled)
+            w.open_ship.connect(lambda name: osutil.open_url(
+                "https://sc-toolbox.com/ships?q=" + urllib.parse.quote(name)))
             self.rows_box.addWidget(w)
         self._fill_where()
         self.show_content()

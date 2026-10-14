@@ -590,6 +590,7 @@ class ToolPage(QWidget):
     when another one is."""
 
     back_requested = Signal()      # kept for views that still emit it (no Back button any more)
+    open_tool = Signal(str, object)  # links between tools: (tool key, what to show there)
 
     def __init__(self, icon_name: str, title: str, subtitle: str = "", *, web_url: str = "",
                  filters: bool = True, parent=None):

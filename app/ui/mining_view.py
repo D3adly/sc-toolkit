@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import html
 
-from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QGridLayout,
@@ -321,6 +321,11 @@ class MiningView(kit.ToolPage):
 
         self.result.clear_requested.connect(self._clear)
         self.set_help(HELP)
+        self.missions_link = kit.button("", "ghost")
+        self.missions_link.clicked.connect(
+            lambda: self.open_tool.emit("missions", self.data["resources"][self.picked[0]]["name"]))
+        self.missions_link.hide()
+        self.result.extra.addWidget(self.missions_link)
 
         body = QWidget()
         row = QHBoxLayout(body)
@@ -467,6 +472,9 @@ class MiningView(kit.ToolPage):
         else:
             self.result.set_count(f"{total} locations · pick resources on the left to find where they are")
         self.result.set_chips([(names[r], lambda _c=False, r=r: self._unpick(r)) for r in self.picked])
+        if len(self.picked) == 1:
+            self.missions_link.setText(f"Missions with {names[self.picked[0]]} →")
+        self.missions_link.setVisible(len(self.picked) == 1)
 
         self.show_content()
         if not locs:

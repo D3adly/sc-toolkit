@@ -1,6 +1,7 @@
 import subprocess
+import threading
 
-from PySide6.QtCore import QEvent, Qt, QRectF, QSize, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QRectF, QSize, QTimer, Signal
 from PySide6.QtGui import QAction, QPixmap, QPainter, QPainterPath, QColor, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -15,7 +16,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QGridLayout,
-    QSizePolicy,
     QMessageBox,
     QProgressBar,
     QStackedWidget,
@@ -24,7 +24,8 @@ from PySide6.QtWidgets import (
 from dataclasses import replace
 
 from app import (
-    __version__, backup, channel as channel_mod, config, datahub, gamelog, ipc, links, osutil, settings, updater,
+    __version__, backup, channel as channel_mod, config, datahub, gamelog, ipc, links, maps, osutil, settings,
+    updater,
 )
 from app.backup import BackupInfo
 from app import hotkeys
@@ -74,42 +75,102 @@ def _section_label(text: str) -> QLabel:
 
 
 class _ToolTile(QFrame):
-    """A large clickable card for one of SC-Toolbox's own tools: icon, title,
-    a line of explanation and an optional credit (with links)."""
+    """A tool on the launch screen: icon, name, one line on what it's for,
+    and a live line (what's in it right now)."""
 
     clicked = Signal()
 
-    def __init__(self, icon_name: str, title: str, text: str, credit: str = "", parent=None):
+    def __init__(self, icon_name: str, title: str, text: str, parent=None):
         super().__init__(parent)
         self.setObjectName("ToolTile")
         self.setAttribute(Qt.WA_Hover, True)
         self.setCursor(Qt.PointingHandCursor)
-        row = QHBoxLayout(self)
-        row.setContentsMargins(18, 18, 18, 18)
-        row.setSpacing(16)
+        grid = QGridLayout(self)
+        grid.setContentsMargins(14, 12, 14, 11)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(2)
         icon = QLabel()
-        icon.setPixmap(_icon(icon_name).pixmap(48, 48))
-        icon.setAlignment(Qt.AlignTop)
-        row.addWidget(icon)
-        col = QVBoxLayout()
-        col.setSpacing(4)
-        col.addWidget(QLabel(title, objectName="TileTitle"))
+        pix = (QIcon(str(config.APP_ICON)) if icon_name == "app" else _icon(icon_name)).pixmap(36, 36)
+        icon.setPixmap(pix)
+        icon.setFixedSize(36, 36)
+        grid.addWidget(icon, 0, 0, 2, 1, Qt.AlignTop)
+        grid.addWidget(QLabel(title, objectName="TileTitle"), 0, 1)
         self.body = body = QLabel(text, objectName="TileText")
         body.setWordWrap(True)
-        col.addWidget(body)
-        if credit:
-            note = QLabel(credit, objectName="TileCredit")
-            note.setWordWrap(True)
-            note.setOpenExternalLinks(True)
-            col.addWidget(note)
-        col.addStretch(1)
-        row.addLayout(col, stretch=1)
+        grid.addWidget(body, 1, 1)
+        self.live = QLabel("", objectName="TileLive")
+        self.live.setTextFormat(Qt.RichText)
+        self.live.setOpenExternalLinks(True)
+        grid.addWidget(self.live, 2, 0, 1, 2)
+        grid.setColumnStretch(1, 1)
+        grid.setRowStretch(3, 1)
+
+    def set_live(self, html: str) -> None:
+        self.live.setText(html)
 
     def mouseReleaseEvent(self, event):
         if (event.button() == Qt.LeftButton and self.isEnabled()
                 and self.rect().contains(event.position().toPoint())):
             self.clicked.emit()
         super().mouseReleaseEvent(event)
+
+
+class _HomeLoader(QObject):
+    """What the launch screen shows about your data: the last play session
+    (read from its own log only) and a few counts. Off the UI thread."""
+
+    loaded = Signal(dict)
+
+    def run(self) -> None:
+        def work():
+            out: dict = {}
+            root = settings.current().game_root
+            try:
+                from app import stats
+
+                sessions = [s for s in gamelog.all_sessions(root) if s.started]
+                if sessions:
+                    latest = sessions[-1]
+                    events = [e for e in gamelog.read_history(root, stats.KINDS, gamelog.OUTPUT_EVENTS,
+                                                              since=latest.started)
+                              if e.session == latest.id]
+                    tiles = {name: value for sec in stats._scope(events, [latest], None)
+                             for name, value, _hint in sec["tiles"]}
+                    end = latest.ended()
+                    out["last"] = {
+                        "when": "{} {} {}".format(
+                            ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[latest.started.astimezone().weekday()],
+                            latest.started.astimezone().day, kit_months()[latest.started.astimezone().month - 1]),
+                        "played": tiles.get("Time played", "—"),
+                        "missions": tiles.get("Completed", "0"),
+                        "blueprints": tiles.get("Received", "0"),
+                        "deaths": tiles.get("Deaths", "0"),
+                        "ended": end,
+                    }
+            except Exception:
+                import traceback
+
+                traceback.print_exc()
+            try:
+                channel = channel_mod.pick_default_channel(root)
+                croot = channel_mod.resolve_channel_paths(root, channel).channel_root if channel else None
+                mining_data = datahub.read_game("mining", croot)
+                if mining_data:
+                    out["locations"] = len(mining_data["locations"])
+                contracts = datahub.read_game("contracts", croot)
+                if contracts is not None:
+                    out["missions"] = len(contracts)
+                    out["channel"] = channel
+            except Exception:
+                pass
+            self.loaded.emit(out)
+        threading.Thread(target=work, daemon=True).start()
+
+
+def kit_months():
+    from app.ui.kit import MONTHS
+
+    return MONTHS
 
 
 class RootFrame(QWidget):
@@ -495,6 +556,9 @@ class MainWindow(QMainWindow):
         elif command in ("toggle-overlay", "toggle-clickthrough"):
             if settings.current().overlay_enabled:
                 self.overlay.send(command)
+        elif command == "settings":            # the overlay's ⋯ → Overlay settings
+            self.show_launcher()
+            self._show_settings()
         elif command == "live-log-on":         # the overlay's "Turn on live log"
             self.gamelog_switch.setChecked(True)
 
@@ -679,7 +743,8 @@ class MainWindow(QMainWindow):
         else:
             self.start_btn.setToolTip("")
             self._set_status("Idle")
-        for btn in (self.bindings_btn, self.salvage_btn, self.mining_btn, self.starstrings_btn):
+        for btn in (self.bindings_btn, self.salvage_btn, self.mining_btn, self.starstrings_btn,
+                    self.tiles["missions"]):
             btn.setEnabled(has_game)
         for key in NEEDS_GAME:
             self.rail.set_enabled(key, has_game, "" if has_game else "Set your Star Citizen folder in Settings")
@@ -736,7 +801,9 @@ class MainWindow(QMainWindow):
         return data if isinstance(data, BackupInfo) else None
 
     def _set_status(self, text: str) -> None:
-        self.status_label.setText(text)
+        # Nothing to say while idle; otherwise what the launcher is doing.
+        self.status_label.setText("" if text == "Idle" else text)
+        self.status_label.setVisible(text != "Idle" and bool(text))
 
     def _set_start_enabled(self, enabled: bool) -> None:
         self.start_btn.setEnabled(enabled and self.channel is not None)
@@ -856,95 +923,136 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        heading_row = QHBoxLayout()
-        heading_row.setSpacing(12)
-        heading_row.addWidget(QLabel("SC-TOOLBOX TOOLS", objectName="ToolsHeading"))
-        heading_row.addStretch(1)
-        layout.addLayout(heading_row)
-
+        layout.setSpacing(10)
         grid = QGridLayout()
-        grid.setSpacing(12)
-        self.bindings_btn = _ToolTile(
-            "joystick", "Joystick Bindings",
-            "See what every button on your stick does, rebind by pressing it, "
-            "and save the result as a launch profile.",
-        )
-        self.bindings_btn.clicked.connect(lambda: self.show_tool("bindings"))
-        self.salvage_btn = _ToolTile(
-            "salvage", "Salvage Claims",
-            "Ships in Adagio salvage claims by difficulty: their components, sell vs "
-            "dismantle prices, and cargo aboard.",
-        )
-        self.salvage_btn.clicked.connect(lambda: self.show_tool("salvage"))
-        self.mining_btn = _ToolTile(
-            "mining", "Mining Finder",
-            "Where each ore spawns, how likely each rock is, radar signatures and "
-            "quality odds, straight from the game files.",
-        )
-        self.mining_btn.clicked.connect(lambda: self.show_tool("mining"))
-        maps_tile = _ToolTile(
-            "scmaps", "SC Maps",
-            "One-page guides and maps for events, locations and missions.",
-            credit=(
-                "Community made by <a style='color:" + PALETTE["info"] + "' "
-                "href='https://mrkraken.space/one-page-guides/'>Mr Kraken</a>, "
-                "all credit to the author."
-            ),
-        )
-        maps_tile.clicked.connect(lambda: self.show_tool("maps"))
-        self.stats_tile = _ToolTile(
-            "stats", "My Stats",
-            "Your missions, blueprints, money, travel, ships and losses from the game's "
-            "logs: all time and your last session.",
-        )
-        self.stats_tile.clicked.connect(lambda: self.show_tool("stats"))
-        hangar_tile = _ToolTile(
-            "hangar", "My Ships",
-            "Your hangar: the ships you pledged or bought in game, ships in concept with their "
-            "loaners, and a link to each on Erkul.",
-        )
-        hangar_tile.clicked.connect(lambda: self.show_tool("hangar"))
-        for i, tile in enumerate((self.bindings_btn, self.salvage_btn, self.mining_btn, maps_tile,
-                                  self.stats_tile, hangar_tile)):
+        grid.setSpacing(10)
+        tiles = [
+            ("missions", "missions", "Mission Database", "Every mission, its rewards and blueprints"),
+            ("mining", "mining", "Mining Finder", "Where each ore spawns and how to spot it"),
+            ("salvage", "salvage", "Salvage Claims", "Which claim ship pays the most"),
+            ("stats", "stats", "My Stats", "Your play time, missions and earnings"),
+            ("hangar", "hangar", "My Ships", "Your pledged and in-game ships"),
+            ("maps", "scmaps", "SC Maps", "One-page guides by Mr Kraken"),
+            ("bindings", "joystick", "Joystick Bindings", "See and rebind every button"),
+            ("web", "app", "sc-toolbox.com", "Blueprints and the Ship Database, online"),
+        ]
+        self.tiles: dict[str, _ToolTile] = {}
+        for i, (key, icon_name, title, text) in enumerate(tiles):
+            tile = _ToolTile(icon_name, title, text)
+            if key == "web":
+                tile.clicked.connect(lambda: osutil.open_url("https://sc-toolbox.com"))
+                tile.set_live("Opens in your browser ↗")
+            else:
+                tile.clicked.connect(lambda k=key: self.show_tool(k))
+            self.tiles[key] = tile
             grid.addWidget(tile, i // 2, i % 2)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         layout.addLayout(grid)
         layout.addStretch(1)
+        self.bindings_btn, self.salvage_btn = self.tiles["bindings"], self.tiles["salvage"]
+        self.mining_btn, self.stats_tile = self.tiles["mining"], self.tiles["stats"]
+        self.tiles["maps"].set_live(f"{len(maps.GUIDES)} guides")
+        self._home_loader = _HomeLoader(self)
+        self._home_loader.loaded.connect(self._on_home_data)
+        QTimer.singleShot(300, self._refresh_home)
         return panel
 
-    # -- right panel: external tools + link library ---------------------------------
+    def _refresh_home(self) -> None:
+        from app import hangar, salvage
+
+        entries = hangar.load()
+        self.tiles["hangar"].set_live(f"<b>{len(entries)}</b> ship{'s' if len(entries) != 1 else ''}"
+                                      if entries else "Add the ships you own")
+        uex = salvage.load_uex()
+        from app.ui.kit import short_date
+
+        self.tiles["salvage"].set_live(f"Prices from <b>{short_date(uex[0] if uex else None)}</b>")
+        profiles = backup.list_profiles(settings.current().backup_root, self.channel) if self.channel else []
+        self.tiles["bindings"].set_live(f"<b>{len(profiles)}</b> saved profile{'s' if len(profiles) != 1 else ''}"
+                                        if profiles else "Save a layout as a launch profile")
+        self._home_loader.run()
+
+    def _on_home_data(self, data: dict) -> None:
+        if "missions" in data:
+            self.tiles["missions"].set_live(f"<b>{data['missions']:,}</b> missions · {data.get('channel', '')}")
+        if "locations" in data:
+            self.tiles["mining"].set_live(f"<b>{data['locations']}</b> locations")
+        last = data.get("last")
+        if not last:
+            self.last_session.hide()
+            self.tiles["stats"].set_live("From your game logs")
+            return
+        self.tiles["stats"].set_live(f"Last session <b>{last['played']}</b>")
+        self.last_title.setText(f"LAST SESSION · {last['when'].upper()}")
+        for key, stat in self.last_stats.items():
+            stat.value.setText(last[key])
+        blueprints = last["blueprints"] not in ("0", "—")
+        self.last_stats["blueprints"].value.setProperty("tone", "success" if blueprints else "")
+        from app.ui.kit import repolish
+
+        repolish(self.last_stats["blueprints"].value)
+        self.last_session.show()
+
+    # -- right panel: last session, external tools, links ------------------------------
     def _build_link_panel(self) -> QWidget:
-        panel = QFrame()
-        panel.setObjectName("SidePanel")
-        panel.setFixedWidth(260)
+        from app.ui import kit
 
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 18, 16, 18)
-        layout.setSpacing(6)
+        column = QWidget()
+        column.setFixedWidth(250)
+        col = QVBoxLayout(column)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(10)
 
-        layout.addWidget(_section_label("TOOLS"))
+        self.last_session = kit.panel()
+        lv = QVBoxLayout(self.last_session)
+        lv.setContentsMargins(14, 12, 14, 12)
+        lv.setSpacing(8)
+        self.last_title = kit.caps("Last session")
+        lv.addWidget(self.last_title)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(8)
+        self.last_stats = {}
+        for i, (key, caption) in enumerate((("played", "played"), ("missions", "missions done"),
+                                           ("blueprints", "blueprints"), ("deaths", "deaths"))):
+            stat = kit.Stat("—", caption, size="md")
+            self.last_stats[key] = stat
+            grid.addWidget(stat, i // 2, i % 2)
+        lv.addLayout(grid)
+        more = kit.button("All your stats →", "ghost", lambda: self.show_tool("stats"))
+        lv.addWidget(more, alignment=Qt.AlignLeft)
+        self.last_session.hide()
+        col.addWidget(self.last_session)
+
+        tools = kit.panel()
+        tv = QVBoxLayout(tools)
+        tv.setContentsMargins(14, 12, 14, 12)
+        tv.setSpacing(6)
+        tv.addWidget(kit.caps("Also"))
         self.gameglass_btn = self._tool_button("GameGlass", "gameglass", self._launch_gameglass)
-        layout.addWidget(self.gameglass_btn)
+        tv.addWidget(self.gameglass_btn)
         self.starstrings_btn = self._tool_button(
             "Update Star Strings", "starstrings", self._on_update_starstrings_clicked)
-        layout.addWidget(self.starstrings_btn)
+        tv.addWidget(self.starstrings_btn)
+        col.addWidget(tools)
 
-        layout.addSpacing(6)
-        layout.addWidget(_divider())
-        layout.addSpacing(6)
-
-        layout.addWidget(_section_label("LINKS · OFFICIAL"))
-        for label, url, icon_name in links.OFFICIAL_LINKS:
-            layout.addWidget(self._link_button(label, icon_name, url))
-        layout.addSpacing(8)
-        layout.addWidget(_section_label("LINKS · COMMUNITY"))
-        for label, url, icon_name in links.COMMUNITY_LINKS:
-            layout.addWidget(self._link_button(label, icon_name, url))
-
-        layout.addStretch(1)
-        return panel
+        for title, items in (("Official", links.OFFICIAL_LINKS), ("Community", links.COMMUNITY_LINKS)):
+            box = kit.panel()
+            bv = QVBoxLayout(box)
+            bv.setContentsMargins(14, 12, 14, 12)
+            bv.setSpacing(6)
+            bv.addWidget(kit.caps(title))
+            grid = QGridLayout()
+            grid.setSpacing(6)
+            for i, (label, url, icon_name) in enumerate(items):
+                text = {"Server Status": "Servers"}.get(label, label.split(" (")[0])
+                last_alone = i == len(items) - 1 and i % 2 == 0
+                grid.addWidget(self._link_button(text, icon_name, url), i // 2, i % 2, 1, 2 if last_alone else 1)
+            bv.addLayout(grid)
+            col.addWidget(box)
+        col.addStretch(1)
+        return column
 
     @staticmethod
     def _tool_button(label: str, icon_name: str, slot) -> QPushButton:
@@ -958,9 +1066,10 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _link_button(label: str, icon_name: str, url: str) -> QPushButton:
         btn = QPushButton(label)
-        btn.setObjectName("LinkButton")
+        btn.setObjectName("LinkChip")
         btn.setIcon(_icon(icon_name))
-        btn.setIconSize(ICON_SIZE)
+        btn.setIconSize(QSize(16, 16))
+        btn.setToolTip(url)
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(lambda: MainWindow._open_url(url))
         return btn

@@ -8,10 +8,15 @@ window keep itself on top of others and doesn't allow global hotkeys,
 while X11 windows can do both over the (also XWayland) game. The main
 launcher stays native Wayland.
 
-Layout: a slim header ("minimised menu") with the tool buttons, opacity
-slider and click-through toggle. Picking a tool expands its compact panel
-underneath; picking it again collapses back to the header. Position,
-opacity and each tool's size are remembered.
+Layout: a slim bar with the tools (icon, one-word caption, its key 1–5
+while the overlay has the keyboard), the click-through dot, minimise and
+⋯ (opacity, hide, settings), and a status line under it that names
+whatever the pointer is on — the overlay has no tooltips (on layer-shell each
+is a popup window that flickers). Picking a tool expands its panel
+underneath; picking it again collapses back to the bar. Minimised, the
+overlay is one line: the current objective, how long you've been on it,
+where you are. The opacity fades the background only, never the text.
+Position, opacity and each tool's size are remembered.
 """
 
 from __future__ import annotations
@@ -20,8 +25,8 @@ import json
 import sys
 
 import psutil
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QPainter, QRegion
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QRegion, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -30,7 +35,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizeGrip,
-    QSlider,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -41,15 +45,16 @@ from app.hotkeys import GlobalHotkeys, label as hotkey_label
 
 STATE_FILE = config.USER_CONFIG_DIR / "overlay.json"
 
-# tool id -> (tooltip, icon in assets/icons, default panel size)
+# tool id -> (what it is, for the status line; icon in assets/icons; default panel size; caption)
 TOOLS = {
-    "missions": ("Missions: what you're on, objectives, possible blueprints", "missions", QSize(440, 600)),
-    "session": ("Session: where you are, earnings, recent moments", "session", QSize(400, 600)),
-    "maps": ("Maps", "scmaps", QSize(560, 640)),
-    "mining": ("Mining", "mining", QSize(480, 640)),
-    "salvage": ("Salvage", "salvage", QSize(480, 620)),
+    "missions": ("what you're on, objectives, possible blueprints", "missions", QSize(440, 600), "Missions"),
+    "session": ("where you are, this session's numbers and blueprints", "session", QSize(400, 600), "Session"),
+    "mining": ("where ores spawn, radar signatures", "mining", QSize(480, 640), "Mining"),
+    "salvage": ("which claim ship pays the most", "salvage", QSize(480, 620), "Salvage"),
+    "maps": ("community one-page guides", "scmaps", QSize(560, 640), "Maps"),
 }
-TOOL_ICON = QSize(24, 24)
+TOOL_ICON = QSize(20, 20)
+BAR_MIN_WIDTH = 400
 # Tools whose panel height follows their content (see fit_height); the
 # user's own resizing only changes their width.
 AUTO_HEIGHT_TOOLS = {"missions"}
@@ -281,6 +286,200 @@ class _InputShield(QWidget):
         self.overlay.activateWindow()
 
 
+class _ToolButton(QPushButton):
+    """A tool in the bar: its icon, a one-word caption under it, and its key."""
+
+    def __init__(self, icon: str, caption: str, key: str, parent=None):
+        super().__init__(parent, objectName="OverlayTool")
+        self.setCheckable(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(52, 44)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 4, 0, 3)
+        v.setSpacing(1)
+        ic = QLabel()
+        ic.setPixmap(QIcon(str(config.ICONS_DIR / f"{icon}.png")).pixmap(TOOL_ICON))
+        ic.setAlignment(Qt.AlignHCenter)
+        ic.setAttribute(Qt.WA_TransparentForMouseEvents)
+        v.addWidget(ic)
+        cap = QLabel(caption, objectName="OverlayCaption")
+        cap.setAlignment(Qt.AlignHCenter)
+        cap.setAttribute(Qt.WA_TransparentForMouseEvents)
+        v.addWidget(cap)
+        k = QLabel(key, self, objectName="OverlayKey")
+        k.setAttribute(Qt.WA_TransparentForMouseEvents)
+        k.move(40, 2)
+
+
+class _Dot(QWidget):
+    """The click-through state: filled green while the overlay takes clicks,
+    hollow while they go through to the game."""
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.on = True
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setFixedSize(30, 30)
+
+    def set_on(self, on: bool) -> None:
+        self.on = on
+        self.update()
+
+    def paintEvent(self, _e):
+        from app.theme import PALETTE
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = QRectF(10, 10, 10, 10)
+        if self.on:
+            halo = QColor(PALETTE["success"])
+            halo.setAlpha(60)
+            p.setPen(Qt.NoPen)
+            p.setBrush(halo)
+            p.drawEllipse(r.adjusted(-3, -3, 3, 3))
+            p.setBrush(QColor(PALETTE["success"]))
+            p.drawEllipse(r)
+        else:
+            from PySide6.QtGui import QPen
+
+            p.setPen(QPen(QColor(PALETTE["text_muted"]), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawEllipse(r.adjusted(1, 1, -1, -1))
+
+
+class _InlineMenu(QFrame):
+    """The ⋯ menu, as a child of the overlay (a QMenu would be a popup
+    window: those flicker on the layer-shell surface)."""
+
+    def __init__(self, overlay: "OverlayWindow"):
+        super().__init__(overlay, objectName="OverlayMenu")
+        self.overlay = overlay
+        self.setFixedWidth(250)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(6, 6, 6, 6)
+        v.setSpacing(2)
+        row = QHBoxLayout()
+        row.setContentsMargins(9, 2, 4, 2)
+        row.addWidget(QLabel("Background opacity", objectName="OverlayMenuText"), stretch=1)
+        minus = QPushButton("−", objectName="OverlayStep")
+        minus.clicked.connect(lambda: overlay.set_opacity(overlay._opacity - 10))
+        row.addWidget(minus)
+        self.value = QLabel("", objectName="OverlayMenuValue")
+        self.value.setFixedWidth(40)
+        self.value.setAlignment(Qt.AlignCenter)
+        row.addWidget(self.value)
+        plus = QPushButton("+", objectName="OverlayStep")
+        plus.clicked.connect(lambda: overlay.set_opacity(overlay._opacity + 10))
+        row.addWidget(plus)
+        v.addLayout(row)
+        self.ct = self._item(v, "Click-through", hotkey_label("toggle-clickthrough"), overlay.toggle_click_through)
+        self._item(v, "Minimise to one line", "", lambda: overlay.set_minimized(True))
+        sep = QFrame(objectName="OverlayMenuSep")
+        sep.setFixedHeight(1)
+        v.addWidget(sep)
+        self._item(v, "Hide overlay", hotkey_label("toggle-overlay"), overlay.hide_overlay)
+        self._item(v, "Overlay settings in SC-Toolbox", "", lambda: ipc.send(ipc.MAIN, "settings"))
+
+    def _item(self, v, text: str, key: str, slot) -> QPushButton:
+        btn = QPushButton(objectName="OverlayMenuItem")
+        btn.setCursor(Qt.PointingHandCursor)
+        row = QHBoxLayout(btn)
+        row.setContentsMargins(9, 0, 6, 0)
+        t = QLabel(text, objectName="OverlayMenuText")
+        t.setAttribute(Qt.WA_TransparentForMouseEvents)
+        row.addWidget(t, stretch=1)
+        if key:
+            k = QLabel(key, objectName="OverlayMenuKey")
+            k.setAttribute(Qt.WA_TransparentForMouseEvents)
+            row.addWidget(k)
+        btn.setFixedHeight(32)
+
+        def run():
+            self.overlay._show_menu(False)
+            slot()
+        btn.clicked.connect(run)
+        v.addWidget(btn)
+        return btn
+
+    def sync(self) -> None:
+        self.set_opacity(self.overlay._opacity)
+
+    def set_opacity(self, value: int) -> None:
+        self.value.setText(f"{value}%")
+
+
+class _MinimisedBar(QFrame):
+    """The minimised overlay: the tracked mission's current objective, how
+    long ago you accepted it, and where you are (from the live log)."""
+
+    expand = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent, objectName="OverlayMini")
+        row = QHBoxLayout(self)
+        row.setContentsMargins(4, 2, 2, 2)
+        row.setSpacing(10)
+        grip = QLabel("⠿", objectName="OverlayGrip")
+        row.addWidget(grip)
+        self.objective = QLabel("", objectName="OverlayMiniObjective")
+        row.addWidget(self.objective)
+        self.timer = QLabel("", objectName="OverlayMiniTimer")
+        row.addWidget(self.timer)
+        self.place = QLabel("", objectName="OverlayMiniPlace")
+        row.addWidget(self.place)
+        row.addStretch(1)
+        expand = QPushButton("⤢", objectName="OverlayIcon")
+        expand.setCursor(Qt.PointingHandCursor)
+        expand.setFixedSize(30, 30)
+        expand.clicked.connect(self.expand.emit)
+        row.addWidget(expand)
+        self._clock = QTimer(self, interval=20_000, timeout=self.refresh)
+        self._feed = None
+
+    def start(self) -> None:
+        from app.ui import overlay_live
+
+        if self._feed is None:
+            self._feed = overlay_live.feed()
+            self._feed.changed.connect(self.refresh)
+        self._feed.want()
+        self._clock.start()
+        self.refresh()
+
+    def stop(self) -> None:
+        self._clock.stop()
+
+    def refresh(self) -> None:
+        if self._feed is None or not self.isVisible() and not self.parent():
+            return
+        from app.stats import pretty
+        from app.ui import overlay_live
+
+        tr = self._feed.tracker
+        active = tr.active_missions()
+        moved = [m for m in active if m.objective_changed is not None]
+        tracked = max(moved, key=lambda m: m.objective_changed) if moved else (active[0] if active else None)
+        state = self._feed.state
+        if tracked is not None:
+            current = tracked.current_objective
+            text = current.text if current is not None else overlay_live._mission_title(tracked, None)
+            self.objective.setText("▶  " + text[:70] + ("…" if len(text) > 70 else ""))
+            self.timer.setText(overlay_live._ago(tracked.accepted))
+        elif state == "disabled":
+            self.objective.setText("The live log is off (LIVE LOG in SC-Toolbox)")
+            self.timer.setText("")
+        elif state in ("off", "waiting") and not tr.session:
+            self.objective.setText("Waiting for Star Citizen…")
+            self.timer.setText("")
+        else:
+            self.objective.setText("No active mission")
+            self.timer.setText("")
+        self.place.setText(("· " + pretty(tr.location)) if tr.location else "")
+        win = self.window()
+        if hasattr(win, "minimized") and win.minimized:
+            QTimer.singleShot(0, win._fit_bar)
+
+
 class OverlayWindow(QWidget):
     """The overlay panel. Its own window (X11 / Windows), or, with `host`, a
     panel inside a full-screen layer-shell surface (KDE Wayland; see
@@ -311,12 +510,19 @@ class OverlayWindow(QWidget):
         self._panels: dict[str, QWidget] = {}
         self._save_timer = QTimer(self, singleShot=True, interval=400, timeout=self._save_state)
         self._build_ui()
+        self.minimized = False
         self._apply_opacity(self.state.get("opacity", 92))
+        for i, tool in enumerate(TOOLS, 1):
+            QShortcut(QKeySequence(str(i)), self, activated=lambda t=tool: self.select_tool(t, force=True),
+                      context=Qt.WindowShortcut)
+        QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self._escape, context=Qt.WindowShortcut)
         pos = self.state.get(self._pos_key)
         if pos:
             self._anchor = QPoint(*pos)
             self.move(self._anchor)
         self._collapse()
+        if self.state.get("minimized"):
+            self.set_minimized(True)
 
     @property
     def _pos_key(self) -> str:
@@ -324,15 +530,14 @@ class OverlayWindow(QWidget):
         return "layer_pos" if self._host is not None else "pos"
 
     def _apply_opacity(self, value: int) -> None:
-        if self._host is None:
-            self.setWindowOpacity(value / 100)
-            return
-        from PySide6.QtWidgets import QGraphicsOpacityEffect
-
-        if self._opacity_effect is None:
-            self._opacity_effect = QGraphicsOpacityEffect(self)
-            self.setGraphicsEffect(self._opacity_effect)
-        self._opacity_effect.setOpacity(value / 100)
+        """Fades the panel's background only: text and icons stay readable
+        over any scene (#51)."""
+        self._opacity = value
+        alpha = max(0.0, min(1.0, value / 100))
+        self.frame.setStyleSheet(
+            f"#OverlayFrame {{ background: rgba(16, 19, 23, {alpha * 0.97:.3f}); }}")
+        if hasattr(self, "menu"):
+            self.menu.set_opacity(value)
 
     def keep_inside(self) -> None:
         """Layer-shell: back inside the surface if it's off-screen (e.g. shown
@@ -366,53 +571,61 @@ class OverlayWindow(QWidget):
 
         self.header = QFrame(objectName="OverlayHeader")
         head = QHBoxLayout(self.header)
-        head.setContentsMargins(4, 0, 0, 0)
-        head.setSpacing(6)
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(2)
         grip = QLabel("⠿", objectName="OverlayGrip")
-        grip.setToolTip("Drag to move")
+        self._hint(grip, "<b>Drag</b> to move the overlay")
         head.addWidget(grip)
-        head.addWidget(QLabel("SC-TOOLBOX", objectName="OverlayTitle"))
-        head.addSpacing(4)
         self.tool_group = QButtonGroup(self)
         self.tool_group.setExclusive(False)
-        for tool, (tip, icon, _size) in TOOLS.items():
-            btn = QPushButton(objectName="OverlayTool")
-            btn.setIcon(QIcon(str(config.ICONS_DIR / f"{icon}.png")))
-            btn.setIconSize(TOOL_ICON)
-            btn.setToolTip(tip)
-            btn.setCheckable(True)
-            btn.setCursor(Qt.PointingHandCursor)
+        for i, (tool, (what, icon, _size, caption)) in enumerate(TOOLS.items(), 1):
+            btn = _ToolButton(icon, caption, str(i))
             btn.clicked.connect(lambda _c=False, t=tool: self.select_tool(t))
             self.tool_group.addButton(btn)
             btn.setProperty("tool", tool)
+            self._hint(btn, f"<b>{caption}</b> · {what} · <kbd>{i}</kbd>")
             head.addWidget(btn)
         head.addStretch(1)
-        self.opacity = QSlider(Qt.Horizontal, objectName="OverlayOpacity")
-        self.opacity.setRange(MIN_OPACITY, MAX_OPACITY)
-        self.opacity.setValue(self.state.get("opacity", 92))
-        self.opacity.setFixedWidth(70)
-        self.opacity.setToolTip("Opacity")
-        self.opacity.valueChanged.connect(self._on_opacity)
-        head.addWidget(self.opacity)
-        self.ct_btn = QPushButton("⇲", objectName="OverlayIcon")
-        self.ct_btn.setToolTip(f"Click-through: clicks go to the game ({hotkey_label('toggle-clickthrough')})")
+        self.ct_btn = QPushButton(objectName="OverlayIcon")
         self.ct_btn.setCursor(Qt.PointingHandCursor)
         self.ct_btn.clicked.connect(self.toggle_click_through)
+        self.ct_dot = _Dot(self.ct_btn)
+        self.ct_btn.setFixedSize(30, 30)
+        self._hint(self.ct_btn, lambda: (
+            "<b>Click-through</b> " + ("on: clicks go to the game" if self.click_through
+                                       else "off: the overlay takes clicks")
+            + f" · <kbd>{hotkey_label('toggle-clickthrough')}</kbd>"))
         head.addWidget(self.ct_btn)
-        hide = QPushButton("✕", objectName="OverlayIcon")
-        hide.setToolTip(f"Hide overlay ({hotkey_label('toggle-overlay')})")
-        hide.setCursor(Qt.PointingHandCursor)
-        hide.clicked.connect(self.hide_overlay)
-        head.addWidget(hide)
+        mini = QPushButton("▭", objectName="OverlayIcon")
+        mini.setCursor(Qt.PointingHandCursor)
+        mini.setFixedSize(30, 30)
+        mini.clicked.connect(lambda: self.set_minimized(True))
+        self._hint(mini, "<b>Minimise</b> to one line: objective, time on it, location")
+        head.addWidget(mini)
+        self.menu_btn = QPushButton("⋯", objectName="OverlayIcon")
+        self.menu_btn.setCursor(Qt.PointingHandCursor)
+        self.menu_btn.setCheckable(True)
+        self.menu_btn.setFixedSize(30, 30)
+        self.menu_btn.toggled.connect(self._show_menu)
+        self._hint(self.menu_btn, "<b>More</b>: background opacity, hide, settings")
+        head.addWidget(self.menu_btn)
         v.addWidget(self.header)
 
-        self.ct_banner = QLabel(
-            f"CLICK-THROUGH: clicks go to the game · {hotkey_label('toggle-clickthrough')} to use the overlay again",
-            objectName="OverlayBanner",
-        )
-        self.ct_banner.setWordWrap(True)   # wraps to the bar's width instead of widening it
-        self.ct_banner.setVisible(False)
-        v.addWidget(self.ct_banner)
+        # The status line: the click-through state, or what the pointer is on.
+        self.status = QLabel("", objectName="OverlayStatus")
+        self.status.setTextFormat(Qt.RichText)
+        v.addWidget(self.status)
+        self._update_status()
+
+        # Minimised: one line.
+        self.mini_bar = _MinimisedBar(self)
+        self.mini_bar.expand.connect(lambda: self.set_minimized(False))
+        self.mini_bar.hide()
+        v.addWidget(self.mini_bar)
+
+        # ⋯ menu: drawn inside the overlay (a QMenu would be its own popup window).
+        self.menu = _InlineMenu(self)
+        self.menu.hide()
 
         self.stack = QStackedWidget()
         v.addWidget(self.stack, stretch=1)
@@ -421,11 +634,19 @@ class OverlayWindow(QWidget):
         grip_row.addStretch(1)
         grip_row.addWidget(self.size_grip)
         v.addLayout(grip_row)
+        # Takes the slack when the panel is closed (e.g. the window grew for the ⋯ menu).
+        v.addStretch(0)
 
     # -- tools ------------------------------------------------------------------------
-    def select_tool(self, tool: str) -> None:
+    def select_tool(self, tool: str, force: bool = False) -> None:
+        """Opens a tool's panel; picking the open one again collapses to the
+        bar (unless `force`: keys 1–5 always open)."""
+        if self.minimized:
+            self.set_minimized(False)
+        self._show_menu(False)
         if tool == self.tool:
-            self._collapse()
+            if not force:
+                self._collapse()
             return
         if self.tool:
             self._remember_size()
@@ -440,7 +661,7 @@ class OverlayWindow(QWidget):
         self.stack.setVisible(True)
         self.size_grip.setVisible(True)
         # Never narrower than the bar, or its buttons get cut off.
-        min_width = max(360, self._bar_width)
+        min_width = max(BAR_MIN_WIDTH, self._bar_width)
         self.setMinimumSize(min_width, 300)
         self.setMaximumSize(16777215, 16777215)
         size = QSize(*size) if size else TOOLS[tool][2]
@@ -487,6 +708,9 @@ class OverlayWindow(QWidget):
             "salvage": overlay_panels.SalvagePanel,
         }[tool]()
 
+    def collapse(self) -> None:
+        self._collapse()
+
     def _collapse(self) -> None:
         if self.tool:
             self._remember_size()
@@ -497,25 +721,105 @@ class OverlayWindow(QWidget):
         self._fit_bar()
 
     def _fit_bar(self) -> None:
-        """Collapsed size: as wide as the header needs, as tall as the header
-        plus the click-through banner (wrapped to that width) when it shows."""
-        banner = self.ct_banner.isVisibleTo(self)
-        self.ct_banner.setVisible(False)
+        """Collapsed (or minimised) size: as wide as the bar needs, as tall
+        as its content."""
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
-        self.adjustSize()
-        self._bar_width = max(self.sizeHint().width(), 440)
-        self.ct_banner.setVisible(banner)
-        self.setFixedWidth(self._bar_width)
         self.layout().activate()
-        height = self.heightForWidth(self._bar_width) if self.hasHeightForWidth() else -1
-        if height <= 0:
-            self.adjustSize()
-            height = self.sizeHint().height()
-        self.setFixedHeight(height)
-        self.setMinimumWidth(0)
-        self.setMaximumWidth(16777215)
-        self.resize(self._bar_width, height)
+        self.adjustSize()
+        hint = self.sizeHint()
+        width = hint.width() if self.minimized else max(hint.width(), BAR_MIN_WIDTH)
+        if not self.minimized:
+            self._bar_width = width
+        self.setFixedSize(width, hint.height())
+        self.setMinimumSize(0, 0)
+        self.setMaximumSize(16777215, 16777215)
+        self.resize(width, hint.height())
+
+    def set_minimized(self, on: bool) -> None:
+        """One line (#53): the current objective, time on it, location."""
+        if on == self.minimized:
+            return
+        self._show_menu(False)
+        if on and self.tool:
+            self._remember_size()
+        self.minimized = on
+        self.header.setVisible(not on)
+        self.status.setVisible(not on)
+        self.mini_bar.setVisible(on)
+        if on:
+            self.mini_bar.start()
+            self.stack.setVisible(False)
+            self.size_grip.setVisible(False)
+            self._fit_bar()
+        else:
+            self.mini_bar.stop()
+            tool, self.tool = self.tool, None
+            if tool:
+                self.select_tool(tool)
+            else:
+                self._collapse()
+        self.state["minimized"] = on
+        self._save_timer.start()
+
+    def _escape(self) -> None:
+        if self.menu.isVisible():
+            self._show_menu(False)
+        elif self.tool:
+            self._collapse()
+
+    # -- the status line and the ⋯ menu --------------------------------------------------
+    def _hint(self, widget: QWidget, text) -> None:
+        """What the status line says while the pointer is on `widget`."""
+        widget.setProperty("hint", text if isinstance(text, str) else "")
+        widget._hint_fn = text if callable(text) else None
+        widget.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Enter and (obj.property("hint") or getattr(obj, "_hint_fn", None)):
+            fn = getattr(obj, "_hint_fn", None)
+            self.status.setText(fn() if fn else obj.property("hint"))
+        elif event.type() == QEvent.Leave and (obj.property("hint") or getattr(obj, "_hint_fn", None)):
+            self._update_status()
+        return super().eventFilter(obj, event)
+
+    def _update_status(self) -> None:
+        key = hotkey_label("toggle-clickthrough")
+        if self.click_through:
+            self.status.setText(f"Click-through <b>on</b> · clicks go to the game · <kbd>{key}</kbd> "
+                                "to use the overlay")
+        else:
+            self.status.setText(f"Click-through <b>off</b> · the overlay takes clicks · <kbd>{key}</kbd>")
+        self.ct_dot.set_on(not self.click_through)
+
+    def _show_menu(self, on: bool) -> None:
+        if not hasattr(self, "menu"):
+            return
+        if on:
+            self.menu.sync()
+            self.menu.adjustSize()
+            pos = self.menu_btn.mapTo(self, self.menu_btn.rect().bottomRight())
+            x = max(4, pos.x() - self.menu.width())
+            self.menu.move(x, pos.y() + 4)
+            self.menu.show()
+            self.menu.raise_()
+            # Short bar (collapsed): the window grows so the menu fits inside it.
+            need = self.menu.geometry().bottom() + 8
+            if self.height() < need:
+                self._menu_grew = self.height()
+                self.setMinimumHeight(need)
+                self.resize(self.width(), need)
+        else:
+            self.menu.hide()
+            grew = getattr(self, "_menu_grew", None)
+            if grew is not None:
+                self._menu_grew = None
+                if self.tool is None:
+                    self._fit_bar()
+        if self.menu_btn.isChecked() != on:
+            self.menu_btn.blockSignals(True)
+            self.menu_btn.setChecked(on)
+            self.menu_btn.blockSignals(False)
 
     def _sync_buttons(self) -> None:
         for btn in self.tool_group.buttons():
@@ -587,9 +891,7 @@ class OverlayWindow(QWidget):
             self.frame.setProperty("clickThrough", self.click_through)
             self.frame.style().unpolish(self.frame)
             self.frame.style().polish(self.frame)
-            self.ct_banner.setVisible(self.click_through)
-            if self.tool is None:
-                self._fit_bar()
+            self._update_status()
             self.show_overlay()        # click-through shows it too, like on X11
             return
         self.click_through = not self.click_through
@@ -599,15 +901,16 @@ class OverlayWindow(QWidget):
         self.frame.setProperty("clickThrough", self.click_through)
         self.frame.style().unpolish(self.frame)
         self.frame.style().polish(self.frame)
-        self.ct_banner.setVisible(self.click_through)
+        self._update_status()
         if visible or self.click_through:
             self.show_overlay()
         if self.tool is None:
-            # After the re-created window is shown: measured while hidden,
-            # the layout isn't up to date and the banner got squeezed in.
             self._fit_bar()
 
     # -- persistence ------------------------------------------------------------------------
+    def set_opacity(self, value: int) -> None:
+        self._on_opacity(max(MIN_OPACITY, min(MAX_OPACITY, value)))
+
     def _on_opacity(self, value: int) -> None:
         self._apply_opacity(value)
         self.state["opacity"] = value

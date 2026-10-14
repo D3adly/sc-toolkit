@@ -118,8 +118,8 @@ def _signature_line(rock: dict, item: dict, method: str, strong: bool = True) ->
     clus = item.get("cluster") or {}
     sizes = clus.get("sizes") or []
     top = max((n for n, _ in sizes), default=1)
-    text = (f"<span style='color:{PALETTE['text_primary']}'><b>RS {sig}</b></span>" if strong
-            else f"<span style='color:{PALETTE['text_muted']}'>RS {sig}</span>")
+    text = (f"<span style='color:{PALETTE['text_primary']}'><b>RS&nbsp;{sig}</b></span>" if strong
+            else f"<span style='color:{PALETTE['text_muted']}'>RS&nbsp;{sig}</span>")
     if method == "ship":
         text += "".join(f"&nbsp;&nbsp;<span style='color:{muted}'>×{n}</span>&nbsp;{sig * n}"
                         for n in range(2, top + 1))
@@ -147,7 +147,13 @@ def resource_rarity(data: dict) -> dict[str, str]:
 # -- one location --------------------------------------------------------------
 
 class LocationCard(QWidget):
-    def __init__(self, loc: dict, method: str, data: dict, picked: list[str], show_system: bool, parent=None):
+    """One place: its rock types (spawn chance, rarity, radar signatures) and,
+    for the picked resources, their share and quality odds. compact=True is
+    the overlay's: tighter, and every rock's composition inline (the overlay
+    has no tooltips), the picked resources highlighted."""
+
+    def __init__(self, loc: dict, method: str, data: dict, picked: list[str], show_system: bool, parent=None,
+                 *, compact: bool = False):
         super().__init__(parent)
         rocks, resources = data["rocks"], data["resources"]
         quality = data["quality"]
@@ -157,7 +163,7 @@ class LocationCard(QWidget):
         frame = kit.panel()
         outer.addWidget(frame)
         v = QVBoxLayout(frame)
-        v.setContentsMargins(14, 11, 14, 12)
+        v.setContentsMargins(*((10, 8, 10, 9) if compact else (14, 11, 14, 12)))
         v.setSpacing(6)
 
         head = QHBoxLayout()
@@ -195,33 +201,69 @@ class LocationCard(QWidget):
                                  tip="Chance that a rock spawned here is this type",
                                  align=Qt.AlignRight | Qt.AlignVCenter), row, 1)
             name = rock["name"] + (" asteroid" if rock["asteroid"] else "")
-            grid.addWidget(label(name, "RockNameHit" if hits else ("RockNameDim" if dim else "RockName"),
-                                 tip=self._composition_tip(rock, resources)), row, 2)
-            if rock["rarity"]:
-                rarity = kit.Rarity(rock["rarity"])
-                if dim:
-                    rarity.setStyleSheet(f"color: {PALETTE['text_muted']};")
-                grid.addWidget(rarity, row, 3, Qt.AlignRight | Qt.AlignVCenter)
+            name_label = label(name, "RockNameHit" if hits else ("RockNameDim" if dim else "RockName"),
+                               tip=self._composition_tip(rock, resources))
+            rarity = kit.Rarity(rock["rarity"]) if rock["rarity"] else None
+            if rarity is not None and dim:
+                rarity.setStyleSheet(f"color: {PALETTE['text_muted']};")
+            if compact:
+                # Narrow: the rarity on the name's line, nothing in a column of its own.
+                line = QHBoxLayout()
+                line.setSpacing(8)
+                line.addWidget(name_label)
+                line.addStretch(1)
+                if rarity is not None:
+                    line.addWidget(rarity)
+                grid.addLayout(line, row, 2, 1, 2)
+            else:
+                grid.addWidget(name_label, row, 2)
+                if rarity is not None:
+                    grid.addWidget(rarity, row, 3, Qt.AlignRight | Qt.AlignVCenter)
             row += 1
 
             sig_text, sig_tip = _signature_line(rock, item, method, strong=not dim)
             if sig_text:
-                sig = label(sig_text, "SignatureDim" if dim else "Signature", tip=sig_tip, rich=True)
+                sig = label(sig_text, "SignatureDim" if dim else "Signature", tip=sig_tip, rich=True, wrap=compact)
                 grid.addWidget(sig, row, 2, 1, 2)
                 row += 1
 
-            for part in hits:
+            for part in (rock["parts"] if compact else hits):
+                if compact and dim:
+                    # Overlay: a rock without the picked resources just lists what it holds.
+                    names = ", ".join(dict.fromkeys(resources.get(x["res"], {}).get("name", x["res"])
+                                                    for x in rock["parts"]))
+                    grid.addWidget(label(names, "MutedText", wrap=True), row, 2, 1, 2)
+                    row += 1
+                    break
+                hit = part in hits or not picked
                 q = quality.get(part["res"], {}).get(loc["system"], {}).get(str(part["scale"]))
                 rng = f"{part['min']:g}–{part['max']:g}%"
                 if part["prob"] < 1:
                     rng += f", in {part['prob'] * 100:.0f}% of rocks"
+                if compact:
+                    # One wrapping line, the quality bars at its end.
+                    colour = PALETTE["success"] if part in hits else PALETTE["text_primary"]
+                    text = (f"↳ <span style='color:{colour}'>{html.escape(resources[part['res']]['name'])}</span>"
+                            f"&nbsp; <b>avg&nbsp;{_pct(part['avg'])}</b> <span style='color:{PALETTE['text_muted']}'>"
+                            f"({rng})</span>")
+                    if q is not None and hit:
+                        text += f"&nbsp; <b>Q&nbsp;≈&nbsp;{q['avg']}</b>"
+                    detail = QHBoxLayout()
+                    detail.setSpacing(8)
+                    detail.addWidget(label(text, "BodyText", rich=True, wrap=True), stretch=1)
+                    if q is not None and hit:
+                        detail.addWidget(_QualityHist(q["dist"]), alignment=Qt.AlignTop)
+                    grid.addLayout(detail, row, 2, 1, 2)
+                    row += 1
+                    continue
                 detail = QHBoxLayout()
                 detail.setSpacing(8)
-                detail.addWidget(label(f"↳ {resources[part['res']]['name']}", "MatchText"))
+                detail.addWidget(label(f"↳ {resources[part['res']]['name']}",
+                                       "MatchText" if part in hits else "BodyText"))
                 detail.addWidget(label(f"avg {_pct(part['avg'])}", "StrongText",
                                        tip="Average share of the rock's mass"))
                 detail.addWidget(label(f"({rng})", "MutedText"))
-                if q is not None:
+                if q is not None and (hit or not compact):
                     tip = _quality_tip(resources[part["res"]]["name"], q)
                     detail.addWidget(label(f"Q ≈ {q['avg']}", "StrongText", tip=tip))
                     hist = _QualityHist(q["dist"])

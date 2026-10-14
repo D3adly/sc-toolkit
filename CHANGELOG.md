@@ -4,6 +4,16 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
 
 ## Unreleased
 
+- **Overlay: Mining and Salvage in the new look**, built from the same parts as the launcher's tools:
+  - **Mining:** pick an ore and the places list straight away, best first, each with how many of
+    its rocks carry the ore (with a bar to compare) and the best average quality there. A place
+    opens the launcher's place card: rock types with spawn chance and rarity, radar signatures,
+    and every rock's composition with share and quality odds spelled out (the overlay has no
+    tooltips).
+  - **Salvage:** the launcher's ship rows: name, a bar of components vs cargo and the net value;
+    open one for the fee, every part with the price it counts at and whether to sell or
+    dismantle it, and the cargo aboard.
+
 - **Mission Database: more filters** (under More filters, like the website's): **faction**, **place**
   (planets or places a mission is limited to, e.g. Pyro I or Rustville), **rank range** (the step on the
   contractor's ladder it needs, 0 = the first) and **Added in** (the patch it first appeared in). The

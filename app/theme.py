@@ -571,34 +571,12 @@ QFrame#Divider {{
     color: {text_secondary};
     font-size: 11px;
 }}
-#ShipCard {{
-    background: {bg_panel_strong};
-    border: 2px solid {border};
-    border-radius: 10px;
-}}
-#ShipCard[acquired="pledge"] {{
-    border: 2px solid {border};
-}}
-#ShipCard[acquired="ingame"] {{
-    border: 2px solid {info_dim};
-}}
-#ShipCard[acquired="pledge"]:hover {{
-    border: 2px solid {border_hover};
-}}
-#ShipCard[acquired="ingame"]:hover {{
-    border: 2px solid {info};
-}}
 #ShipImage {{
     background: rgba(0, 0, 0, 0.35);
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     color: {text_muted};
     font-size: 11px;
-}}
-#ShipName {{
-    color: {text_primary};
-    font-size: 14px;
-    font-weight: 700;
 }}
 #AcquiredTag, #ConceptTag {{
     font-size: 10px;
@@ -729,55 +707,6 @@ QFrame#Divider {{
     background: {info_soft};
 }}
 
-#ShipCard {{
-    background: {bg_panel};
-    border: 1px solid {border};
-    border-radius: 8px;
-}}
-#ShipHeader {{
-    background: transparent;
-    border-radius: 8px;
-    border-left: 2px solid transparent;
-}}
-#ShipHeader:hover {{
-    background: {bg_input};
-    border-left: 2px solid {info};
-}}
-#ShipHeader[open="true"] {{
-    border-left: 2px solid {info};
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-}}
-#ShipDetail, #ShipHeader QWidget {{
-    background: transparent;
-}}
-#ShipArrow {{
-    color: {text_secondary};
-    font-size: 12px;
-}}
-#ShipName {{
-    font-size: 14px;
-    font-weight: 600;
-}}
-#ShipMuted {{
-    color: {text_muted};
-    font-size: 11px;
-}}
-#ShipCaption {{
-    color: {text_muted};
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 1px;
-}}
-#ShipStat {{
-    color: {text_primary};
-    font-size: 13px;
-}}
-#ShipNet {{
-    color: {text_primary};
-    font-size: 14px;
-    font-weight: 700;
-}}
 #SalvageHead {{
     color: {text_muted};
     font-size: 10px;
@@ -787,45 +716,6 @@ QFrame#Divider {{
 #SalvageCell {{
     color: {text_primary};
     font-size: 12px;
-}}
-#SalvageDim {{
-    color: {text_secondary};
-    font-size: 12px;
-}}
-#SalvageBest {{
-    color: {success};
-    font-size: 12px;
-    font-weight: 700;
-}}
-#SalvageMatch {{
-    color: {info};
-    font-size: 12px;
-    font-weight: 600;
-}}
-#ShipMatch {{
-    color: {info};
-    font-size: 11px;
-}}
-#ShipTier {{
-    color: {text_secondary};
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid {border};
-    border-radius: 4px;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    padding: 1px 6px;
-}}
-#SalvageYes {{
-    color: {info};
-    font-weight: 700;
-}}
-#SalvageMaybe {{
-    color: {warning};
-    font-weight: 700;
-}}
-#SalvageNo {{
-    color: {text_muted};
 }}
 
 #AboutLabel {{
@@ -859,44 +749,6 @@ QFrame#Divider {{
 #SettingsBad {{
     color: {danger};
     font-size: 11px;
-}}
-#MiningChance {{
-    color: {info};
-    font-size: 12px;
-    font-weight: 700;
-}}
-#MiningRockHit {{
-    color: {text_primary};
-    font-size: 12px;
-    font-weight: 700;
-}}
-#MiningRarity {{
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 1px;
-}}
-#MiningPart {{
-    color: {info};
-    font-size: 12px;
-    padding-left: 10px;
-}}
-#MiningSignature {{
-    color: {text_secondary};
-    font-size: 11px;
-}}
-#MiningSignatureDim {{
-    color: {text_muted};
-    font-size: 11px;
-}}
-#MiningAmount {{
-    color: {text_primary};
-    font-size: 12px;
-    font-weight: 600;
-}}
-#MiningQuality {{
-    color: {text_primary};
-    font-size: 12px;
-    font-weight: 700;
 }}
 #ActionList::indicator {{
     width: 14px;
@@ -1290,6 +1142,9 @@ QInputDialog QLineEdit {{
 #PanelRow[open="true"] {{
     background: rgba(255, 255, 255, 0.03);
     border-bottom: none;
+}}
+#PanelRow[flagged="true"] {{
+    border-left: 2px solid {info};
 }}
 #RowDetail {{
     background: rgba(255, 255, 255, 0.03);

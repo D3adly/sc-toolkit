@@ -1,7 +1,8 @@
-"""Compact ("minimised") layouts of SC-Toolbox's tools for the in-game
-overlay. They're narrow widgets over the same data code as the full views
-(app.maps / app.mining / app.salvage) and reuse their helpers; only the
-layout differs.
+"""Compact layouts of SC-Toolbox's tools for the in-game overlay: the same
+data code as the full views (app.maps / app.mining / app.salvage) and the
+same components (app.ui.kit, the views' own cards and rows in their compact
+mode), only narrower. The overlay has no tooltips, so what the launcher
+shows on hover is spelled out here.
 """
 
 from __future__ import annotations
@@ -30,9 +31,11 @@ from PySide6.QtWidgets import (
 
 from app import channel as channel_mod, datahub, maps, mining, salvage, settings
 from app.theme import PALETTE
+from app.ui import kit
+from app.ui.kit import Badge, label
 from app.ui.maps_view import ZOOM_STEP, ZoomView, _cache_path, _ImageLoader
-from app.ui.mining_view import _QualityHist, _pct, _quality_tip, _signature_line
-from app.ui.salvage_view import _Header, _better_option, _money
+from app.ui.mining_view import KIND_LABELS, LocationCard, _pct
+from app.ui.salvage_view import ShipRowWidget
 
 
 def _label(text: str, name: str = "SalvageCell", tip: str = "", wrap: bool = False) -> QLabel:
@@ -43,7 +46,7 @@ def _label(text: str, name: str = "SalvageCell", tip: str = "", wrap: bool = Fal
     return lbl
 
 
-class _InlineCombo(QComboBox):
+class _InlineCombo(kit.Dropdown):
     """A combo box whose list opens inside the overlay window instead of as a
     popup window. A popup grabs the mouse; over a fullscreen game (XWayland,
     an OSD window) that grab sometimes failed, so the list closed at once and
@@ -112,8 +115,8 @@ class _InlineCombo(QComboBox):
         return False
 
 
-def _combo(min_width: int = 0) -> QComboBox:
-    combo = _InlineCombo(objectName="ConfigCombo")
+def _combo(min_width: int = 0, marks: bool = False) -> QComboBox:
+    combo = _InlineCombo(marks=marks)
     combo.setMaxVisibleItems(20)
     if min_width:
         combo.setMinimumWidth(min_width)
@@ -195,11 +198,9 @@ class _ScrollPanel(QWidget):
         self.scroll.setWidget(page)
         return v
 
-    def _message(self, text: str) -> None:
+    def _message(self, text: str, title: str = "") -> None:
         v = self._new_page()
-        lbl = _label(text, "InspectorHint", wrap=True)
-        lbl.setAlignment(Qt.AlignCenter)
-        v.addWidget(lbl, stretch=1)
+        v.addWidget(kit.EmptyState(title, text), stretch=1)
 
 
 # -- Maps -----------------------------------------------------------------------
@@ -303,97 +304,82 @@ class _Clickable(QFrame):
             self.clicked.emit()
 
 
-class _Segments(QWidget):
-    """A row of small toggle buttons, one checked; the combo-box API the
-    filters use (currentData, currentIndexChanged)."""
-
-    currentIndexChanged = Signal(int)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._row = QHBoxLayout(self)
-        self._row.setContentsMargins(0, 0, 0, 0)
-        self._row.setSpacing(0)
-        self._buttons: list[QPushButton] = []
-
-    def set_items(self, items: list[tuple], current=None) -> None:
-        """items: (text, data) or (text, data, tooltip)."""
-        for btn in self._buttons:
-            btn.deleteLater()
-        self._buttons = []
-        for i, (text, data, *tip) in enumerate(items):
-            btn = QPushButton(text, objectName="Segment")
-            if tip:
-                btn.setToolTip(tip[0])
-            btn.setProperty("compact", True)
-            btn.setProperty("pos", "first" if i == 0 else "last" if i == len(items) - 1 else "")
-            btn.setCheckable(True)
-            btn.setAutoExclusive(True)
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setProperty("data", data)
-            btn.clicked.connect(lambda _c=False, i=i: self.currentIndexChanged.emit(i))
-            self._row.addWidget(btn)
-            self._buttons.append(btn)
-        pick = next((b for b in self._buttons if b.property("data") == current), None)
-        (pick or self._buttons[0]).setChecked(True)
-
-    def currentData(self):
-        return next((b.property("data") for b in self._buttons if b.isChecked()), None)
+def _rows_panel() -> tuple[QFrame, QVBoxLayout]:
+    """The glass panel a list of rows sits in (as in the launcher's tables)."""
+    frame = kit.panel()
+    rows = QVBoxLayout(frame)
+    rows.setContentsMargins(0, 2, 0, 2)
+    rows.setSpacing(0)
+    return frame, rows
 
 
 class MiningPanel(_ScrollPanel):
-    """Filter by ore, system and mining method → the locations; pick one →
-    every rock type that spawns there: spawn chance, radar signatures and,
-    per resource, its share range and a chart of the quality odds."""
+    """Pick an ore (or not), a mining method and a system → the places, best
+    first for the ore: how many of the rocks there carry it and its best
+    average quality. Pick a place → its rock types (the launcher's location
+    card, compact): spawn chance, rarity, radar signatures, composition and
+    quality odds."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.data: dict | None = None
         self.location: str | None = None     # id of the opened location
         v = self.layout_
-        self.resource = _combo()
-        self.resource.currentIndexChanged.connect(self._render)
+        self.resource = _combo(marks=True)
+        self.resource.currentIndexChanged.connect(lambda _i: self._render())
         v.addWidget(self.resource)
         row = QHBoxLayout()
         row.setSpacing(8)
-        self.method = _Segments()
-        self.method.set_items([(label, key) for key, label in mining.METHOD_LABELS.items()])
-        self.method.currentIndexChanged.connect(self._fill_resources)
+        self.method = kit.Segmented(list(mining.METHOD_LABELS.items()), "ship", compact=True)
+        self.method.changed.connect(self._on_method)
         row.addWidget(self.method)
         row.addStretch(1)
-        self.system = _Segments()
-        self.system.currentIndexChanged.connect(self._fill_resources)
+        self.system = kit.Segmented([(None, "All")], None, compact=True)
+        self.system.changed.connect(lambda _v: self._fill_resources())
         row.addWidget(self.system)
         v.addLayout(row)
+        self.count = label("", "ResultCount")
+        v.addWidget(self.count)
         self._add_scroll()
         self._task = _Task(self)
         self._task.done.connect(self._on_loaded)
-        self._task.failed.connect(lambda msg: self._message(f"Couldn't read the game data:\n{msg}"))
+        self._task.failed.connect(lambda msg: self._message(msg, "Couldn't read the game data"))
         self._message("Loading mining data…")
 
     def activate(self) -> None:
         if self.data is None:
             root = _channel_root()
             if root is None:
-                self._message("Set up your Star Citizen folder in the launcher first.")
+                self._message("Set up your Star Citizen folder in the launcher first.", "No game folder")
                 return
             self._task.run(lambda: _cached_game("mining", root), "mining data")
 
     def _on_loaded(self, data: dict) -> None:
         self.data = data
-        self.system.set_items([("All", None)] + [(s["name"], s["id"]) for s in data["systems"]])
+        self.system.set_options([(None, "All")] + [(s["id"], s["name"]) for s in data["systems"]],
+                                self.system.value())
         self._fill_resources()
 
     # -- filters ------------------------------------------------------------------
+    def _on_method(self, method) -> None:
+        if method is None:             # the checked one clicked again
+            self.method.set_value(self._method or "ship")
+            return
+        self._fill_resources()
+
+    @property
+    def _method(self) -> str:
+        return self.method.value() or "ship"
+
     def _locations(self) -> list[dict]:
-        method, system = self.method.currentData(), self.system.currentData()
+        method, system = self._method, self.system.value()
         return [l for l in self.data["locations"]
                 if method in l["groups"] and (system is None or l["system"] == system)]
 
     def _fill_resources(self) -> None:
         if self.data is None:
             return
-        method = self.method.currentData()
+        method = self._method
         found = {p["res"] for l in self._locations() for i in l["groups"][method]
                  for p in self.data["rocks"][i["rock"]]["parts"]}
         current = self.resource.currentData()
@@ -404,13 +390,26 @@ class MiningPanel(_ScrollPanel):
             self.resource.addItem(self.data["resources"][res]["name"], res)
         self.resource.setCurrentIndex(max(self.resource.findData(current), 0))
         self.resource.blockSignals(False)
+        self.resource._mark()
         self._render()
 
     def _share(self, loc: dict, res: str) -> float:
         """% of this method's spawns at loc that are rocks carrying res."""
         rocks = self.data["rocks"]
-        return sum(i["chance"] for i in loc["groups"][self.method.currentData()]
+        return sum(i["chance"] for i in loc["groups"][self._method]
                    if any(p["res"] == res for p in rocks[i["rock"]]["parts"]))
+
+    def _quality(self, loc: dict, res: str) -> int | None:
+        """The best average quality res comes in at loc (over its rocks there)."""
+        rocks, quality = self.data["rocks"], self.data["quality"]
+        best = None
+        for i in loc["groups"][self._method]:
+            for part in rocks[i["rock"]]["parts"]:
+                if part["res"] == res:
+                    q = quality.get(res, {}).get(loc["system"], {}).get(str(part["scale"]))
+                    if q is not None and (best is None or q["avg"] > best):
+                        best = q["avg"]
+        return best
 
     def _render(self) -> None:
         if self.data is None:
@@ -427,217 +426,113 @@ class MiningPanel(_ScrollPanel):
         self._render()
         self.scroll.verticalScrollBar().setValue(0)
 
-    # -- page 1: locations -------------------------------------------------------------
+    # -- page 1: places -----------------------------------------------------------------
     def _render_list(self, locs: list[dict]) -> None:
         res = self.resource.currentData()
-        method = self.method.currentData()
+        method = self._method
         if res is not None:
             locs = sorted((l for l in locs if self._share(l, res) > 0), key=lambda l: -self._share(l, res))
-        body = self._new_page()
-        if res is not None:
             name = self.data["resources"][res]["name"]
-            hint = f"{len(locs)} locations with {name}, most first. Click one for its rocks."
+            self.count.setText(f"{len(locs)} places with {name} · most first")
         else:
-            hint = f"{len(locs)} locations. Click one for its rocks."
-        body.addWidget(_label(hint, "InspectorHint", wrap=True))
+            self.count.setText(f"{len(locs)} places · pick an ore for the best ones")
+        body = self._new_page()
+        if not locs:
+            body.addWidget(kit.EmptyState("Not found here", "This ore doesn't spawn in this system with this "
+                                          "mining method. Try All systems or another method."), stretch=1)
+            return
         systems = {s["id"]: s["name"] for s in self.data["systems"]}
+        show_system = self.system.value() is None
+        top = max((self._share(l, res) for l in locs), default=0) if res is not None else 0
+        frame, rows = _rows_panel()
         for loc in locs:
-            row = _Clickable(objectName="ShipHeader")
+            row = _Clickable(objectName="PanelRow")
             h = QHBoxLayout(row)
             h.setContentsMargins(10, 6, 10, 6)
             h.setSpacing(8)
             col = QVBoxLayout()
-            col.setSpacing(0)
-            col.addWidget(_label(loc["name"], "ShipName"))
-            where = ", ".join(filter(None, [loc.get("parent") or "", systems.get(loc["system"], "")]))
-            col.addWidget(_label(where or loc["kind"].title(), "InspectorHint"))
+            col.setSpacing(1)
+            title = QHBoxLayout()
+            title.setSpacing(6)
+            title.addWidget(label(loc["name"], "RowName"))
+            if show_system and loc["system"] in systems:
+                title.addWidget(Badge(systems[loc["system"]], hue=loc["system"]))
+            title.addStretch(1)
+            col.addLayout(title)
+            kind = KIND_LABELS.get(loc["kind"], loc["kind"].title())
+            if loc.get("parent") and loc["kind"] in ("moon", "lagrange"):
+                kind += f" · {loc['parent']}"
+            col.addWidget(label(kind, "MutedText"))
             h.addLayout(col, stretch=1)
             if res is not None:
-                h.addWidget(_label(f"{_pct(self._share(loc, res))} of rocks", "MiningChance"))
+                share = self._share(loc, res)
+                stats = QVBoxLayout()
+                stats.setSpacing(1)
+                line = QHBoxLayout()
+                line.setSpacing(6)
+                line.addWidget(kit.Bar(share / top if top else 0, PALETTE["success"], 44, 5), alignment=Qt.AlignVCenter)
+                line.addWidget(label(f"<b>{_pct(share)}</b> of rocks", "ChanceText", rich=True))
+                stats.addLayout(line)
+                q = self._quality(loc, res)
+                if q is not None:
+                    stats.addWidget(label(f"Q ≈ {q}", "MutedText", align=Qt.AlignRight))
+                h.addLayout(stats)
             else:
-                h.addWidget(_label(f"{len(loc['groups'][method])} rock types", "InspectorHint"))
-            h.addWidget(_label("›", "ShipArrow"))
+                n = len(loc["groups"][method])
+                h.addWidget(label(f"{n} rock type{'s' if n != 1 else ''}", "MutedText"))
+            h.addWidget(label("›", "MutedText"))
             # Next event loop turn: the click handler finishes before the page is replaced.
             row.clicked.connect(lambda lid=loc["id"]: QTimer.singleShot(0, lambda: self._open(lid)))
-            body.addWidget(row)
+            rows.addWidget(row)
+        body.addWidget(frame)
         body.addStretch(1)
 
-    # -- page 2: one location's rocks ------------------------------------------------
+    # -- page 2: one place's rocks ------------------------------------------------------
     def _render_location(self, loc: dict) -> None:
-        """Compact: per rock type its spawn chance, radar signatures and
-        composition; quality odds as a tiny histogram (numbers on hover)."""
         res = self.resource.currentData()
-        method = self.method.currentData()
-        rocks, quality, names = self.data["rocks"], self.data["quality"], self.data["resources"]
+        method = self._method
+        self.count.setText(f"{loc['name']} · {mining.METHOD_LABELS[method]} mining")
         body = self._new_page()
-        body.setSpacing(4)
         top = QHBoxLayout()
-        back = QPushButton("‹ Locations", objectName="MiniButton")
-        back.setCursor(Qt.PointingHandCursor)
-        back.clicked.connect(lambda: QTimer.singleShot(0, lambda: self._open(None)))
-        top.addWidget(back)
-        top.addWidget(_label(loc["name"], "ShipName"), stretch=1)
-        top.addWidget(_label(f"{mining.METHOD_LABELS[method]} mining", "InspectorHint"))
+        top.addWidget(kit.button("‹ All places", "ghost", lambda: QTimer.singleShot(0, lambda: self._open(None))))
+        top.addStretch(1)
         body.addLayout(top)
-        for item in loc["groups"][method]:
-            rock = rocks[item["rock"]]
-            carries = res is not None and any(p["res"] == res for p in rock["parts"])
-            card = QFrame(objectName="ShipCard")
-            cv = QVBoxLayout(card)
-            cv.setContentsMargins(8, 4, 8, 5)
-            cv.setSpacing(1)
-            head = QHBoxLayout()
-            head.setSpacing(6)
-            title = rock["name"] + (" asteroid" if rock["asteroid"] else "")
-            head.addWidget(_label(title, "MiningRockHit" if carries else "ShipName"))
-            if rock.get("rarity"):
-                head.addWidget(_label(rock["rarity"], "InspectorHint"))
-            head.addStretch(1)
-            head.addWidget(_label(_pct(item["chance"]), "MiningChance",
-                                  tip="Share of this location's spawns (for this mining type)"))
-            cv.addLayout(head)
-            sig, sig_tip = _signature_line(rock, item, method)
-            if sig:
-                cv.addWidget(_label(sig, "MiningSignature", tip=sig_tip))
-            parts = QGridLayout()
-            parts.setHorizontalSpacing(10)
-            parts.setVerticalSpacing(0)
-            for r, part in enumerate(rock["parts"]):
-                name = names.get(part["res"], {}).get("name", part["res"])
-                style = "MiningRockHit" if part["res"] == res else "SalvageCell"
-                parts.addWidget(_label(name, style), r, 0)
-                share = f"{part['min']:g}–{part['max']:g}%"
-                if part["prob"] < 1:
-                    share += f"  ({_pct(100 * part['prob'])} of rocks)"
-                parts.addWidget(_label(share, "MiningAmount"), r, 1)
-                q = quality.get(part["res"], {}).get(loc["system"], {}).get(str(part["scale"]))
-                if q is not None and q["dist"]:
-                    hist = _QualityHist(q["dist"])
-                    hist.setToolTip(_quality_tip(name, q))
-                    parts.addWidget(hist, r, 2, Qt.AlignVCenter)
-            parts.setColumnStretch(3, 1)
-            cv.addLayout(parts)
-            body.addWidget(card)
-        body.addWidget(_label("Hover a quality bar for its odds (estimated from the game's settings).",
-                              "InspectorHint", wrap=True))
+        body.addWidget(LocationCard(loc, method, self.data, [res] if res else [], True, compact=True))
+        body.addWidget(label("RS: radar signature of one rock (×2, ×3: a group). Q: average quality, the "
+                             "bars its odds (estimated from the game's settings).", "MutedText", wrap=True))
         body.addStretch(1)
 
 
 # -- Salvage ------------------------------------------------------------------------
 
-class _ShipItem(QFrame):
-    """One ship in the salvage accordion: a header (name, net value) that
-    opens the details underneath."""
-
-    toggled = Signal(str)
-
-    def __init__(self, row, parent=None):
-        super().__init__(parent)
-        self.setObjectName("ShipCard")
-        self.row = row
-        self._detail: QWidget | None = None
-        v = QVBoxLayout(self)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
-        self.header = _Header(objectName="ShipHeader")
-        self.header.setCursor(Qt.PointingHandCursor)
-        self.header.clicked.connect(lambda: self.toggled.emit(row.stem))
-        h = QHBoxLayout(self.header)
-        h.setContentsMargins(10, 7, 10, 7)
-        h.setSpacing(8)
-        self.arrow = _label("▸", "ShipArrow")
-        h.addWidget(self.arrow)
-        h.addWidget(_label(row.name, "ShipName"), stretch=1)
-        h.addWidget(_label(_money(row.net), "ShipNet") if row.in_sheet else _label("no data", "ShipMuted"))
-        v.addWidget(self.header)
-
-    def set_open(self, on: bool) -> None:
-        self.header.setProperty("open", on)
-        self.header.style().unpolish(self.header)
-        self.header.style().polish(self.header)
-        self.arrow.setText("▾" if on else "▸")
-        if on and self._detail is None:
-            self._detail = _ship_detail(self.row)
-            self.layout().addWidget(self._detail)
-        if self._detail is not None:
-            self._detail.setVisible(on)
-
-
-def _ship_detail(row) -> QWidget:
-    body = QWidget(objectName="ShipDetail")
-    v = QVBoxLayout(body)
-    v.setContentsMargins(12, 4, 10, 10)
-    v.setSpacing(6)
-    stats = QGridLayout()
-    stats.setHorizontalSpacing(12)
-    for col, (cap, val) in enumerate((("FEE", _money(row.fee)),
-                                      ("COMPONENTS", _money(row.components_value)),
-                                      ("CARGO", _money(row.cargo_value)))):
-        stats.addWidget(_label(cap, "ShipCaption"), 0, col)
-        stats.addWidget(_label(val, "ShipStat"), 1, col)
-    v.addLayout(stats)
-    if row.note:
-        v.addWidget(_label(row.note, "InspectorNote", wrap=True))
-
-    v.addWidget(_label("COMPONENTS", "SectionLabel"))
-    grid = QGridLayout()
-    grid.setHorizontalSpacing(10)
-    grid.setVerticalSpacing(2)
-    marks = {"yes": ("✓", "SalvageYes"), "unlisted": ("?", "SalvageMaybe"), "unknown": ("—", "SalvageNo")}
-    for r, c in enumerate(row.components):
-        # Same value the ship's total counts: the better of sell / dismantle.
-        priced = bool(c.sell or c.dismantle)
-        better = _better_option(c) or ("sell" if c.sell else "dismantle" if c.dismantle else None)
-        style = "SalvageCell" if c.salvageable == "yes" else "SalvageDim"
-        mark, mark_style = marks[c.salvageable]
-        tip = " · ".join(filter(None, [c.type, f"size {c.size}" if c.size else "", c.grade, c.family]))
-        grid.addWidget(_label(mark, mark_style), r, 0)
-        grid.addWidget(_label(f"{c.qty}× {c.name}", style, tip=tip), r, 1)
-        grid.addWidget(_label(c.spec, "InspectorHint", tip=tip), r, 2)
-        grid.addWidget(_label(_money(c.best) if priced else "—",
-                              "SalvageBest" if priced and c.salvageable == "yes" else style), r, 3, Qt.AlignRight)
-        grid.addWidget(_label(better or "", "InspectorHint"), r, 4)
-    grid.setColumnStretch(1, 1)
-    v.addLayout(grid)
-
-    if row.cargo:
-        v.addWidget(_label("CARGO ABOARD", "SectionLabel"))
-        cargo = QGridLayout()
-        cargo.setHorizontalSpacing(10)
-        for r, c in enumerate(row.cargo):
-            cargo.addWidget(_label(f"{c.scu} SCU {c.material}"), r, 0)
-            cargo.addWidget(_label(_money(c.value), "SalvageCell"), r, 1, Qt.AlignRight)
-        cargo.setColumnStretch(0, 1)
-        v.addLayout(cargo)
-    return body
-
-
 class SalvagePanel(_ScrollPanel):
-    """Pick a claim difficulty → its ships as an accordion (name and net
-    value; click for fee, what comes off it (sell vs dismantle) and cargo).
-    Uses the prices downloaded by the launcher's Salvage Claims view (no
-    network access from the overlay)."""
+    """Pick a claim difficulty → its ships, most valuable first (the
+    launcher's rows, compact): click one for its fee, what comes off it and
+    the cargo. Uses the prices downloaded by the launcher's Salvage Claims
+    view (no network access from the overlay)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.game: dict | None = None
         self.opened: str | None = None       # stem of the open ship
-        self._items: dict[str, _ShipItem] = {}
+        self._rows: dict[str, ShipRowWidget] = {}
         v = self.layout_
-        self.tier = _Segments()
-        self.tier.currentIndexChanged.connect(self._fill_ships)
+        self.tier = kit.Segmented([], None, compact=True)
+        self.tier.changed.connect(self._on_tier)
         v.addWidget(self.tier, alignment=Qt.AlignLeft)
+        self.count = label("", "ResultCount")
+        v.addWidget(self.count)
         self._add_scroll()
         self._task = _Task(self)
         self._task.done.connect(self._on_loaded)
-        self._task.failed.connect(lambda msg: self._message(f"Couldn't read the game data:\n{msg}"))
+        self._task.failed.connect(lambda msg: self._message(msg, "Couldn't read the game data"))
         self._message("Loading salvage data…")
 
     def activate(self) -> None:
         if self.game is None:
             root = _channel_root()
             if root is None:
-                self._message("Set up your Star Citizen folder in the launcher first.")
+                self._message("Set up your Star Citizen folder in the launcher first.", "No game folder")
                 return
             self._task.run(lambda: _cached_game("salvage", root), "salvage data")
 
@@ -646,41 +541,59 @@ class SalvagePanel(_ScrollPanel):
         self.sheet = salvage.load_sheet()
         uex = salvage.load_uex()
         self.prices = uex[1] if uex else {}
-        self.tier.set_items([(t["label"], t["id"], f"Claim size: {t['size']}") for t in game["tiers"]],
-                            current="Easy")
+        self._tier = "Easy" if any(t["id"] == "Easy" for t in game["tiers"]) else game["tiers"][0]["id"]
+        self.tier.set_options([(t["id"], t["label"]) for t in game["tiers"]], self._tier)
+        self._fill_ships()
+
+    def _on_tier(self, tier) -> None:
+        if tier is None:              # the checked one clicked again
+            self.tier.set_value(self._tier)
+            return
+        self._tier = tier
         self._fill_ships()
 
     def _fill_ships(self) -> None:
         if self.game is None:
             return
-        rows = salvage.build_rows(self.game, self.tier.currentData(), self.sheet, self.prices)
+        rows = salvage.build_rows(self.game, self._tier, self.sheet, self.prices)
         rows.sort(key=lambda r: (not r.in_sheet, -r.net, r.name))
+        tier = next((t for t in self.game["tiers"] if t["id"] == self._tier), None)
+        count = f"{len(rows)} ship" + ("" if len(rows) == 1 else "s") + " · most valuable first"
+        if tier:
+            count += f" · {tier['size'].lower()} ships"
+        self.count.setText(count)
         body = self._new_page()
         if self.sheet is None:
-            body.addWidget(_label(
-                "Prices not downloaded yet: open Salvage Claims in the launcher once.",
-                "InspectorNote", wrap=True))
-        count = f"{len(rows)} ship" + ("" if len(rows) == 1 else "s")
-        body.addWidget(_label(f"{count}, most valuable first. Click one for details.",
-                              "InspectorHint"))
-        self._items = {}
+            notice = kit.Notice()
+            notice.show_text("Prices aren't downloaded yet: open Salvage Claims in the launcher once.",
+                             "warning", dismissible=False)
+            body.addWidget(notice)
+        best = max((r.net for r in rows if r.in_sheet), default=None)
+        top = max((r.components_value + r.cargo_value for r in rows if r.in_sheet), default=0)
+        frame, list_box = _rows_panel()
+        self._rows = {}
         for row in rows:
-            item = _ShipItem(row)
-            item.toggled.connect(self._toggle)
-            self._items[row.stem] = item
-            body.addWidget(item)
+            w = ShipRowWidget(row, False, best=row.in_sheet and row.net == best and row.net > 0, top=top,
+                              compact=True)
+            w.toggled.connect(self._toggled)
+            self._rows[row.stem] = w
+            list_box.addWidget(w)
+        body.addWidget(frame)
         body.addStretch(1)
-        if self.opened in self._items:
-            self._items[self.opened].set_open(True)
+        if self.opened in self._rows:
+            self._rows[self.opened]._set_open(True)
         else:
             self.opened = None
 
-    def _toggle(self, stem: str) -> None:
+    def _toggled(self, stem: str, on: bool) -> None:
         """Accordion: one ship open at a time."""
-        if self.opened in self._items:
-            self._items[self.opened].set_open(False)
-        self.opened = None if stem == self.opened else stem
-        if self.opened:
-            item = self._items[self.opened]
-            item.set_open(True)
-            QTimer.singleShot(0, lambda: self.scroll.ensureWidgetVisible(item.header, 0, 0))
+        if not on:
+            if stem == self.opened:
+                self.opened = None
+            return
+        previous, self.opened = self.opened, stem
+        if previous in self._rows and previous != stem:
+            self._rows[previous]._set_open(False)
+            self.opened = stem
+        item = self._rows[stem]
+        QTimer.singleShot(0, lambda: self.scroll.ensureWidgetVisible(item.header, 0, 0))

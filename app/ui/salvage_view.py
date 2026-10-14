@@ -101,13 +101,19 @@ def _table_head() -> QWidget:
 # -- one ship ---------------------------------------------------------------------
 
 class ShipRowWidget(QWidget):
+    """One claim ship: a header row (name, fee, components, cargo, net value)
+    that expands in place. compact=True is the overlay's: name, value bar and
+    net only, the details stacked underneath and spelled out (no tooltips
+    there); `flag` marks the row (e.g. "Your claim")."""
+
     toggled = Signal(str, bool)
     open_ship = Signal(str)
 
     def __init__(self, row: ShipRow, expanded: bool, *, best: bool, top: float = 0, match=None, tier: str = "",
-                 parent=None):
+                 compact: bool = False, flag: str = "", parent=None):
         super().__init__(parent)
         self.row = row
+        self.compact = compact
         self.match = match  # component filter predicate, or None
         self._detail: QWidget | None = None
         self._open = False
@@ -118,9 +124,11 @@ class ShipRowWidget(QWidget):
         self.header = _Header(objectName="PanelRow")
         self.header.setCursor(Qt.PointingHandCursor)
         self.header.clicked.connect(lambda: self._set_open(not self._open))
+        if flag:
+            self.header.setProperty("flagged", True)
         head = QHBoxLayout(self.header)
-        head.setContentsMargins(14, 9, 14, 9)
-        head.setSpacing(14)
+        head.setContentsMargins(*((10, 7, 10, 7) if compact else (14, 9, 14, 9)))
+        head.setSpacing(10 if compact else 14)
         self.arrow = label("▸", "MutedText")
         self.arrow.setFixedWidth(COLS["arrow"])
         head.addWidget(self.arrow)
@@ -132,6 +140,8 @@ class ShipRowWidget(QWidget):
         name.addWidget(label(row.name, "RowName"))
         if tier:
             name.addWidget(Badge(tier))
+        if flag:
+            name.addWidget(Badge(flag, "info"))
         name.addStretch(1)
         title.addLayout(name)
         if match is not None:
@@ -142,7 +152,18 @@ class ShipRowWidget(QWidget):
         head.addLayout(title, stretch=1)
 
         if not row.in_sheet:
-            head.addWidget(label("Not in the spreadsheet yet", "MutedText"))
+            head.addWidget(label("no data" if compact else "Not in the spreadsheet yet", "MutedText"))
+        elif compact:
+            gross = row.components_value + row.cargo_value
+            if gross > 0:
+                head.addWidget(kit.StackedBar(
+                    [(row.components_value, PALETTE["info"]), (row.cargo_value, PALETTE["hue_industry"])],
+                    width=56, scale=gross / top if top else 1), alignment=Qt.AlignVCenter)
+            value = label(_money(row.net), "RowKey", align=Qt.AlignRight | Qt.AlignVCenter)
+            value.setMinimumWidth(64)
+            if best:
+                value.setProperty("tone", "success")
+            head.addWidget(value)
         else:
             head.addWidget(_cell(_money(row.fee), COLS["fee"]))
             head.addWidget(_cell(_money(row.components_value), COLS["components"]))
@@ -188,6 +209,8 @@ class ShipRowWidget(QWidget):
 
     # -- expanded body --------------------------------------------------------
     def _build_detail(self) -> QWidget:
+        if self.compact:
+            return self._build_compact_detail()
         row = self.row
         body = QFrame(objectName="RowDetail")
         v = QVBoxLayout(body)
@@ -262,6 +285,61 @@ class ShipRowWidget(QWidget):
         link = kit.button(f"{row.name} in the Ship Database ↗", "ghost",
                           lambda: self.open_ship.emit(row.name))
         v.addWidget(link, alignment=Qt.AlignLeft)
+        return body
+
+
+    def _build_compact_detail(self) -> QWidget:
+        """The overlay's: fee / components / cargo, then each part with the
+        price it's counted at and whether selling or dismantling pays more,
+        then the cargo."""
+        row = self.row
+        body = QFrame(objectName="RowDetail")
+        v = QVBoxLayout(body)
+        v.setContentsMargins(12, 4, 10, 10)
+        v.setSpacing(6)
+        stats = QHBoxLayout()
+        stats.setSpacing(18)
+        for caption, value in (("Fee", row.fee), ("Components", row.components_value), ("Cargo", row.cargo_value)):
+            col = QVBoxLayout()
+            col.setSpacing(0)
+            col.addWidget(kit.caps(caption))
+            col.addWidget(label(_money(value), "RowValue"))
+            stats.addLayout(col)
+        stats.addStretch(1)
+        v.addLayout(stats)
+        if row.note:
+            v.addWidget(label(row.note, "WarnText", wrap=True))
+        v.addWidget(kit.caps("Components"))
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(3)
+        for r, c in enumerate(row.components):
+            mark, tone, _tip = _STATE[c.salvageable]
+            counted = c.salvageable == "yes"
+            dim = "RowValue" if counted else "RowValueDim"
+            priced = bool(c.sell or c.dismantle)
+            better = _better_option(c) or ("sell" if c.sell else "dismantle" if c.dismantle else "")
+            grid.addWidget(Badge(mark, tone), r, 0)
+            name = label(f"{c.qty}× {c.name}", "MatchText" if self.match is not None and self.match(c) else dim)
+            name.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            grid.addWidget(name, r, 1)
+            grid.addWidget(label(_money(c.best) if priced else "—", "BestText" if priced and counted else dim,
+                                 align=Qt.AlignRight), r, 2)
+            grid.addWidget(label(better, "MutedText"), r, 3)
+        grid.setColumnStretch(1, 1)
+        v.addLayout(grid)
+        legend = "✓ comes off and counts · ? priced, not confirmed (not counted)"
+        v.addWidget(label(legend, "MutedText", wrap=True))
+        if row.cargo:
+            v.addWidget(kit.caps("Cargo aboard"))
+            cg = QGridLayout()
+            cg.setHorizontalSpacing(8)
+            cg.setVerticalSpacing(2)
+            for r, c in enumerate(row.cargo):
+                cg.addWidget(label(f"{c.scu} SCU {c.material}", "RowValue"), r, 0)
+                cg.addWidget(label(_money(c.value), "RowValue", align=Qt.AlignRight), r, 1)
+            cg.setColumnStretch(0, 1)
+            v.addLayout(cg)
         return body
 
 

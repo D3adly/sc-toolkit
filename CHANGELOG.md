@@ -2,7 +2,7 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
-## Unreleased
+## 0.4.0 (2026-10-14)
 
 - **New: Sync online** (signed in, under Live log and in Settings → Online account). It keeps
   sc-toolbox.com up to date, and sc-toolbox.com is where everything is kept:

@@ -13,7 +13,7 @@ from collections import deque
 from pathlib import Path
 
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QImage, QPainter
 
 from app import config
 
@@ -49,6 +49,12 @@ def ensure_photo(template) -> Path | None:
         return None
     x, y, w, h = photo.crop
     image = image.copy(QRect(x, y, w, h)).convertToFormat(QImage.Format_ARGB32)
+    if photo.erase:
+        # Paint over the maker's logo with background white; keying then clears it.
+        painter = QPainter(image)
+        for ex, ey, ew, eh in photo.erase:
+            painter.fillRect(ex - x, ey - y, ew, eh, Qt.white)
+        painter.end()
     if photo.key_background:
         _key_out_background(image)
     size = template.size

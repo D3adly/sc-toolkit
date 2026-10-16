@@ -4,6 +4,14 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
 
 ## Unreleased
 
+- **Joystick Bindings: two more VKB models.** *Gladiator EVO SCE (Premium) — Right* has the
+  analog mini-stick in the A1 spot (slots for both its hat mode and its analog mode), the C1
+  thumb hat and the rapid-fire trigger (up and down). *Gladiator EVO SCE (Standard) on Omni Throttle — Left* is
+  the Standard grip on the Omni Throttle Adapter, with the gimbal shown as the throttle. Pick
+  them under STICK (the game names the sticks the same, so they aren't chosen for you). When you
+  switch a stick to another model, the buttons you already identified stay for the controls both
+  models share. The En1 encoder on every VKB model no longer asks for a press it doesn't have.
+
 - **Fix: My Ships listed remote turret guns as the pilot's.** Remote turrets (the Polaris's rear
   ones, the Carrack's, Reclaimer's, Hercules', Redeemer's…) are typed like ordinary gun mounts in
   the game files; their guns now show under Turrets, so the Polaris has no pilot guns. A

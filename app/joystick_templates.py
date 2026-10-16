@@ -47,6 +47,7 @@ class Photo:
     crop: tuple[int, int, int, int]  # x, y, w, h in source pixels
     scale: float                     # source pixels -> display units
     key_background: bool = True      # white studio background to key out (False: already transparent)
+    erase: tuple[tuple[int, int, int, int], ...] = ()  # source-pixel rects to blank (a logo inside the crop)
 
 
 @dataclass(frozen=True)
@@ -141,8 +142,41 @@ _EVO_SCE_STD = (
     ("encoder", "Encoder (En1)", (
         InputSlot("up", "▲", "Roll the En1 encoder UP"),
         InputSlot("down", "▼", "Roll the En1 encoder DOWN"),
-        InputSlot("push", "●", "Press the En1 encoder in (Skip if it doesn't click)"),
     )),
+)
+
+
+# The same grip with the Premium modules: the analog mini-stick in the A1 spot (top-left hat), a
+# 4-way hat with push in the C1 spot (was the thumb button), and the rapid-fire trigger, which
+# clicks both ways (up and down). The
+# mini-stick's push swaps it between hat mode (four buttons) and analog mode (two axes) in VKB's
+# default profile, so it has slots for both. Control ids match the Standard layout where the
+# control is the same, so identified buttons carry over when switching model.
+_EVO_SCE_PREM = (
+    ("ministick", "Mini-stick (A1)", (
+        _axis("x", "↔", "Analog mode: push the A1 mini-stick fully LEFT or RIGHT"),
+        _axis("y", "↕", "Analog mode: push the A1 mini-stick fully UP or DOWN"),
+        InputSlot("up", "▲", "Hat mode: push the A1 mini-stick UP"),
+        InputSlot("right", "▶", "Hat mode: push the A1 mini-stick RIGHT"),
+        InputSlot("down", "▼", "Hat mode: push the A1 mini-stick DOWN"),
+        InputSlot("left", "◀", "Hat mode: push the A1 mini-stick LEFT"),
+        InputSlot("push", "●", "Press the A1 mini-stick in (Skip if it only switches mode)"),
+    )),
+    *(c for c in _EVO_SCE_STD if c[0] in ("hat_tr", "hat_c", "btn_red", "btn_front", "trigger")),
+    ("rapid_fire", "Rapid-fire trigger", _rocker("rapid-fire trigger")),
+    ("hat_c1", "Thumb hat (C1)", _hat("C1 thumb hat")),
+    *(c for c in _EVO_SCE_STD if c[0] not in (
+        "hat_tl", "hat_tr", "hat_c", "btn_red", "btn_front", "trigger", "btn_thumb")),
+)
+
+# The Standard grip on the Omni Throttle Adapter: same controls, but the gimbal is now the
+# throttle (forward/back) and strafe (left/right) of a 6-DOF throttle.
+_EVO_SCE_STD_OTA = tuple(
+    ("stick", "Omni throttle", (
+        _axis("x", "↔", "Slide the throttle fully LEFT or RIGHT", default="x"),
+        _axis("y", "↕", "Push the throttle fully FORWARD or BACK", default="y"),
+    )) if cid == "stick" else (cid, label, inputs)
+    for cid, label, inputs in _EVO_SCE_STD
 )
 
 
@@ -225,6 +259,10 @@ _PHOTO_CDN = "https://cdn.shopify.com/s/files/1/0571/3192/5689/products/"
 _LOGI_CDN = "https://resource.logitechg.com/content/dam/gaming/en/products/x56/2025/gallery/"
 _PHOTO_R = Photo(_PHOTO_CDN + "68_GNX-EVO_SCG-R_1024_2-nologo.jpg", (150, 30, 780, 950), 0.8)
 _PHOTO_L = Photo(_PHOTO_CDN + "67_GNX-EVO_SCG-L_1024_3-nologo.jpg", (115, 45, 780, 950), 0.8)
+# VKB's current store photos (823 and 600 px squares) have the VKBsim logo in the top-left corner.
+_VKB_CDN = "https://cdn.shopify.com/s/files/1/0808/7827/2731/files/"
+_PHOTO_PREM_R = Photo(_VKB_CDN + "GNE_SCG-R_P_02.webp", (140, 55, 545, 705), 1.1, erase=((140, 55, 55, 80),))
+_PHOTO_OTA_L = Photo(_VKB_CDN + "GNE_OT_SCG_04.webp", (115, 50, 365, 505), 1.35, erase=((115, 50, 35, 40),))
 # Logitech's gallery renders are transparent PNGs (2500x2160), one per unit.
 _PHOTO_X56_STICK = Photo(_LOGI_CDN + "x56-3qtr-left-angle-gallery-4.png", (722, 353, 1144, 1443), 0.55, key_background=False)
 _PHOTO_X56_THROTTLE = Photo(_LOGI_CDN + "x56-3qtr-left-angle-gallery-5.png", (601, 592, 1254, 1055), 0.62, key_background=False)
@@ -258,6 +296,29 @@ TEMPLATES: dict[str, StickTemplate] = {
                 "stick": (522, 628),
                 "base_f2": (300, 712), "base_f1": (352, 724), "base_f3": (402, 748),
                 "switch": (240, 792), "wheel": (293, 815), "encoder": (346, 832),
+            }),
+        ),
+        StickTemplate(
+            "vkb_evo_sce_prem_r", "VKB Gladiator EVO SCE (Premium) — Right", _PHOTO_PREM_R,
+            _controls(_PHOTO_PREM_R, _EVO_SCE_PREM, {
+                "ministick": (288, 126), "hat_tr": (337, 116), "hat_c": (325, 166),
+                "btn_red": (283, 186), "btn_front": (206, 160), "trigger": (262, 250),
+                "rapid_fire": (226, 224), "hat_c1": (330, 292), "btn_pinky": (465, 415),
+                "twist": (395, 360), "stick": (380, 490),
+                "base_f2": (468, 576), "base_f1": (512, 553), "base_f3": (548, 534),
+                "switch": (512, 642), "wheel": (555, 612), "encoder": (598, 588),
+            }),
+        ),
+        StickTemplate(
+            "vkb_evo_sce_std_ota_l", "VKB Gladiator EVO SCE (Standard) on Omni Throttle — Left", _PHOTO_OTA_L,
+            _controls(_PHOTO_OTA_L, _EVO_SCE_STD_OTA, {
+                # The grip lies on its side here; the trigger faces away from the camera.
+                "hat_tl": (390, 80), "hat_tr": (425, 138), "hat_c": (378, 128),
+                "btn_red": (393, 170), "btn_front": (452, 168), "trigger": (412, 200),
+                "btn_thumb": (330, 215), "btn_pinky": (165, 212), "twist": (255, 205),
+                "stick": (300, 330),
+                "base_f2": (240, 420), "base_f1": (290, 420), "base_f3": (340, 420),
+                "switch": (233, 482), "wheel": (290, 480), "encoder": (345, 480),
             }),
         ),
         StickTemplate(

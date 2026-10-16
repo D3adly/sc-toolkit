@@ -1035,7 +1035,12 @@ class BindingsView(kit.ToolPage):
     def _on_model_changed(self, template_id: str | None) -> None:
         if template_id == self.setup.template_id:
             return
-        self.setup = DeviceSetup(template_id, {}, {})
+        # Identified buttons carry over for controls both models share (moving from the Standard
+        # to the Premium grip keeps the hats you already identified); marker positions don't,
+        # since they belong to the old photo.
+        new = TEMPLATES.get(template_id) if template_id else None
+        keep = {f"{c.id}.{s.key}" for c in new.controls for s in c.inputs} if new else set()
+        self.setup = DeviceSetup(template_id, {k: v for k, v in self.setup.inputs.items() if k in keep}, {})
         self._save_setup()
         self.selected = None
         self._render()

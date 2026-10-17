@@ -116,7 +116,7 @@ class EventReminder(QFrame):
         self.details.setText(text)
 
     def _update_count(self) -> None:
-        if self.op is None or not self.isVisible():
+        if self.op is None or self.isHidden():      # (not isVisible(): kept current while hidden)
             return
         text = events.countdown(self.op["startsAt"], self.op.get("durationMinutes"))
         if text == "Over":

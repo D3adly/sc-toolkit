@@ -836,7 +836,7 @@ class OverlayWindow(QWidget):
         # The next op you're signed up for (from the launcher), in both the bar and one-line mode.
         from app.ui.overlay_events import EventReminder
 
-        self.reminder = EventReminder(self._hint)
+        self.reminder = EventReminder(self._hint, self.frame)
         self.reminder.resized.connect(self._reminder_changed)
         v.addWidget(self.reminder)
 
@@ -950,6 +950,10 @@ class OverlayWindow(QWidget):
         as its content."""
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
+        # A child shown while the overlay is hidden (the event reminder) doesn't reach the outer
+        # layout's cached hint for the frame: the bar would keep its old height, squashing everything.
+        self.frame.layout().invalidate()
+        self.frame.updateGeometry()
         self.layout().activate()
         self.adjustSize()
         hint = self.sizeHint()
@@ -960,7 +964,7 @@ class OverlayWindow(QWidget):
             inner = width - m.left() - m.right() - 2
             bar = self.mini_bar.heightForWidth(inner) if self.mini_bar.hasHeightForWidth() else -1
             height = max(bar, self.mini_bar.sizeHint().height()) + m.top() + m.bottom() + 2
-            if self.reminder.isVisible():
+            if not self.reminder.isHidden():     # (isVisible() is False while the overlay is hidden)
                 r = self.reminder.heightForWidth(inner) if self.reminder.hasHeightForWidth() else -1
                 height += max(r, self.reminder.sizeHint().height()) + self.frame.layout().spacing()
             hint.setHeight(height)

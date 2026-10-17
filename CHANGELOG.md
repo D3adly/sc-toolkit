@@ -2,7 +2,7 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
-## Unreleased
+## 0.6.0 (2026-10-17)
 
 - **Events: your orgs' ops in the launcher.** A new tool (rail and home screen) with a month
   calendar, the agenda (filter *I'm in* / *Has room*) and the op you pick: its countdown, how

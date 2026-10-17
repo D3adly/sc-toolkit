@@ -43,7 +43,13 @@ _REFRESH_MARGIN = 60   # refresh this many seconds before the access token expir
 
 
 class PortalError(Exception):
-    """Something went wrong; the message is shown to the user."""
+    """Something went wrong; the message is shown to the user. `code` is the API's error code
+    ("seat_conflict", …) and `data` its whole problem body, for callers that act on them."""
+
+    def __init__(self, message: str = "", code: str = "", data: dict | None = None):
+        super().__init__(message)
+        self.code = code
+        self.data = data or {}
 
 
 class SignedOut(PortalError):
@@ -374,7 +380,8 @@ class Session:
             if status == 403 and data.get("code") == "insufficient_scope":
                 raise InsufficientScope("Sign in again to give SC-Toolbox the permission for this.")
             if status >= 400:
-                raise PortalError(data.get("detail") or data.get("error") or f"Request failed ({status}).")
+                raise PortalError(data.get("detail") or data.get("error") or f"Request failed ({status}).",
+                                  str(data.get("code") or ""), data)
             return data
         raise PortalError("Request failed.")
 

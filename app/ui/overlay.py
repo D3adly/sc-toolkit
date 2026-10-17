@@ -833,6 +833,13 @@ class OverlayWindow(QWidget):
         v.addWidget(self.status)
         self._update_status()
 
+        # The next op you're signed up for (from the launcher), in both the bar and one-line mode.
+        from app.ui.overlay_events import EventReminder
+
+        self.reminder = EventReminder(self._hint)
+        self.reminder.resized.connect(self._reminder_changed)
+        v.addWidget(self.reminder)
+
         # Minimised: one line.
         self.mini_bar = _MinimisedBar(self)
         self.mini_bar.expand.connect(lambda: self.set_minimized(False))
@@ -952,7 +959,11 @@ class OverlayWindow(QWidget):
             m = self.frame.layout().contentsMargins()
             inner = width - m.left() - m.right() - 2
             bar = self.mini_bar.heightForWidth(inner) if self.mini_bar.hasHeightForWidth() else -1
-            hint.setHeight(max(bar, self.mini_bar.sizeHint().height()) + m.top() + m.bottom() + 2)
+            height = max(bar, self.mini_bar.sizeHint().height()) + m.top() + m.bottom() + 2
+            if self.reminder.isVisible():
+                r = self.reminder.heightForWidth(inner) if self.reminder.hasHeightForWidth() else -1
+                height += max(r, self.reminder.sizeHint().height()) + self.frame.layout().spacing()
+            hint.setHeight(height)
         else:
             width = max(hint.width(), BAR_MIN_WIDTH)
             self._bar_width = width
@@ -961,6 +972,12 @@ class OverlayWindow(QWidget):
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
         self.resize(width, hint.height())
+
+    def _reminder_changed(self) -> None:
+        """The reminder appeared, went or unfolded: a collapsed overlay fits it (an open panel
+        keeps its size and gives the reminder the room)."""
+        if self.tool is None or self.minimized:
+            QTimer.singleShot(0, self._fit_bar)
 
     def set_minimized(self, on: bool) -> None:
         """One line (#53): the current objective, time on it, location."""

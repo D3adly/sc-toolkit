@@ -1621,6 +1621,101 @@ QInputDialog QLineEdit {{
 #RailGame[tone="warning"] {{
     color: {warning};
 }}
+/* The overlay's event reminder */
+#OverlayReminder {{
+    background: {accent_soft};
+    border: 1px solid {accent_dim};
+    border-radius: 8px;
+}}
+#OverlayReminderLine {{
+    background: transparent;
+    border: 0;
+    min-height: 24px;
+    text-align: left;
+}}
+#OverlayReminderTitle {{
+    color: {text_primary};
+    font-size: 13px;
+    font-weight: 700;
+    background: transparent;
+}}
+#OverlayReminderCount {{
+    color: {accent};
+    font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+    font-size: 13px;
+    font-weight: 700;
+    background: transparent;
+}}
+#OverlayReminderText {{
+    color: {text_secondary};
+    font-size: 12px;
+    background: transparent;
+}}
+/* Events: the calendar's days, seats, the countdown */
+#CalDay {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: {text_muted};
+    font-size: 12px;
+}}
+#CalDay[kind="op"] {{
+    background: {accent_soft};
+    color: {text_primary};
+    font-weight: 700;
+}}
+#CalDay[kind="mine"] {{
+    background: {success_soft};
+    color: {text_primary};
+    font-weight: 700;
+}}
+#CalDay[kind="op"]:hover, #CalDay[kind="mine"]:hover {{
+    border: 1px solid {accent};
+}}
+#CalDay[today="true"] {{
+    border: 1px solid {info};
+}}
+#EventDate {{
+    background: {bg_input};
+    border-radius: 8px;
+    color: {text_primary};
+}}
+#Countdown {{
+    color: {accent};
+    font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+    font-size: 22px;
+    font-weight: 700;
+}}
+#SeatButton {{
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: 600;
+}}
+#SeatButton[state="free"] {{
+    background: transparent;
+    border: 1px dashed {info_dim};
+    color: {info};
+}}
+#SeatButton[state="free"]:hover {{
+    background: {info_soft};
+    border: 1px solid {info};
+}}
+#SeatButton[state="free"]:disabled {{
+    color: {text_muted};
+    border-color: {border};
+}}
+#SeatButton[state="taken"] {{
+    background: {bg_input};
+    border: 1px solid {border};
+    color: {text_primary};
+}}
+#SeatButton[state="mine"] {{
+    background: {success_soft};
+    border: 1px solid {success};
+    color: {text_primary};
+}}
 """
 
 

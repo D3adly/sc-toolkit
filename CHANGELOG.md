@@ -2,6 +2,23 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
+## Unreleased
+
+- **Events: your orgs' ops in the launcher.** A new tool (rail and home screen) with a month
+  calendar, the agenda (filter *I'm in* / *Has room*) and the op you pick: its countdown, how
+  many pilots, gunners and ground team it still needs, the formation with every seat, the
+  briefing (muster point, comms). Take a seat by clicking it, or join by role: *Fly a ship*
+  offers the organizer's free ships and yours from My Ships (it goes where it fits), *Crew a
+  turret* and *Ground team* find the seat for you, *Backup* puts you on the bench. Leave or move
+  any time; holding a seat that clashes asks once whether to move. Planning events (and drafts)
+  stays on sc-toolbox.com: *Plan an event* opens it. Needs the online sign-in; orgs come from
+  your verified RSI account.
+
+- **Overlay: a reminder for your next op.** Signed up for an op in the next three days? A line
+  under the overlay's bar shows it with a countdown, also in one-line mode. Click it for when,
+  your seat, the muster point, comms, who's still missing and the briefing, and *Open in
+  SC-Toolbox*.
+
 ## 0.5.1 (2026-10-16)
 
 - **Joystick Bindings: two more VKB models.** *Gladiator EVO SCE (Premium) — Right* has the

@@ -205,6 +205,21 @@ GLYPHS = {
 <circle cx="86" cy="40" r="4" fill="#e26a55"/>
 <circle cx="40" cy="84" r="3.5" fill="url(#steel)" fill-opacity="0.8"/>
 """,
+    # A calendar sheet with a ship flying across it (Events: your orgs' ops).
+    "events": f"""
+<rect x="14" y="24" width="100" height="88" rx="10" fill="url(#goldDark)"/>
+<rect x="14" y="24" width="100" height="26" rx="10" fill="url(#gold)"/>
+<rect x="14" y="40" width="100" height="10" fill="url(#gold)"/>
+<rect x="22" y="56" width="84" height="48" rx="5" fill="{INK}"/>
+<path d="M40 14 V34 M88 14 V34" stroke="url(#steel)" stroke-width="7" stroke-linecap="round"/>
+<g fill="url(#gold)" fill-opacity="0.35">
+  <rect x="30" y="64" width="12" height="10" rx="2"/><rect x="48" y="64" width="12" height="10" rx="2"/>
+  <rect x="30" y="84" width="12" height="10" rx="2"/><rect x="48" y="84" width="12" height="10" rx="2"/>
+</g>
+<path d="M66 96 L98 62 L92 92 Z" fill="url(#steel)"/>
+<path d="M66 96 L98 62 L84 88 Z" fill="#4d6a80" fill-opacity="0.55"/>
+<circle cx="98" cy="62" r="4" fill="url(#gold)"/>
+""",
     # Hangar arch with a ship parked inside (My Ships).
     "hangar": f"""
 <path d="M12 106 V60 Q64 8 116 60 V106 Z" fill="url(#goldDark)"/>

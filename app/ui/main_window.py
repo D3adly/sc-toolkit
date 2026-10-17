@@ -1,3 +1,4 @@
+import html
 import subprocess
 import threading
 
@@ -56,6 +57,7 @@ RAIL_ITEMS = [
     ("salvage", "salvage", "Salvage"),
     ("stats", "stats", "My Stats"),
     ("hangar", "hangar", "My Ships"),
+    ("events", "events", "Events"),
     ("maps", "scmaps", "Maps"),
     ("bindings", "joystick", "Bindings"),
 ]
@@ -347,10 +349,13 @@ class MainWindow(QMainWindow):
         title_bar.set_account_menu(self._build_account_menu())
         account.changed.connect(self._on_account_for_sync)
         if start_overlay:
+            from app.events import controller as events_controller
             from app.sync import SyncController
 
             self.sync = SyncController(self.gamelog, self)
             self.sync.status.connect(self._on_sync_status)
+            # Org events: the agenda for Events, the home tile, and the overlay's reminder.
+            events_controller().listed.connect(self._on_events_listed)
             account.restore()
 
     # -- game files and web data (app.datahub) -----------------------------------
@@ -571,6 +576,9 @@ class MainWindow(QMainWindow):
         elif command == "settings":            # the overlay's ⋯ → Overlay settings
             self.show_launcher()
             self._show_settings()
+        elif command.startswith("events:"):    # the overlay's reminder: open that op
+            self.show_launcher()
+            self.open_tool("events", command.split(":", 1)[1] or None)
         elif command == "live-log-on":         # the overlay's "Turn on live log"
             self.gamelog_switch.setChecked(True)
 
@@ -1018,6 +1026,7 @@ class MainWindow(QMainWindow):
             ("salvage", "salvage", "Salvage Claims", "Which claim ship pays the most"),
             ("stats", "stats", "My Stats", "Your play time, missions and earnings"),
             ("hangar", "hangar", "My Ships", "Your pledged and in-game ships"),
+            ("events", "events", "Events", "Your orgs' ops and your seat in them"),
             ("maps", "scmaps", "SC Maps", "One-page guides by Mr Kraken"),
             ("bindings", "joystick", "Joystick Bindings", "See and rebind every button"),
             ("web", "app", "sc-toolbox.com", "Blueprints and the Ship Database, online"),
@@ -1031,7 +1040,10 @@ class MainWindow(QMainWindow):
             else:
                 tile.clicked.connect(lambda k=key: self.show_tool(k))
             self.tiles[key] = tile
-            grid.addWidget(tile, i // 2, i % 2)
+            if i == len(tiles) - 1 and len(tiles) % 2:
+                grid.addWidget(tile, i // 2, 0, 1, 2)    # an odd last tile spans the row
+            else:
+                grid.addWidget(tile, i // 2, i % 2)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         layout.addLayout(grid)
@@ -1043,6 +1055,22 @@ class MainWindow(QMainWindow):
         self._home_loader.loaded.connect(self._on_home_data)
         QTimer.singleShot(300, self._refresh_home)
         return panel
+
+    def _on_events_listed(self, items: list) -> None:
+        """The Events tile: the next op you're in, else how many are planned."""
+        from app import events
+
+        tile = self.tiles.get("events")
+        if tile is None:
+            return
+        mine = [e for e in items if e.get("mySignups") and e.get("status") == "published"]
+        if mine:
+            e = mine[0]
+            tile.set_live(f"Next: <b>{html.escape(e['title'])}</b> · {events.countdown(e['startsAt'], e.get('durationMinutes'))}")
+        elif items:
+            tile.set_live(f"<b>{len(items)}</b> op{'s' if len(items) != 1 else ''} planned · take a seat")
+        else:
+            tile.set_live("Your orgs' ops, from sc-toolbox.com")
 
     def _refresh_home(self) -> None:
         from app import hangar, salvage
@@ -1246,6 +1274,10 @@ class MainWindow(QMainWindow):
             from app.ui.maps_view import MapsView
 
             view = MapsView()
+        elif key == "events":
+            from app.ui.events_view import EventsView
+
+            view = EventsView()
         else:
             raise KeyError(key)
         view.back_requested.connect(self._show_main)

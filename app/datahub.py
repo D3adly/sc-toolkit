@@ -1,7 +1,7 @@
 """Every data source the launcher reads from the game files or the web, in
 one place, with one caching rule each:
 
-- **Game data** (missions, mining, salvage ships, ship stats): read from
+- **Game data** (missions, mining, salvage ships, ship stats, loadout parts): read from
   Data.p4k once per game patch per channel, all in one pass that opens
   Game2.dcb once (GameFiles), and cached. Only this module reads the game
   files: at SC-Toolbox start and game start when the build changed, and
@@ -31,7 +31,7 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, Signal
 
-from app import bindings, config, contracts, mining, p4k, salvage, shipdata, ships
+from app import bindings, config, contracts, loadoutdata, mining, p4k, salvage, shipdata, ships
 from app.datacore import DataCore
 
 GAME2_ENTRY = "Data\\Game2.dcb"
@@ -169,6 +169,11 @@ def _build_shipdata(game: GameFiles, progress) -> dict:
     return shipdata.build(game, progress, catalogue.class_ids(), crew)
 
 
+def _build_loadoutdata(game: GameFiles, progress) -> dict:
+    """Slots, parts and recipes for the loadout editor, for the same ships as ship stats."""
+    return loadoutdata.build(game, progress, ships.load().class_ids())
+
+
 GAME_SOURCES: dict[str, GameSource] = {
     "contracts": GameSource("contracts", "missions", contracts.CACHE, "contracts", contracts.FORMAT,
                             contracts.build, contracts.Contracts, contracts.localization_key),
@@ -178,6 +183,9 @@ GAME_SOURCES: dict[str, GameSource] = {
     "shipdata": GameSource("shipdata", "ship stats", shipdata.CACHE, "shipdata", shipdata.FORMAT,
                            lambda game, progress: _build_shipdata(game, progress),
                            shipdata.ShipData),
+    "loadoutdata": GameSource("loadoutdata", "loadout parts", loadoutdata.CACHE, "loadoutdata", loadoutdata.FORMAT,
+                              lambda game, progress: _build_loadoutdata(game, progress),
+                              loadoutdata.LoadoutData),
 }
 
 WEB_SOURCES: dict[str, WebSource] = {

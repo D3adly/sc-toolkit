@@ -1,0 +1,199 @@
+{
+  "format": 1,
+  "about": "Refined SCU out per ore SCU in at the best-yield refining method, refinery bonuses left out. Values marked confirmed=false come from community measurements and await in-game tests.",
+  "default": {
+    "yield": 0.45,
+    "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+  },
+  "materials": {
+    "Agricium": {
+      "ore": "Ore_Agricium",
+      "name": "Agricium",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Aluminum": {
+      "ore": "Ore_Aluminum",
+      "name": "Aluminum",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Aslarite": {
+      "ore": "Raw_Aslarite",
+      "name": "Aslarite",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Beryl": {
+      "ore": "Raw_Beryl",
+      "name": "Beryl",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Bexalite": {
+      "ore": "Raw_Bexalite",
+      "name": "Bexalite",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Borase": {
+      "ore": "Ore_Borase",
+      "name": "Borase",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Copper": {
+      "ore": "Ore_Copper",
+      "name": "Copper",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Corundum": {
+      "ore": "Raw_Corundum",
+      "name": "Corundum",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Diamond": {
+      "ore": "Raw_Diamond",
+      "name": "Diamond",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Gold": {
+      "ore": "Ore_Gold",
+      "name": "Gold",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Hephaestanite": {
+      "ore": "Raw_Hephaestanite",
+      "name": "Hephaestanite",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Iron": {
+      "ore": "Ore_Iron",
+      "name": "Iron",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Laranite": {
+      "ore": "Raw_Laranite",
+      "name": "Laranite",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Lindinium": {
+      "ore": "Ore_Lindinium",
+      "name": "Lindinium",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Ouratite": {
+      "ore": "RawOuratite",
+      "name": "Ouratite",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Pressurized_Ice": {
+      "ore": "Raw_Ice",
+      "name": "Pressurized Ice",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Quantanium": {
+      "ore": "Raw_Quantainium",
+      "name": "Quantainium",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Quartz": {
+      "ore": "Raw_Quartz",
+      "name": "Quartz",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Riccite": {
+      "ore": "Ore_Riccite",
+      "name": "Riccite",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Savrilium": {
+      "ore": "Ore_Savrilium",
+      "name": "Savrilium",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Silicon": {
+      "ore": "RawSilicon",
+      "name": "Silicon",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Stileron": {
+      "ore": "Ore_Stileron",
+      "name": "Stileron",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Taranite": {
+      "ore": "Raw_Taranite",
+      "name": "Taranite",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Tin": {
+      "ore": "Ore_Tin",
+      "name": "Tin",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Titanium": {
+      "ore": "Ore_Titanium",
+      "name": "Titanium",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Torite": {
+      "ore": "Ore_Torite",
+      "name": "Torite",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    },
+    "Tungsten": {
+      "ore": "Ore_Tungsten",
+      "name": "Tungsten",
+      "yield": 0.45,
+      "confirmed": false,
+      "source": "community: scminer.rocks (4.10.2), best-yield methods Dinyx Solventation, Ferron Exchange, Pyrometric Chromalysis at 45%"
+    }
+  }
+}

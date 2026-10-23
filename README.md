@@ -41,6 +41,7 @@ data and tools goes to them:
 | [Joystick Diagrams](https://github.com/Rexeh/joystick-diagrams) | Its community X56 templates, used to cross-check the X56 button map | Rexeh and contributors |
 | [Star Citizen Wiki](https://starcitizen.tools/) ([API](https://api.star-citizen.wiki/)) | **My Ships**: the ship list (including ships in concept and their loaners), game ids and ship pictures (CC BY-SA 4.0) | The Star Citizen Wiki community |
 | [Erkul](https://www.erkul.games/) | The Erkul button on each ship in My Ships opens the ship there | Erkul |
+| [SC Miner](https://scminer.rocks/data/refineries) | Starting values of the refining table (best-method yield) behind the craft list's ore amounts | The SC Miner team |
 | [unp4k](https://github.com/dolkensp/unp4k) | How Data.p4k stores its few encrypted files (the vehicle definitions): format and key | [dolkensp](https://github.com/dolkensp) |
 
 Quick links in the launcher also point to [SCMDB](https://scmdb.net/),

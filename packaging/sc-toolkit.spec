@@ -20,6 +20,7 @@ datas = [
     (str(assets / "fonts" / "*"), "assets/fonts"),        # Inter (OFL), loaded by app.theme
     (str(ROOT / "CHANGELOG.md"), "."),     # What's new (app.changelog)
     (str(assets / "ships.json"), "assets"),  # ship catalogue snapshot (app.ships)
+    (str(assets / "refining.json"), "assets"),  # refining table (app.refining)
 ]
 
 # The app only uses QtCore, QtGui and QtWidgets; keep the rest of Qt out.

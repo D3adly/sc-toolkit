@@ -8,7 +8,7 @@ one place, with one caching rule each:
   when the RSI Launcher's log says an update completed (app.patchwatch).
   While an update runs, the channel is frozen: nothing reads its files, and
   everyone gets the previous version's cache until the new one is built.
-- **Web data** (ship list, salvage spreadsheet, UEX prices): downloaded at
+- **Web data** (ship list, salvage spreadsheet, UEX prices, part prices): downloaded at
   startup when older than its maximum age, and never more often than that,
   even on request.
 
@@ -31,7 +31,7 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, Signal
 
-from app import bindings, config, contracts, loadoutdata, mining, p4k, salvage, shipdata, ships
+from app import bindings, config, contracts, loadoutdata, mining, p4k, salvage, shipdata, ships, uexparts
 from app.datacore import DataCore
 
 GAME2_ENTRY = "Data\\Game2.dcb"
@@ -194,6 +194,7 @@ WEB_SOURCES: dict[str, WebSource] = {
     "salvage_sheet": WebSource("salvage_sheet", "salvage spreadsheet", DAY, lambda _p: salvage.refresh_sheet(),
                                salvage.sheet_fetched),
     "uex": WebSource("uex", "UEX prices", DAY, lambda _p: salvage.refresh_uex(), salvage.uex_fetched),
+    "uex_parts": WebSource("uex_parts", "ship part prices", 6 * 3600, lambda _p: uexparts.refresh(), uexparts.fetched),
 }
 
 

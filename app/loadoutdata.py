@@ -13,7 +13,9 @@ Where things are:
   is a Part's ItemPort: size range, accepted types/subtypes, flags
   (uneditable, invisible), required tags. Hull HP: the Body part's damageMax.
 - **Default parts**: the ship's SEntityComponentDefaultLoadoutParams, nested
-  (guns on mounts and turrets, missiles in racks).
+  (guns on mounts and turrets, missiles in racks). What the parts outside the
+  editable slots draw from the power plant (scanners, flight controller…) is
+  the ship's basePower.
 - **Slots on parts** (mounts, racks, turrets): the part's
   SItemPortContainerComponentParams; its own default children in its
   SEntityComponentDefaultLoadoutParams.
@@ -38,7 +40,7 @@ from app import config, crafting, cryxml, p4k, shipdata
 from app.datacore import DataCore
 
 CACHE = config.CACHE_DIR / "loadoutdata"
-FORMAT = 1
+FORMAT = 2  # 2: basePower (what the parts outside the editable slots draw)
 VEHICLE_DIR = "Data\\Scripts\\Entities\\Vehicles\\Implementations\\Xml\\"
 
 # Part types a loadout can hold (seats, doors, thrusters, lights… stay out).
@@ -381,7 +383,22 @@ class _Ships:
             self._fill(slot, fitted, nested, 0)
             slots.append(slot)
         hull = _hull(root)
-        return {"hull": round(hull, 1), "slots": slots}
+        kept = {s["id"].lower() for s in slots}
+        base = {"max": 0.0, "min": 0.0}
+        for port, (fitted, nested) in defaults.items():
+            if port not in kept:
+                self._power(fitted, nested, base, 0)
+        return {"hull": round(hull, 1), "slots": slots, "basePower": {k: round(v, 3) for k, v in base.items()}}
+
+    def _power(self, cls: str, nested: dict | None, acc: dict, depth: int) -> None:
+        """Adds what a part outside the editable slots (and what it holds) draws from the power plant."""
+        info = self.parts.base.item(self.parts.own_case(cls)) if cls else None
+        if info and info["type"] != "WeaponGun":
+            acc["max"] += info.get("power_use", 0.0)
+            acc["min"] += info.get("power_min", 0.0)
+        if depth < 6:
+            for sub, sub_nested in _defaults(nested).values():
+                self._power(sub, sub_nested, acc, depth + 1)
 
     def _fill(self, slot: dict, fitted: str, nested: dict | None, depth: int) -> None:
         """Puts the default part in the slot, and the slots that part brings (with their defaults)."""

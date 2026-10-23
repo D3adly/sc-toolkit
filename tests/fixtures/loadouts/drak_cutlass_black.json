@@ -580,6 +580,3128 @@
    },
    "name": "stock",
    "route": "stops"
+  },
+  {
+   "expect": {
+    "ceilings": {
+     "alpha": 7425.0,
+     "coolant": 120.0,
+     "dps": 13475.0,
+     "quantumSpeed": 397357670.4,
+     "segments": 25.0,
+     "shieldHp": 12672.0
+    },
+    "crafting": {
+     "materials": [
+      {
+       "amount": 0.42,
+       "key": "Borase",
+       "name": "Borase",
+       "odds": {
+        "pyro": 100.0,
+        "stanton": 100.0
+       },
+       "oreScu": 0.9333,
+       "quality": 500,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.68,
+       "key": "Gold",
+       "name": "Gold",
+       "odds": {
+        "pyro": 24.65,
+        "stanton": 21.99
+       },
+       "oreScu": 1.5111,
+       "quality": 650,
+       "unit": "scu"
+      },
+      {
+       "amount": 1.74,
+       "key": "Iron",
+       "name": "Iron",
+       "odds": {
+        "nyx": 0.48,
+        "pyro": 0.66,
+        "stanton": 0.48
+       },
+       "oreScu": 3.8667,
+       "quality": 900,
+       "unit": "scu"
+      },
+      {
+       "amount": 1.35,
+       "key": "Laranite",
+       "name": "Laranite",
+       "odds": {
+        "pyro": 1.04,
+        "stanton": 0.69
+       },
+       "oreScu": 3.0,
+       "quality": 900,
+       "unit": "scu"
+      },
+      {
+       "amount": 1.0,
+       "key": "Pressurized_Ice",
+       "name": "Pressurized Ice",
+       "odds": {
+        "nyx": 0.0,
+        "pyro": 0.0,
+        "stanton": 0.0
+       },
+       "oreScu": 2.2222,
+       "quality": 1000,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.5,
+       "key": "Silicon",
+       "name": "Silicon",
+       "odds": {
+        "pyro": 0.0,
+        "stanton": 0.0
+       },
+       "oreScu": 1.1111,
+       "quality": 1000,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.6,
+       "key": "Tin",
+       "name": "Tin",
+       "odds": {
+        "nyx": 0.0,
+        "pyro": 0.0,
+        "stanton": 0.0
+       },
+       "oreScu": 1.3333,
+       "quality": 1000,
+       "unit": "scu"
+      },
+      {
+       "amount": 2.22,
+       "key": "Tungsten",
+       "name": "Tungsten",
+       "odds": {
+        "pyro": 0.01,
+        "stanton": 0.0
+       },
+       "oreScu": 4.9333,
+       "quality": 1000,
+       "unit": "scu"
+      },
+      {
+       "amount": 58.0,
+       "key": "harvestable_mineral_1h_beradom",
+       "name": "Beradom",
+       "odds": {
+        "pyro": 0.02,
+        "stanton": 0.01
+       },
+       "oreScu": null,
+       "quality": 1000,
+       "unit": "units"
+      }
+     ],
+     "parts": [
+      {
+       "count": 2,
+       "item": "cool_acom_s02_icedive_scitem",
+       "seconds": 1260.0
+      },
+      {
+       "count": 1,
+       "item": "powr_acom_s02_solarflare_scitem",
+       "seconds": 1110.0
+      },
+      {
+       "count": 1,
+       "item": "qdrv_arcc_s02_flash_scitem",
+       "seconds": 1110.0
+      },
+      {
+       "count": 1,
+       "item": "shld_asas_s02_obscura_scitem",
+       "seconds": 690.0
+      }
+     ],
+     "seconds": 4170.0
+    },
+    "hull": 6500.0,
+    "parts": [
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cutlass_scitem_turret_black",
+      "obsolete": false,
+      "path": "hardpoint_turret",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "klwe_laserrepeater_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_right/hardpoint_class_2",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "klwe_laserrepeater_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_left/hardpoint_class_2",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Body_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "gats_ballisticgatling_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Body_Weapon/hardpoint_class_2",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Body_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "gats_ballisticgatling_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Body_Weapon/hardpoint_class_2",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Wing_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "klwe_laserrepeater_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Wing_Weapon/hardpoint_class_2",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Wing_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "klwe_laserrepeater_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Wing_Weapon/hardpoint_class_2",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "qdrv_arcc_s02_flash_scitem",
+      "obsolete": false,
+      "path": "hardpoint_quantum_drive",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "",
+      "obsolete": false,
+      "path": "hardpoint_quantum_drive/hardpoint_Jump_Drive",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "radr_grnp_s02_vigilance",
+      "obsolete": false,
+      "path": "hardpoint_radar",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "shld_asas_s02_obscura_scitem",
+      "obsolete": false,
+      "path": "hardpoint_shield_generator_right",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "powr_acom_s02_solarflare_scitem",
+      "obsolete": false,
+      "path": "hardpoint_power_plant",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "cool_acom_s02_icedive_scitem",
+      "obsolete": false,
+      "path": "hardpoint_cooler_right",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "cool_acom_s02_icedive_scitem",
+      "obsolete": false,
+      "path": "hardpoint_cooler_left",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cml_decoy_small",
+      "obsolete": false,
+      "path": "hardpoint_cm_launcher_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cml_noise_small",
+      "obsolete": false,
+      "path": "hardpoint_cm_launcher_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_quad_s02",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_03_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_04_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_quad_s02",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_03_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_04_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_02",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_02/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_02/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cutlass_remote_turret",
+      "obsolete": false,
+      "path": "hardpoint_tractor_turret",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "grin_tractorbeam_s1",
+      "obsolete": false,
+      "path": "hardpoint_tractor_turret/turret_weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     }
+    ],
+    "shopping": {
+     "mode": "stops",
+     "stops": [
+      {
+       "moon": "",
+       "place": "New Babbage",
+       "planet": "MicroTech",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "radr_grnp_s02_vigilance",
+           "price": 176000.0,
+           "reported": 1789582589,
+           "total": 176000.0
+          }
+         ],
+         "shop": "Omega Pro",
+         "terminal": "130"
+        }
+       ],
+       "system": "Stanton"
+      }
+     ],
+     "total": 176000.0,
+     "unsold": []
+    },
+    "stock": {
+     "alpha": 238.6,
+     "alphaByType": {
+      "energy": 174.6,
+      "physical": 64.0
+     },
+     "coolant": 68.0,
+     "dps": 3889.17,
+     "dpsByType": {
+      "energy": 2182.5,
+      "physical": 1706.67
+     },
+     "missileDamage": 39200.0,
+     "missiles": 16,
+     "powerMax": 27.0,
+     "powerMin": 13.0,
+     "quantumCooldown": 14.3,
+     "quantumSpeed": 238314304.0,
+     "segments": 18.0,
+     "shieldHp": 7200.0,
+     "shieldRegen": 1368.0
+    },
+    "totals": {
+     "alpha": 238.6,
+     "alphaByType": {
+      "energy": 174.6,
+      "physical": 64.0
+     },
+     "coolant": 102.47,
+     "dps": 3889.17,
+     "dpsByType": {
+      "energy": 2182.5,
+      "physical": 1706.67
+     },
+     "missileDamage": 39200.0,
+     "missiles": 16,
+     "powerMax": 28.0,
+     "powerMin": 15.0,
+     "quantumCooldown": 12.8,
+     "quantumSpeed": 336075174.35,
+     "segments": 22.0,
+     "shieldHp": 8451.35,
+     "shieldRegen": 1421.0
+    }
+   },
+   "loadout": {
+    "parts": {
+     "hardpoint_cooler_left": {
+      "item": "cool_acom_s02_icedive_scitem",
+      "qualities": [
+       1000,
+       1000,
+       1000
+      ],
+      "source": "craft"
+     },
+     "hardpoint_cooler_right": {
+      "item": "cool_acom_s02_icedive_scitem",
+      "qualities": [
+       363,
+       null,
+       777
+      ],
+      "source": "craft"
+     },
+     "hardpoint_power_plant": {
+      "item": "powr_acom_s02_solarflare_scitem",
+      "qualities": [
+       787,
+       1000,
+       null
+      ],
+      "source": "craft"
+     },
+     "hardpoint_quantum_drive": {
+      "item": "qdrv_arcc_s02_flash_scitem",
+      "qualities": [
+       900,
+       900,
+       900
+      ],
+      "source": "craft"
+     },
+     "hardpoint_radar": {
+      "item": "radr_grnp_s02_vigilance",
+      "source": "buy"
+     },
+     "hardpoint_shield_generator_right": {
+      "item": "shld_asas_s02_obscura_scitem",
+      "qualities": [
+       500,
+       650,
+       1000
+      ],
+      "source": "craft"
+     }
+    }
+   },
+   "name": "crafted-systems",
+   "route": "stops"
+  },
+  {
+   "expect": {
+    "ceilings": {
+     "alpha": 7425.0,
+     "coolant": 120.0,
+     "dps": 13475.0,
+     "quantumSpeed": 397357670.4,
+     "segments": 25.0,
+     "shieldHp": 12672.0
+    },
+    "crafting": {
+     "materials": [
+      {
+       "amount": 0.46,
+       "key": "Copper",
+       "name": "Copper",
+       "odds": {
+        "pyro": 100.0,
+        "stanton": 100.0
+       },
+       "oreScu": 1.0222,
+       "quality": 1,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.23,
+       "key": "Quantanium",
+       "name": "Quantainium",
+       "odds": {
+        "stanton": 100.0
+       },
+       "oreScu": 0.5111,
+       "quality": 1,
+       "unit": "scu"
+      },
+      {
+       "amount": 1.16,
+       "key": "Tungsten",
+       "name": "Tungsten",
+       "odds": {
+        "pyro": 100.0,
+        "stanton": 100.0
+       },
+       "oreScu": 2.5778,
+       "quality": 1,
+       "unit": "scu"
+      }
+     ],
+     "parts": [
+      {
+       "count": 1,
+       "item": "banu_tachyoncannon_s3",
+       "seconds": 1680.0
+      }
+     ],
+     "seconds": 1680.0
+    },
+    "hull": 6500.0,
+    "parts": [
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cutlass_scitem_turret_black",
+      "obsolete": false,
+      "path": "hardpoint_turret",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "anvl_ballisticgatling_bespoke",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_right/hardpoint_class_2",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "klwe_massdriver_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_left/hardpoint_class_2",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Body_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": true,
+      "changed": true,
+      "item": "banu_tachyoncannon_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Body_Weapon/hardpoint_class_2",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": true,
+      "item": "",
+      "obsolete": false,
+      "path": "hardpoint_Right_Body_Weapon",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Wing_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "klwe_laserrepeater_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Wing_Weapon/hardpoint_class_2",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Wing_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "gats_ballisticgatling_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Wing_Weapon/hardpoint_class_2",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "qdrv_tars_s02_odyssey_scitem",
+      "obsolete": false,
+      "path": "hardpoint_quantum_drive",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "jdrv_tars_s02_excelsior_scitem",
+      "obsolete": false,
+      "path": "hardpoint_quantum_drive/hardpoint_Jump_Drive",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": true,
+      "changed": false,
+      "item": "radr_wlop_s02_chernykh",
+      "obsolete": false,
+      "path": "hardpoint_radar",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "shld_seco_s02_stop_scitem",
+      "obsolete": false,
+      "path": "hardpoint_shield_generator_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "powr_sasu_s02_daybreak_scitem",
+      "obsolete": false,
+      "path": "hardpoint_power_plant",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "cool_lplt_s02_coldsnap_scitem",
+      "obsolete": false,
+      "path": "hardpoint_cooler_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "cool_lplt_s02_coldsnap_scitem",
+      "obsolete": false,
+      "path": "hardpoint_cooler_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cml_decoy_small",
+      "obsolete": false,
+      "path": "hardpoint_cm_launcher_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cml_noise_small",
+      "obsolete": false,
+      "path": "hardpoint_cm_launcher_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "misl_s03_ir_novp_viper",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_01_attach",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_quad_s02",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_03_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_04_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": true,
+      "item": "mrck_gone_from_the_game",
+      "obsolete": true,
+      "path": "hardpoint_Left_Pylon_02",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "misl_s03_em_fski_thunderbolt",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01/missile_02_attach",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cutlass_remote_turret",
+      "obsolete": false,
+      "path": "hardpoint_tractor_turret",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": true,
+      "item": "apar_ballisticscattergun_s3_shark",
+      "obsolete": false,
+      "path": "hardpoint_tractor_turret/turret_weapon",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": true
+     }
+    ],
+    "shopping": {
+     "mode": "stops",
+     "stops": [
+      {
+       "moon": "",
+       "place": "Area 18",
+       "planet": "ArcCorp",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "klwe_massdriver_s3",
+           "price": 58094.0,
+           "reported": 1788031807,
+           "total": 58094.0
+          }
+         ],
+         "shop": "CenterMass",
+         "terminal": "107"
+        }
+       ],
+       "system": "Stanton"
+      },
+      {
+       "moon": "Yela",
+       "place": "Green Imperial Housing Exchange",
+       "planet": "Crusader",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "misl_s03_ir_novp_viper",
+           "price": 621.0,
+           "reported": 1788452794,
+           "total": 621.0
+          }
+         ],
+         "shop": "Dumper's Depot",
+         "terminal": "115"
+        }
+       ],
+       "system": "Stanton"
+      },
+      {
+       "moon": "",
+       "place": "Orison",
+       "planet": "Crusader",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "anvl_ballisticgatling_bespoke",
+           "price": 56955.0,
+           "reported": 1788365491,
+           "total": 56955.0
+          },
+          {
+           "count": 1,
+           "item": "gats_ballisticgatling_s3",
+           "price": 24045.0,
+           "reported": 1788365490,
+           "total": 24045.0
+          },
+          {
+           "count": 1,
+           "item": "misl_s03_em_fski_thunderbolt",
+           "price": 678.0,
+           "reported": 1788365742,
+           "total": 678.0
+          },
+          {
+           "count": 1,
+           "item": "mrck_s04_behr_dual_s03",
+           "price": 13045.0,
+           "reported": 1788365585,
+           "total": 13045.0
+          }
+         ],
+         "shop": "Ship Weapons",
+         "terminal": "268"
+        }
+       ],
+       "system": "Stanton"
+      }
+     ],
+     "total": 153438.0,
+     "unsold": [
+      {
+       "count": 1,
+       "item": "apar_ballisticscattergun_s3_shark"
+      }
+     ]
+    },
+    "stock": {
+     "alpha": 238.6,
+     "alphaByType": {
+      "energy": 174.6,
+      "physical": 64.0
+     },
+     "coolant": 68.0,
+     "dps": 3889.17,
+     "dpsByType": {
+      "energy": 2182.5,
+      "physical": 1706.67
+     },
+     "missileDamage": 39200.0,
+     "missiles": 16,
+     "powerMax": 27.0,
+     "powerMin": 13.0,
+     "quantumCooldown": 14.3,
+     "quantumSpeed": 238314304.0,
+     "segments": 18.0,
+     "shieldHp": 7200.0,
+     "shieldRegen": 1368.0
+    },
+    "totals": {
+     "alpha": 3105.85,
+     "alphaByType": {
+      "energy": 1056.15,
+      "physical": 2049.7
+     },
+     "coolant": 68.0,
+     "dps": 3292.96,
+     "dpsByType": {
+      "energy": 545.63,
+      "physical": 2747.33
+     },
+     "missileDamage": 28350.0,
+     "missiles": 11,
+     "powerMax": 26.0,
+     "powerMin": 12.0,
+     "quantumCooldown": 14.3,
+     "quantumSpeed": 238314304.0,
+     "segments": 18.0,
+     "shieldHp": 7200.0,
+     "shieldRegen": 1368.0
+    }
+   },
+   "loadout": {
+    "parts": {
+     "hardpoint_Left_Body_Weapon/hardpoint_class_2": {
+      "item": "banu_tachyoncannon_s3",
+      "qualities": [
+       null,
+       null,
+       null
+      ],
+      "source": "craft"
+     },
+     "hardpoint_Left_Pylon_01/missile_02_attach": {
+      "item": "misl_s03_em_fski_thunderbolt",
+      "shop": "999999",
+      "source": "buy"
+     },
+     "hardpoint_Left_Pylon_02": {
+      "item": "mrck_gone_from_the_game",
+      "source": "buy"
+     },
+     "hardpoint_Left_Wing_Weapon/hardpoint_class_2": {
+      "item": "klwe_laserrepeater_s3",
+      "source": "stock"
+     },
+     "hardpoint_Right_Body_Weapon": {
+      "item": "",
+      "source": "buy"
+     },
+     "hardpoint_Right_Pylon_03": {
+      "item": "mrck_s04_behr_dual_s03",
+      "source": "buy"
+     },
+     "hardpoint_Right_Pylon_03/missile_01_attach": {
+      "item": "misl_s03_ir_novp_viper",
+      "shop": "115",
+      "source": "buy"
+     },
+     "hardpoint_Right_Wing_Weapon/hardpoint_class_2": {
+      "item": "gats_ballisticgatling_s3"
+     },
+     "hardpoint_tractor_turret/turret_weapon": {
+      "item": "apar_ballisticscattergun_s3_shark",
+      "source": "buy"
+     },
+     "hardpoint_turret/hardpoint_weapon_left/hardpoint_class_2": {
+      "item": "klwe_massdriver_s3",
+      "source": "buy"
+     },
+     "hardpoint_turret/hardpoint_weapon_right/hardpoint_class_2": {
+      "item": "anvl_ballisticgatling_bespoke",
+      "source": "buy"
+     }
+    }
+   },
+   "name": "turret-racks-empties-overrides",
+   "route": "stops"
+  },
+  {
+   "expect": {
+    "ceilings": {
+     "alpha": 7425.0,
+     "coolant": 120.0,
+     "dps": 13475.0,
+     "quantumSpeed": 397357670.4,
+     "segments": 25.0,
+     "shieldHp": 12672.0
+    },
+    "crafting": {
+     "materials": [
+      {
+       "amount": 0.46,
+       "key": "Copper",
+       "name": "Copper",
+       "odds": {
+        "pyro": 100.0,
+        "stanton": 100.0
+       },
+       "oreScu": 1.0222,
+       "quality": 1,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.23,
+       "key": "Quantanium",
+       "name": "Quantainium",
+       "odds": {
+        "stanton": 100.0
+       },
+       "oreScu": 0.5111,
+       "quality": 1,
+       "unit": "scu"
+      },
+      {
+       "amount": 1.16,
+       "key": "Tungsten",
+       "name": "Tungsten",
+       "odds": {
+        "pyro": 100.0,
+        "stanton": 100.0
+       },
+       "oreScu": 2.5778,
+       "quality": 1,
+       "unit": "scu"
+      }
+     ],
+     "parts": [
+      {
+       "count": 1,
+       "item": "banu_tachyoncannon_s3",
+       "seconds": 1680.0
+      }
+     ],
+     "seconds": 1680.0
+    },
+    "hull": 6500.0,
+    "parts": [
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cutlass_scitem_turret_black",
+      "obsolete": false,
+      "path": "hardpoint_turret",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "anvl_ballisticgatling_bespoke",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_right/hardpoint_class_2",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "klwe_massdriver_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_left/hardpoint_class_2",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Body_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": true,
+      "changed": true,
+      "item": "banu_tachyoncannon_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Body_Weapon/hardpoint_class_2",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": true,
+      "item": "",
+      "obsolete": false,
+      "path": "hardpoint_Right_Body_Weapon",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Wing_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "klwe_laserrepeater_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Wing_Weapon/hardpoint_class_2",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Wing_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "gats_ballisticgatling_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Wing_Weapon/hardpoint_class_2",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "qdrv_tars_s02_odyssey_scitem",
+      "obsolete": false,
+      "path": "hardpoint_quantum_drive",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "jdrv_tars_s02_excelsior_scitem",
+      "obsolete": false,
+      "path": "hardpoint_quantum_drive/hardpoint_Jump_Drive",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": true,
+      "changed": false,
+      "item": "radr_wlop_s02_chernykh",
+      "obsolete": false,
+      "path": "hardpoint_radar",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "shld_seco_s02_stop_scitem",
+      "obsolete": false,
+      "path": "hardpoint_shield_generator_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "powr_sasu_s02_daybreak_scitem",
+      "obsolete": false,
+      "path": "hardpoint_power_plant",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "cool_lplt_s02_coldsnap_scitem",
+      "obsolete": false,
+      "path": "hardpoint_cooler_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "cool_lplt_s02_coldsnap_scitem",
+      "obsolete": false,
+      "path": "hardpoint_cooler_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cml_decoy_small",
+      "obsolete": false,
+      "path": "hardpoint_cm_launcher_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cml_noise_small",
+      "obsolete": false,
+      "path": "hardpoint_cm_launcher_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "misl_s03_ir_novp_viper",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_01_attach",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_quad_s02",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_03_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_04_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": true,
+      "item": "mrck_gone_from_the_game",
+      "obsolete": true,
+      "path": "hardpoint_Left_Pylon_02",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "misl_s03_em_fski_thunderbolt",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01/missile_02_attach",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cutlass_remote_turret",
+      "obsolete": false,
+      "path": "hardpoint_tractor_turret",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": true,
+      "item": "apar_ballisticscattergun_s3_shark",
+      "obsolete": false,
+      "path": "hardpoint_tractor_turret/turret_weapon",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": true
+     }
+    ],
+    "shopping": {
+     "mode": "price",
+     "stops": [
+      {
+       "moon": "",
+       "place": "Baijini Point",
+       "planet": "ArcCorp",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "anvl_ballisticgatling_bespoke",
+           "price": 56955.0,
+           "reported": 1788066989,
+           "total": 56955.0
+          }
+         ],
+         "shop": "Ship Weapons",
+         "terminal": "188"
+        }
+       ],
+       "system": "Stanton"
+      },
+      {
+       "moon": "Yela",
+       "place": "Green Imperial Housing Exchange",
+       "planet": "Crusader",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "misl_s03_ir_novp_viper",
+           "price": 621.0,
+           "reported": 1788452794,
+           "total": 621.0
+          }
+         ],
+         "shop": "Dumper's Depot",
+         "terminal": "115"
+        }
+       ],
+       "system": "Stanton"
+      },
+      {
+       "moon": "",
+       "place": "New Babbage",
+       "planet": "MicroTech",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "klwe_massdriver_s3",
+           "price": 58094.0,
+           "reported": 1789582589,
+           "total": 58094.0
+          }
+         ],
+         "shop": "CenterMass",
+         "terminal": "108"
+        }
+       ],
+       "system": "Stanton"
+      },
+      {
+       "moon": "",
+       "place": "Orison",
+       "planet": "Crusader",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "gats_ballisticgatling_s3",
+           "price": 24045.0,
+           "reported": 1788365490,
+           "total": 24045.0
+          }
+         ],
+         "shop": "Ship Weapons",
+         "terminal": "268"
+        }
+       ],
+       "system": "Stanton"
+      },
+      {
+       "moon": "",
+       "place": "Pyro Gateway (Stanton)",
+       "planet": "",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "misl_s03_em_fski_thunderbolt",
+           "price": 523.0,
+           "reported": 1788918803,
+           "total": 523.0
+          },
+          {
+           "count": 1,
+           "item": "mrck_s04_behr_dual_s03",
+           "price": 11899.0,
+           "reported": 1788918756,
+           "total": 11899.0
+          }
+         ],
+         "shop": "Ship Weapons",
+         "terminal": "317"
+        }
+       ],
+       "system": "Stanton"
+      }
+     ],
+     "total": 152137.0,
+     "unsold": [
+      {
+       "count": 1,
+       "item": "apar_ballisticscattergun_s3_shark"
+      }
+     ]
+    },
+    "stock": {
+     "alpha": 238.6,
+     "alphaByType": {
+      "energy": 174.6,
+      "physical": 64.0
+     },
+     "coolant": 68.0,
+     "dps": 3889.17,
+     "dpsByType": {
+      "energy": 2182.5,
+      "physical": 1706.67
+     },
+     "missileDamage": 39200.0,
+     "missiles": 16,
+     "powerMax": 27.0,
+     "powerMin": 13.0,
+     "quantumCooldown": 14.3,
+     "quantumSpeed": 238314304.0,
+     "segments": 18.0,
+     "shieldHp": 7200.0,
+     "shieldRegen": 1368.0
+    },
+    "totals": {
+     "alpha": 3105.85,
+     "alphaByType": {
+      "energy": 1056.15,
+      "physical": 2049.7
+     },
+     "coolant": 68.0,
+     "dps": 3292.96,
+     "dpsByType": {
+      "energy": 545.63,
+      "physical": 2747.33
+     },
+     "missileDamage": 28350.0,
+     "missiles": 11,
+     "powerMax": 26.0,
+     "powerMin": 12.0,
+     "quantumCooldown": 14.3,
+     "quantumSpeed": 238314304.0,
+     "segments": 18.0,
+     "shieldHp": 7200.0,
+     "shieldRegen": 1368.0
+    }
+   },
+   "loadout": {
+    "parts": {
+     "hardpoint_Left_Body_Weapon/hardpoint_class_2": {
+      "item": "banu_tachyoncannon_s3",
+      "qualities": [
+       null,
+       null,
+       null
+      ],
+      "source": "craft"
+     },
+     "hardpoint_Left_Pylon_01/missile_02_attach": {
+      "item": "misl_s03_em_fski_thunderbolt",
+      "shop": "999999",
+      "source": "buy"
+     },
+     "hardpoint_Left_Pylon_02": {
+      "item": "mrck_gone_from_the_game",
+      "source": "buy"
+     },
+     "hardpoint_Left_Wing_Weapon/hardpoint_class_2": {
+      "item": "klwe_laserrepeater_s3",
+      "source": "stock"
+     },
+     "hardpoint_Right_Body_Weapon": {
+      "item": "",
+      "source": "buy"
+     },
+     "hardpoint_Right_Pylon_03": {
+      "item": "mrck_s04_behr_dual_s03",
+      "source": "buy"
+     },
+     "hardpoint_Right_Pylon_03/missile_01_attach": {
+      "item": "misl_s03_ir_novp_viper",
+      "shop": "115",
+      "source": "buy"
+     },
+     "hardpoint_Right_Wing_Weapon/hardpoint_class_2": {
+      "item": "gats_ballisticgatling_s3"
+     },
+     "hardpoint_tractor_turret/turret_weapon": {
+      "item": "apar_ballisticscattergun_s3_shark",
+      "source": "buy"
+     },
+     "hardpoint_turret/hardpoint_weapon_left/hardpoint_class_2": {
+      "item": "klwe_massdriver_s3",
+      "source": "buy"
+     },
+     "hardpoint_turret/hardpoint_weapon_right/hardpoint_class_2": {
+      "item": "anvl_ballisticgatling_bespoke",
+      "source": "buy"
+     }
+    }
+   },
+   "name": "turret-racks-empties-overrides-lowest-price",
+   "route": "price"
+  },
+  {
+   "expect": {
+    "ceilings": {
+     "alpha": 7425.0,
+     "coolant": 120.0,
+     "dps": 13475.0,
+     "quantumSpeed": 397357670.4,
+     "segments": 25.0,
+     "shieldHp": 12672.0
+    },
+    "crafting": {
+     "materials": [
+      {
+       "amount": 0.42,
+       "key": "Borase",
+       "name": "Borase",
+       "odds": {
+        "pyro": 100.0,
+        "stanton": 100.0
+       },
+       "oreScu": 0.9333,
+       "quality": 500,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.46,
+       "key": "Copper",
+       "name": "Copper",
+       "odds": {
+        "pyro": 100.0,
+        "stanton": 100.0
+       },
+       "oreScu": 1.0222,
+       "quality": 1,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.68,
+       "key": "Gold",
+       "name": "Gold",
+       "odds": {
+        "pyro": 24.65,
+        "stanton": 21.99
+       },
+       "oreScu": 1.5111,
+       "quality": 650,
+       "unit": "scu"
+      },
+      {
+       "amount": 1.74,
+       "key": "Iron",
+       "name": "Iron",
+       "odds": {
+        "nyx": 0.48,
+        "pyro": 0.66,
+        "stanton": 0.48
+       },
+       "oreScu": 3.8667,
+       "quality": 900,
+       "unit": "scu"
+      },
+      {
+       "amount": 1.35,
+       "key": "Laranite",
+       "name": "Laranite",
+       "odds": {
+        "pyro": 1.04,
+        "stanton": 0.69
+       },
+       "oreScu": 3.0,
+       "quality": 900,
+       "unit": "scu"
+      },
+      {
+       "amount": 1.0,
+       "key": "Pressurized_Ice",
+       "name": "Pressurized Ice",
+       "odds": {
+        "nyx": 0.0,
+        "pyro": 0.0,
+        "stanton": 0.0
+       },
+       "oreScu": 2.2222,
+       "quality": 1000,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.23,
+       "key": "Quantanium",
+       "name": "Quantainium",
+       "odds": {
+        "stanton": 100.0
+       },
+       "oreScu": 0.5111,
+       "quality": 1,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.5,
+       "key": "Silicon",
+       "name": "Silicon",
+       "odds": {
+        "pyro": 0.0,
+        "stanton": 0.0
+       },
+       "oreScu": 1.1111,
+       "quality": 1000,
+       "unit": "scu"
+      },
+      {
+       "amount": 0.6,
+       "key": "Tin",
+       "name": "Tin",
+       "odds": {
+        "nyx": 0.0,
+        "pyro": 0.0,
+        "stanton": 0.0
+       },
+       "oreScu": 1.3333,
+       "quality": 1000,
+       "unit": "scu"
+      },
+      {
+       "amount": 3.38,
+       "key": "Tungsten",
+       "name": "Tungsten",
+       "odds": {
+        "pyro": 0.01,
+        "stanton": 0.0
+       },
+       "oreScu": 7.5111,
+       "quality": 1000,
+       "unit": "scu"
+      },
+      {
+       "amount": 58.0,
+       "key": "harvestable_mineral_1h_beradom",
+       "name": "Beradom",
+       "odds": {
+        "pyro": 0.02,
+        "stanton": 0.01
+       },
+       "oreScu": null,
+       "quality": 1000,
+       "unit": "units"
+      }
+     ],
+     "parts": [
+      {
+       "count": 1,
+       "item": "banu_tachyoncannon_s3",
+       "seconds": 1680.0
+      },
+      {
+       "count": 2,
+       "item": "cool_acom_s02_icedive_scitem",
+       "seconds": 1260.0
+      },
+      {
+       "count": 1,
+       "item": "powr_acom_s02_solarflare_scitem",
+       "seconds": 1110.0
+      },
+      {
+       "count": 1,
+       "item": "qdrv_arcc_s02_flash_scitem",
+       "seconds": 1110.0
+      },
+      {
+       "count": 1,
+       "item": "shld_asas_s02_obscura_scitem",
+       "seconds": 690.0
+      }
+     ],
+     "seconds": 5850.0
+    },
+    "hull": 6500.0,
+    "parts": [
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cutlass_scitem_turret_black",
+      "obsolete": false,
+      "path": "hardpoint_turret",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "anvl_ballisticgatling_bespoke",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_right/hardpoint_class_2",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "klwe_massdriver_s3",
+      "obsolete": false,
+      "path": "hardpoint_turret/hardpoint_weapon_left/hardpoint_class_2",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Body_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": true,
+      "changed": true,
+      "item": "banu_tachyoncannon_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Body_Weapon/hardpoint_class_2",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": true,
+      "item": "",
+      "obsolete": false,
+      "path": "hardpoint_Right_Body_Weapon",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Wing_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": false,
+      "item": "klwe_laserrepeater_s3",
+      "obsolete": false,
+      "path": "hardpoint_Left_Wing_Weapon/hardpoint_class_2",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mount_gimbal_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Wing_Weapon",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "gats_ballisticgatling_s3",
+      "obsolete": false,
+      "path": "hardpoint_Right_Wing_Weapon/hardpoint_class_2",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "qdrv_arcc_s02_flash_scitem",
+      "obsolete": false,
+      "path": "hardpoint_quantum_drive",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "",
+      "obsolete": false,
+      "path": "hardpoint_quantum_drive/hardpoint_Jump_Drive",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "radr_grnp_s02_vigilance",
+      "obsolete": false,
+      "path": "hardpoint_radar",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "shld_asas_s02_obscura_scitem",
+      "obsolete": false,
+      "path": "hardpoint_shield_generator_right",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "powr_acom_s02_solarflare_scitem",
+      "obsolete": false,
+      "path": "hardpoint_power_plant",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "cool_acom_s02_icedive_scitem",
+      "obsolete": false,
+      "path": "hardpoint_cooler_right",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": true,
+      "changed": true,
+      "item": "cool_acom_s02_icedive_scitem",
+      "obsolete": false,
+      "path": "hardpoint_cooler_left",
+      "source": "craft",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cml_decoy_small",
+      "obsolete": false,
+      "path": "hardpoint_cm_launcher_left",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cml_noise_small",
+      "obsolete": false,
+      "path": "hardpoint_cm_launcher_right",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "misl_s03_ir_novp_viper",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_01_attach",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_03/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_02/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Right_Pylon_01/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_quad_s02",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_02_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_03_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s02_cs_fski_tempest",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_03/missile_04_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": true,
+      "item": "mrck_gone_from_the_game",
+      "obsolete": true,
+      "path": "hardpoint_Left_Pylon_02",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "mrck_s04_behr_dual_s03",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": false,
+      "item": "misl_s03_cs_fski_arrester",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01/missile_01_attach",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": true,
+      "canCraft": false,
+      "changed": true,
+      "item": "misl_s03_em_fski_thunderbolt",
+      "obsolete": false,
+      "path": "hardpoint_Left_Pylon_01/missile_02_attach",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": false,
+      "item": "drak_cutlass_remote_turret",
+      "obsolete": false,
+      "path": "hardpoint_tractor_turret",
+      "source": "stock",
+      "stock": true,
+      "unobtainable": false
+     },
+     {
+      "canBuy": false,
+      "canCraft": false,
+      "changed": true,
+      "item": "apar_ballisticscattergun_s3_shark",
+      "obsolete": false,
+      "path": "hardpoint_tractor_turret/turret_weapon",
+      "source": "buy",
+      "stock": false,
+      "unobtainable": true
+     }
+    ],
+    "shopping": {
+     "mode": "stops",
+     "stops": [
+      {
+       "moon": "",
+       "place": "Baijini Point",
+       "planet": "ArcCorp",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "anvl_ballisticgatling_bespoke",
+           "price": 56955.0,
+           "reported": 1788066989,
+           "total": 56955.0
+          }
+         ],
+         "shop": "Ship Weapons",
+         "terminal": "188"
+        }
+       ],
+       "system": "Stanton"
+      },
+      {
+       "moon": "Yela",
+       "place": "Green Imperial Housing Exchange",
+       "planet": "Crusader",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "misl_s03_ir_novp_viper",
+           "price": 621.0,
+           "reported": 1788452794,
+           "total": 621.0
+          }
+         ],
+         "shop": "Dumper's Depot",
+         "terminal": "115"
+        }
+       ],
+       "system": "Stanton"
+      },
+      {
+       "moon": "",
+       "place": "New Babbage",
+       "planet": "MicroTech",
+       "shops": [
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "gats_ballisticgatling_s3",
+           "price": 28116.0,
+           "reported": 1789582589,
+           "total": 28116.0
+          },
+          {
+           "count": 1,
+           "item": "klwe_massdriver_s3",
+           "price": 58094.0,
+           "reported": 1789582589,
+           "total": 58094.0
+          },
+          {
+           "count": 1,
+           "item": "misl_s03_em_fski_thunderbolt",
+           "price": 678.0,
+           "reported": 1789582589,
+           "total": 678.0
+          },
+          {
+           "count": 1,
+           "item": "mrck_s04_behr_dual_s03",
+           "price": 13045.0,
+           "reported": 1789582589,
+           "total": 13045.0
+          }
+         ],
+         "shop": "CenterMass",
+         "terminal": "108"
+        },
+        {
+         "items": [
+          {
+           "count": 1,
+           "item": "radr_grnp_s02_vigilance",
+           "price": 176000.0,
+           "reported": 1789582589,
+           "total": 176000.0
+          }
+         ],
+         "shop": "Omega Pro",
+         "terminal": "130"
+        }
+       ],
+       "system": "Stanton"
+      }
+     ],
+     "total": 333509.0,
+     "unsold": [
+      {
+       "count": 1,
+       "item": "apar_ballisticscattergun_s3_shark"
+      }
+     ]
+    },
+    "stock": {
+     "alpha": 238.6,
+     "alphaByType": {
+      "energy": 174.6,
+      "physical": 64.0
+     },
+     "coolant": 68.0,
+     "dps": 3889.17,
+     "dpsByType": {
+      "energy": 2182.5,
+      "physical": 1706.67
+     },
+     "missileDamage": 39200.0,
+     "missiles": 16,
+     "powerMax": 27.0,
+     "powerMin": 13.0,
+     "quantumCooldown": 14.3,
+     "quantumSpeed": 238314304.0,
+     "segments": 18.0,
+     "shieldHp": 7200.0,
+     "shieldRegen": 1368.0
+    },
+    "totals": {
+     "alpha": 3105.85,
+     "alphaByType": {
+      "energy": 1056.15,
+      "physical": 2049.7
+     },
+     "coolant": 102.47,
+     "dps": 3292.96,
+     "dpsByType": {
+      "energy": 545.63,
+      "physical": 2747.33
+     },
+     "missileDamage": 28350.0,
+     "missiles": 11,
+     "powerMax": 27.0,
+     "powerMin": 14.0,
+     "quantumCooldown": 12.8,
+     "quantumSpeed": 336075174.35,
+     "segments": 22.0,
+     "shieldHp": 8451.35,
+     "shieldRegen": 1421.0
+    }
+   },
+   "loadout": {
+    "parts": {
+     "hardpoint_Left_Body_Weapon/hardpoint_class_2": {
+      "item": "banu_tachyoncannon_s3",
+      "qualities": [
+       null,
+       null,
+       null
+      ],
+      "source": "craft"
+     },
+     "hardpoint_Left_Pylon_01/missile_02_attach": {
+      "item": "misl_s03_em_fski_thunderbolt",
+      "shop": "999999",
+      "source": "buy"
+     },
+     "hardpoint_Left_Pylon_02": {
+      "item": "mrck_gone_from_the_game",
+      "source": "buy"
+     },
+     "hardpoint_Left_Wing_Weapon/hardpoint_class_2": {
+      "item": "klwe_laserrepeater_s3",
+      "source": "stock"
+     },
+     "hardpoint_Right_Body_Weapon": {
+      "item": "",
+      "source": "buy"
+     },
+     "hardpoint_Right_Pylon_03": {
+      "item": "mrck_s04_behr_dual_s03",
+      "source": "buy"
+     },
+     "hardpoint_Right_Pylon_03/missile_01_attach": {
+      "item": "misl_s03_ir_novp_viper",
+      "shop": "115",
+      "source": "buy"
+     },
+     "hardpoint_Right_Wing_Weapon/hardpoint_class_2": {
+      "item": "gats_ballisticgatling_s3"
+     },
+     "hardpoint_cooler_left": {
+      "item": "cool_acom_s02_icedive_scitem",
+      "qualities": [
+       1000,
+       1000,
+       1000
+      ],
+      "source": "craft"
+     },
+     "hardpoint_cooler_right": {
+      "item": "cool_acom_s02_icedive_scitem",
+      "qualities": [
+       363,
+       null,
+       777
+      ],
+      "source": "craft"
+     },
+     "hardpoint_power_plant": {
+      "item": "powr_acom_s02_solarflare_scitem",
+      "qualities": [
+       787,
+       1000,
+       null
+      ],
+      "source": "craft"
+     },
+     "hardpoint_quantum_drive": {
+      "item": "qdrv_arcc_s02_flash_scitem",
+      "qualities": [
+       900,
+       900,
+       900
+      ],
+      "source": "craft"
+     },
+     "hardpoint_radar": {
+      "item": "radr_grnp_s02_vigilance",
+      "source": "buy"
+     },
+     "hardpoint_shield_generator_right": {
+      "item": "shld_asas_s02_obscura_scitem",
+      "qualities": [
+       500,
+       650,
+       1000
+      ],
+      "source": "craft"
+     },
+     "hardpoint_tractor_turret/turret_weapon": {
+      "item": "apar_ballisticscattergun_s3_shark",
+      "source": "buy"
+     },
+     "hardpoint_turret/hardpoint_weapon_left/hardpoint_class_2": {
+      "item": "klwe_massdriver_s3",
+      "source": "buy"
+     },
+     "hardpoint_turret/hardpoint_weapon_right/hardpoint_class_2": {
+      "item": "anvl_ballisticgatling_bespoke",
+      "source": "buy"
+     }
+    }
+   },
+   "name": "everything",
+   "route": "stops"
   }
  ],
  "catalog": {

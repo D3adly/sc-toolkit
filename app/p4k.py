@@ -4,8 +4,9 @@ a handful of known files out of it.
 Data.p4k is a ZIP64 archive, but CIG stores custom extra fields that the
 stdlib `zipfile` rejects as corrupt, so the central directory is parsed by
 hand here. The files we need (defaultProfile.xml, global.ini) use
-compression method 100 (zstd) and are not encrypted; stdlib
-`compression.zstd` (Python 3.14+) handles them.
+compression method 100 (zstd); stdlib `compression.zstd` (Python 3.14+)
+handles them. The few encrypted entries (vehicle definitions) are
+decrypted first (app.aes).
 
 Rather than walking all ~1.4M central-directory records in Python, the
 directory is scanned in chunks for the exact entry names we want — CIG
@@ -20,12 +21,18 @@ from compression import zstd
 from collections.abc import Iterator
 from pathlib import Path
 
+from app import aes
+
 _EOCD64_LOCATOR = b"PK\x06\x07"
 _EOCD64 = b"PK\x06\x06"
 _CENTRAL_HEADER = b"PK\x01\x02"
 _METHOD_STORE = 0
 _METHOD_ZSTD = 100
 _CHUNK = 32 * 1024 * 1024
+# A few entries (the vehicle definitions) are AES-128-CBC encrypted with a zero IV and the key the
+# community unp4k tool publishes; byte 168 of CIG's central-directory extra data flags them.
+_CRYPT_FLAG = 168
+_KEY = bytes.fromhex("5e7a2002302eeb1a3bb617c30fde1e47")
 
 
 class P4kError(Exception):
@@ -106,6 +113,11 @@ def _read_entry(f, header_offset: int) -> bytes:
     f.seek(local_offset + 30 + local_name_len + local_extra_len)
     data = f.read(csize)
 
+    if len(extra) > _CRYPT_FLAG and extra[_CRYPT_FLAG]:
+        # The block padding after the zstd frame is left to the decompressor.
+        data = aes.decrypt_cbc(_KEY, data)
+        if method == _METHOD_ZSTD:
+            return zstd.ZstdDecompressor().decompress(data)
     if method == _METHOD_ZSTD:
         return zstd.decompress(data)
     if method == _METHOD_STORE:

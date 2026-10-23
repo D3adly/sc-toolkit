@@ -41,6 +41,7 @@ data and tools goes to them:
 | [Joystick Diagrams](https://github.com/Rexeh/joystick-diagrams) | Its community X56 templates, used to cross-check the X56 button map | Rexeh and contributors |
 | [Star Citizen Wiki](https://starcitizen.tools/) ([API](https://api.star-citizen.wiki/)) | **My Ships**: the ship list (including ships in concept and their loaners), game ids and ship pictures (CC BY-SA 4.0) | The Star Citizen Wiki community |
 | [Erkul](https://www.erkul.games/) | The Erkul button on each ship in My Ships opens the ship there | Erkul |
+| [unp4k](https://github.com/dolkensp/unp4k) | How Data.p4k stores its few encrypted files (the vehicle definitions): format and key | [dolkensp](https://github.com/dolkensp) |
 
 Quick links in the launcher also point to [SCMDB](https://scmdb.net/),
 [Erkul](https://erkul.games/), [UEX Corp](https://uexcorp.space/) and
@@ -278,6 +279,13 @@ cd sc-toolkit
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt   # Windows: .venv\Scripts\pip install -r requirements.txt
 ./run.sh                                    # Windows: .venv\Scripts\python -m app.main
+```
+
+Tests (stdlib unittest; the game-file tests run when `SCT_GAME` points at a channel folder such as
+`…/StarCitizen/LIVE`, and are skipped otherwise):
+
+```bash
+SCT_GAME="/path/to/StarCitizen/LIVE" .venv/bin/python -m unittest discover -s tests -t .
 ```
 
 ## Building & releasing

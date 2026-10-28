@@ -68,6 +68,9 @@ FS = {"2xs": 11, "xs": 12, "sm": 13, "md": 14, "lg": 15, "xl": 16, "2xl": 18, "3
 SPACE = (4, 8, 12, 16, 24, 32)
 FONT_FAMILY = "Inter"
 FONT_WEIGHTS = ("Regular", "Medium", "SemiBold", "Bold", "ExtraBold")
+# Display numbers (the loadout editor's totals, part stats): Rajdhani (SIL OFL), as on the website.
+NUM_FAMILY = "Rajdhani"
+NUM_WEIGHTS = ("Medium", "SemiBold", "Bold")
 
 
 def hue(name: str | None) -> str:
@@ -98,6 +101,8 @@ def install_fonts() -> None:
     for weight in FONT_WEIGHTS:
         path = Path(config.ASSETS_DIR) / "fonts" / f"Inter-{weight}.ttf"
         loaded |= QFontDatabase.addApplicationFont(str(path)) >= 0
+    for weight in NUM_WEIGHTS:
+        QFontDatabase.addApplicationFont(str(Path(config.ASSETS_DIR) / "fonts" / f"Rajdhani-{weight}.ttf"))
     font = QFont(FONT_FAMILY if loaded else app.font().family())
     font.setPixelSize(FS["sm"])
     font.setFeature(QFont.Tag("tnum"), 1)
@@ -1120,7 +1125,8 @@ QInputDialog QLineEdit {{
 }}
 
 /* == kit (app.ui.kit) =================================================== */
-#ToolPage, #KitScroll, #KitScroll > QWidget > QWidget, #ResultLine {{
+#ToolPage, #KitScroll, #KitScroll > QWidget > QWidget, #ResultLine,
+#LoScroll, #LoScroll > QWidget > QWidget, #LoCards, #LoCards > QWidget > QWidget {{
     background: transparent;
 }}
 #Panel, #FilterBar {{
@@ -1715,6 +1721,302 @@ QInputDialog QLineEdit {{
     background: {success_soft};
     border: 1px solid {success};
     color: {text_primary};
+}}
+/* Loadouts (app.ui.loadout_editor): the painted pieces' buttons and the editor's own controls. */
+#BusSlot {{
+    min-height: 26px;
+    padding: 0 6px;
+    border: 1px solid rgba(218, 197, 164, 0.22);
+    border-radius: 7px;
+    background: rgba(11, 13, 16, 0.6);
+    color: {text_secondary};
+    font-size: 11px;
+    font-weight: 700;
+}}
+#BusSlot:hover {{
+    border-color: {info};
+}}
+#BusSlot:checked {{
+    border-color: {info};
+    background: {info};
+    color: #0b0d10;
+}}
+#PartGet {{
+    min-height: 32px;
+    border: 1px solid rgba(218, 197, 164, 0.3);
+    border-radius: 10px;
+    background: transparent;
+    color: {text_primary};
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+}}
+#PartGet:hover {{
+    border-color: {info};
+}}
+#PartGet[pressed="true"] {{
+    border-color: {info};
+    background: {info};
+    color: #0b0d10;
+}}
+#PartGet:disabled {{
+    border: 1px dashed rgba(218, 197, 164, 0.25);
+    color: rgba(163, 154, 138, 0.55);
+}}
+#Toast {{
+    background: #1b1f24;
+    border: 1px solid {border_strong};
+    border-radius: 12px;
+}}
+#ToastText {{
+    color: {text_primary};
+    font-size: 13px;
+}}
+#ToastUndo {{
+    min-height: 30px;
+    padding: 0 14px;
+    border: 1px solid {info_dim};
+    border-radius: 8px;
+    background: {info_soft};
+    color: {text_primary};
+    font-weight: 700;
+}}
+#ToastUndo:hover {{
+    border-color: {info};
+}}
+#LoPill {{
+    min-height: 30px;
+    padding: 0 12px;
+    border: 1px solid rgba(243, 237, 226, 0.28);
+    border-radius: 15px;
+    background: rgba(11, 13, 16, 0.5);
+    color: {text_secondary};
+    font-size: 12px;
+    font-weight: 600;
+}}
+#LoPill:hover {{
+    border-color: {text_primary};
+}}
+#LoPill:checked {{
+    background: {text_primary};
+    border-color: {text_primary};
+    color: #0b0d10;
+}}
+#LoPill[kind="new"] {{
+    border-style: dashed;
+    color: {info};
+}}
+#LoCta {{
+    min-height: 40px;
+    padding: 0 16px;
+    border: 1px solid #f6cf8a;
+    border-radius: 12px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #efb453, stop:1 #e3a33b);
+    color: #1b1712;
+    font-size: 14px;
+    font-weight: 700;
+}}
+#LoCta:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f3c06b, stop:1 #e8ac48);
+}}
+#LoCta:disabled {{
+    background: {bg_input};
+    border: 1px solid {border};
+    color: {text_muted};
+}}
+#LoBack, #LoLink {{
+    border: 0;
+    background: transparent;
+    color: {text_secondary};
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 6px;
+}}
+#LoLink {{
+    color: {info};
+}}
+#LoBack:hover, #LoLink:hover {{
+    color: {text_primary};
+    text-decoration: underline;
+}}
+#LoChip {{
+    color: {text_secondary};
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 11px;
+    background: rgba(11, 13, 16, 0.6);
+}}
+#LoSeg {{
+    min-height: 30px;
+    padding: 0 12px;
+    border: 1px solid rgba(218, 197, 164, 0.28);
+    background: transparent;
+    color: {text_secondary};
+    font-size: 12px;
+    font-weight: 700;
+}}
+#LoSeg[pos="first"] {{
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+}}
+#LoSeg[pos="last"] {{
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+}}
+#LoSeg:checked {{
+    background: {info_soft};
+    color: {text_primary};
+}}
+#LoRackTab {{
+    min-height: 46px;
+    padding: 4px 14px;
+    border: 1px solid rgba(218, 197, 164, 0.18);
+    border-radius: 12px;
+    background: rgba(20, 24, 28, 0.85);
+    color: {text_primary};
+    text-align: left;
+    font-size: 13px;
+    font-weight: 700;
+}}
+#LoRackTab:checked {{
+    border-color: {info};
+    background: {info_soft};
+}}
+#LoRackTab:disabled {{
+    color: {text_muted};
+}}
+#LoTrayPort {{
+    color: {info};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+}}
+#LoTrayName {{
+    font-size: 18px;
+    font-weight: 800;
+}}
+#LoTraySrc, #LoHint {{
+    color: {text_secondary};
+    font-size: 13px;
+}}
+#LoHint {{
+    color: {text_muted};
+    font-size: 12px;
+}}
+#LoPatch {{
+    background: {warning_soft};
+    border: 1px solid rgba(224, 149, 79, 0.4);
+    border-radius: 12px;
+}}
+#LoPanel {{
+    background: rgba(20, 24, 28, 0.9);
+    border: 1px solid rgba(218, 197, 164, 0.14);
+    border-radius: 14px;
+}}
+#KitButton[kind="danger"] {{
+    background: {danger_soft};
+    border: 1px solid {danger};
+    color: {text_primary};
+}}
+#KitButton[kind="danger"]:hover {{
+    background: {danger};
+}}
+#LoChipBtn {{
+    min-height: 28px;
+    padding: 0 12px;
+    border: 1px solid rgba(218, 197, 164, 0.2);
+    border-radius: 14px;
+    background: transparent;
+    color: {text_secondary};
+    font-size: 12px;
+    font-weight: 600;
+}}
+#LoChipBtn:hover {{
+    border-color: rgba(218, 197, 164, 0.45);
+}}
+#LoChipBtn:checked {{
+    background: {info_soft};
+    border-color: {info};
+    color: {text_primary};
+}}
+#LoPin {{
+    border: 1px solid rgba(218, 197, 164, 0.28);
+    border-radius: 15px;
+    background: rgba(11, 13, 16, 0.6);
+    color: {text_secondary};
+    font-size: 15px;
+    font-weight: 700;
+}}
+#LoPin:hover {{
+    border-color: {info};
+}}
+#LoPin:checked {{
+    background: {info};
+    border-color: {info};
+    color: #0b0d10;
+}}
+#LoDock {{
+    background: rgba(15, 18, 21, 0.96);
+    border: 1px solid rgba(218, 197, 164, 0.14);
+    border-radius: 14px;
+}}
+#LoDialog {{
+    background: {bg_panel_solid};
+}}
+#LoCraftAside {{
+    background: rgba(20, 24, 28, 0.9);
+    border-right: 1px solid rgba(218, 197, 164, 0.14);
+}}
+#LoSaveBar {{
+    background: rgba(20, 24, 28, 0.9);
+    border: 1px solid rgba(218, 197, 164, 0.14);
+    border-radius: 14px;
+}}
+#LoSaveBar[state="saved"] {{
+    border-color: rgba(120, 180, 220, 0.35);
+}}
+#LoSaveBar[state="drift"] {{
+    border-color: {warning};
+}}
+#LoItem, #LoMat {{
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(218, 197, 164, 0.12);
+    border-radius: 12px;
+}}
+#LoItem[done="true"], #LoMat[done="true"] {{
+    background: rgba(255, 255, 255, 0.01);
+    border-color: {info};
+}}
+#LoAside {{
+    background: transparent;
+    border: 1px dashed rgba(218, 197, 164, 0.2);
+    border-radius: 12px;
+}}
+#LoOffer {{
+    text-align: left;
+    padding: 10px 14px;
+    border: 1px solid rgba(218, 197, 164, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    color: {text_primary};
+    font-size: 13px;
+}}
+#LoOffer:hover {{
+    border-color: {info};
+}}
+#LoOffer:checked {{
+    background: {info_soft};
+    border-color: {info};
+}}
+#LoRemoveChip {{
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(218, 197, 164, 0.2);
+    border-radius: 12px;
+}}
+#LoOfflineNote {{
+    color: {warning};
+    font-size: 13px;
 }}
 """
 

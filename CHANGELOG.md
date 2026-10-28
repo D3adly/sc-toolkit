@@ -4,6 +4,22 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
 
 ## Unreleased
 
+- **Loadouts in My Ships.** Opening a ship now opens its loadouts, the same editor as on
+  sc-toolbox.com: the ship's banner with its loadouts and the four numbers that matter
+  (firepower, alpha, shields, quantum), the power ring on the bus of parts (weapons above,
+  systems below; big ships stack guns and missiles in lanes), and a tray of parts that fit the
+  slot you pick. Point at a part to preview it on every number; Buy or Craft puts it on (Stock
+  for the ship's own). Changing Stock starts a new loadout; every change saves at once and can
+  be undone (Ctrl+Z). *All that fit* compares everything side by side (search, sort, pin up to
+  three); *Set quality* picks crafting qualities with how often finds reach them. *Shopping &
+  crafting* plans the buy run (fewest stops or lowest price, or a shop of your own per part) and
+  the craft list (materials, quality odds, how much ore to mine, a link to the Mining Finder);
+  save the list to tick things off. Rename, duplicate, delete and share links from the loadout's
+  menu. *Ship info & stats* keeps the old details page.
+
+- **Removing a ship with loadouts asks first**, naming the loadouts that go with it (and which
+  are shared: their links will say they were removed).
+
 - **Loadouts sync with sc-toolbox.com.** Loadouts you make for your ships (here or on the
   website) stay the same on both, like My Ships: the newer edit wins, removals carry over, and
   shopping ticks and a saved shopping list go along. Removing a ship removes its loadouts on

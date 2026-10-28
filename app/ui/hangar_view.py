@@ -3,8 +3,10 @@ an Add / Edit side panel over the ship catalogue (app.ships).
 
 Cards: a badge says how you got it (Pledge, or In game in steel) and
 whether it's still in concept, which then shows its loaners. The Erkul button opens Erkul's ship
-pop-out for released ships. Clicking a card opens its details page: stats
-and default loadout from the game files (app.shipdata).
+pop-out for released ships. Clicking a card opens its loadouts (the
+editor, app.ui.loadout_editor, synced with sc-toolbox.com); "Ship info &
+stats" there opens the details page: stats and default loadout from the game
+files (app.shipdata).
 """
 
 from __future__ import annotations
@@ -19,10 +21,13 @@ from PySide6.QtWidgets import (
     QListWidgetItem, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
-from app import channel as channel_mod, config, datahub, hangar, osutil, settings, shipdata, ships
+from app import channel as channel_mod, config, datahub, hangar, loadoutmodel, loadouts, osutil, settings, \
+    shipdata, ships, uexparts
+from app.contracts import game_version
 from app.hangar import INGAME, PLEDGE, Entry
 from app.theme import PALETTE
 from app.ui import kit
+from app.ui.loadout_editor import LoadoutEditor
 from app.ui.widgets import Elided
 
 CARD_WIDTH = 252
@@ -388,7 +393,10 @@ class HangarView(kit.ToolPage):
         self._cards: list[_ShipCard] = []
         self._columns = 0
         self._editing: str | None = None
-        self._details: str | None = None     # entry id on the details page
+        self._details: str | None = None     # entry id of the open ship (its loadouts, or its info page)
+        self._info = False                   # the open ship's info & stats page instead of its loadouts
+        self.sync = None
+        self._sync_tone = ""
         self.shipdata: shipdata.ShipData | None = None
         self._shipdata_error = ""
         self._worker = _Worker(self)
@@ -400,6 +408,14 @@ class HangarView(kit.ToolPage):
         self._stats.ready.connect(self._on_shipdata)
         self._stats.failed.connect(self._on_shipdata_failed)
         self._stats.progress.connect(self._on_shipdata_progress)
+        # The loadout editor's parts, with UEX prices and the mining odds for the craft list.
+        self.loadoutdata = None
+        self._loadout_error = ""
+        self._contexts: dict[str, loadoutmodel.Ctx] = {}     # per ship class, while the data stays the same
+        self._parts = datahub.GameDataWaiter("loadoutdata", self)
+        self._parts.ready.connect(self._on_loadoutdata)
+        self._parts.failed.connect(self._on_loadoutdata_failed)
+        self._parts.progress.connect(self._on_shipdata_progress)
         self._build_ui()
 
     # -- layout ---------------------------------------------------------------
@@ -456,6 +472,13 @@ class HangarView(kit.ToolPage):
         self.details.edit_requested.connect(self._open_edit)
         self.details.hide()
         body.addWidget(self.details, stretch=1)
+
+        self.editor = LoadoutEditor()
+        self.editor.back_requested.connect(self._close_details)
+        self.editor.info_requested.connect(lambda: self._show_info(True))
+        self.editor.open_tool.connect(self.open_tool.emit)
+        self.editor.hide()
+        body.addWidget(self.editor, stretch=1)
 
         self.side = kit.panel()
         self.side.setFixedWidth(340)
@@ -595,9 +618,16 @@ class HangarView(kit.ToolPage):
     # -- sync (app.sync) ----------------------------------------------------------
     def attach_sync(self, sync) -> None:
         self.sync = sync
+        self.editor.sync = sync
         sync.hangar_updated.connect(self._on_synced)
-        sync.status.connect(lambda text, _tone: self.sync_label.setText(
-            "" if text in ("Off", "Sign in to sync") else f"sc-toolbox.com: {text}"))
+        sync.loadouts_updated.connect(self.editor.reload)
+        sync.status.connect(self._on_sync_status)
+
+    def _on_sync_status(self, text: str, tone: str) -> None:
+        self._sync_tone = tone
+        shown = "" if text in ("Off", "Sign in to sync") else text
+        self.sync_label.setText(f"sc-toolbox.com: {shown}" if shown else "")
+        self.editor.set_sync_status(shown)
 
     def _on_synced(self) -> None:
         """Online changes arrived (or the signed-in account changed): show them,
@@ -607,6 +637,8 @@ class HangarView(kit.ToolPage):
         self.entries = hangar.load()
         if self._details is not None and not any(e.id == self._details for e in self.entries):
             self._close_details()
+        elif self._details is not None:
+            self._open_details(self._details)
         elif self._details is None:
             self._render()
 
@@ -728,18 +760,31 @@ class HangarView(kit.ToolPage):
                 card.set_image(path)
         if self.details.ship is not None and self.details.ship.key == key:
             self.details.set_image(path)
+        if self.editor.ship is not None and self.editor.ship.key == key:
+            self.editor.set_image(path)
 
     # -- details page -------------------------------------------------------------
     def _back(self) -> None:
-        """A ship's page goes back to the hangar; the hangar to the launcher."""
-        if self._details is not None:
+        """A ship's info page goes back to its loadouts; its loadouts to the hangar."""
+        if self._info:
+            self._show_info(False)
+        elif self._details is not None:
             self._close_details()
 
     def _set_details_mode(self, on: bool) -> None:
-        """Hangar-only controls (filters, the result line) hide on a ship's page."""
+        """Hangar-only controls (filters, the result line) hide on a ship's page; the loadouts
+        have their own way back (the banner's "All my ships")."""
         self.filters.setVisible(not on)
         self.result.setVisible(not on)
-        self.back_btn.setVisible(on)
+        self.back_btn.setVisible(on and self._info)
+        self.add_btn.setVisible(not on and not self.side.isVisible())
+
+    def _show_info(self, on: bool) -> None:
+        self._info = on
+        self.details.setVisible(on)
+        self.editor.setVisible(not on)
+        self.back_btn.setText("←  Loadouts")
+        self._set_details_mode(True)
 
     def _open_details(self, entry_id: str) -> None:
         entry = next((e for e in self.entries if e.id == entry_id), None)
@@ -766,6 +811,7 @@ class HangarView(kit.ToolPage):
             channel = channel_mod.pick_default_channel(root)
             self._stats.request(channel_mod.resolve_channel_paths(root, channel).channel_root if channel else None)
         self.details.show_ship(entry, ship, data, note)
+        self._open_editor(entry, ship)
         if ship is not None:
             if ship.image_file.is_file():
                 self.details.set_image(str(ship.image_file))
@@ -773,14 +819,75 @@ class HangarView(kit.ToolPage):
                 self._worker.want_image(ship)
         self.scroll.hide()
         self.empty.hide()
-        self._set_details_mode(True)
-        self.details.show()
+        self._show_info(self._info)
+
+    def _open_editor(self, entry: Entry, ship: ships.Ship | None) -> None:
+        """The ship's loadouts, or why there are none."""
+        if ship is None:
+            self.editor.open_ship(entry, None, None)
+            self.editor.show_message("Not in the ship list", "This ship isn't in the ship list any more.")
+            return
+        if ship.concept:
+            self.editor.open_ship(entry, ship, None)
+            self.editor.show_message("Still in concept", "There's no game data for it yet, so no loadouts.")
+            return
+        root = self._channel_root()
+        if self.loadoutdata is None:
+            self.editor.open_ship(entry, ship, None)
+            if self._loadout_error:
+                self.editor.show_message("No loadout data", self._loadout_error)
+            else:
+                self.editor.show_message("Reading the game files", "Reading the ship parts from your game files "
+                                         "(once per game version)…")
+                self._parts.request(root)
+            return
+        ctx = self._context(ship.class_id, root)
+        if ctx is None:
+            self.editor.open_ship(entry, ship, None)
+            self.editor.show_message("Not in your game files", "This ship isn't in your game files, so there are "
+                                     "no loadouts for it.")
+            return
+        self.editor.open_ship(entry, ship, ctx, (game_version(root) if root else "").split(" ")[0])
+
+    def _channel_root(self):
+        root = settings.current().game_root
+        channel = channel_mod.pick_default_channel(root)
+        return channel_mod.resolve_channel_paths(root, channel).channel_root if channel else None
+
+    def _context(self, class_id: str, root) -> loadoutmodel.Ctx | None:
+        data = self.loadoutdata
+        cls = (class_id or "").lower()
+        if cls not in data.ships:
+            return None
+        if cls not in self._contexts:
+            self._contexts[cls] = loadoutmodel.context(
+                {"ships": data.ships, "items": data.items, "recipes": data.recipes}, cls, uexparts.load(),
+                datahub.read_game("mining", root))
+        return self._contexts[cls]
 
     def _close_details(self) -> None:
         self._details = None
+        self._info = False
+        self.editor.close_subview(refresh=False)
+        self.editor.toast.hide()
         self.details.hide()
+        self.editor.hide()
         self._set_details_mode(False)
         self._render()
+
+    def _on_loadoutdata(self, data) -> None:
+        self.loadoutdata = data
+        self._contexts = {}
+        self._loadout_error = ""
+        self.status_label.setText("")
+        if self._details is not None:
+            self._open_details(self._details)
+
+    def _on_loadoutdata_failed(self, message: str) -> None:
+        self._loadout_error = f"Couldn't read the ship parts from the game files: {message}"
+        self.status_label.setText("")
+        if self._details is not None:
+            self._open_details(self._details)
 
     def _on_shipdata(self, data) -> None:
         self.shipdata = data
@@ -836,7 +943,7 @@ class HangarView(kit.ToolPage):
     def _close_side(self) -> None:
         self._editing = None
         self.side.hide()
-        self.add_btn.show()
+        self.add_btn.setVisible(self._details is None)
         self.empty.setVisible(not self.entries and self._details is None)
         QTimer.singleShot(0, self._relayout)
 
@@ -920,12 +1027,27 @@ class HangarView(kit.ToolPage):
         self.remove_btn.setText("Click again to remove" if armed else "Remove")
 
     def _remove(self) -> None:
-        if not self._remove_armed:
+        removed = self._editing
+        entry = next((e for e in self.entries if e.id == removed), None)
+        if entry is None:
+            return
+        mine = loadouts.for_ship(removed)
+        if mine:
+            # Loadouts go with the ship (here and online): ask, naming them (design "V-LauncherRemove").
+            from app.ui.loadout_views import RemoveShipDialog
+
+            ship = self.catalogue.get(entry.ship)
+            image = str(ship.image_file) if ship is not None and ship.image_file.is_file() else None
+            offline = bool(self.sync is not None and self.sync.enabled and self._sync_tone in ("warning", "danger"))
+            dialog = RemoveShipDialog(self, entry.name or entry.ship_name, mine, offline, image)
+            if dialog.exec() != RemoveShipDialog.Accepted:
+                return
+        elif not self._remove_armed:
             self._arm_remove(True)
             return
-        removed = self._editing
         self.entries = [e for e in self.entries if e.id != removed]
         hangar.save(self.entries)
+        loadouts.cascade({removed})
         self._close_side()
         if self._details == removed:
             self._close_details()

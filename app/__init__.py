@@ -1,3 +1,3 @@
 """SC-Toolbox — a Star Citizen companion launcher and toolkit."""
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"

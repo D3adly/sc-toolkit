@@ -2,7 +2,7 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
-## Unreleased
+## 0.7.0 (2026-10-28)
 
 - **Loadouts in My Ships.** Opening a ship now opens its loadouts, the same editor as on
   sc-toolbox.com: the ship's banner with its loadouts and the four numbers that matter

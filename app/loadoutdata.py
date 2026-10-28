@@ -23,7 +23,7 @@ Where things are:
   quantum), plus guns (app.crafting.alpha: damage by type per shot, fire
   rate, pellets; projectile speed × lifetime; ammo or capacitor), missiles
   (explosion damage, lock), component HP and the entity's uuid (UEX keys
-  parts by it).
+  parts by it); radars: aim assist range (min, max, buffer) and ping cooldown.
 - **Recipes**: app.crafting.recipes for every part with a blueprint.
 
 The publishing tool keeps a copy of this module; keep the two in step.
@@ -40,7 +40,7 @@ from app import config, crafting, cryxml, p4k, shipdata
 from app.datacore import DataCore
 
 CACHE = config.CACHE_DIR / "loadoutdata"
-FORMAT = 2  # 2: basePower (what the parts outside the editable slots draw)
+FORMAT = 3  # 2: basePower (what the parts outside the editable slots draw); 3: radar ranges
 VEHICLE_DIR = "Data\\Scripts\\Entities\\Vehicles\\Implementations\\Xml\\"
 
 # Part types a loadout can hold (seats, doors, thrusters, lights… stay out).
@@ -279,6 +279,13 @@ class _Parts:
             out["cooler"] = {"coolant": info.get("coolant_gen", 0.0)}
         elif t == "QuantumDrive":
             out["quantum"] = {"speed": info.get("qd_speed", 0.0), "cooldown": info.get("qd_cooldown", 0.0)}
+        elif t == "Radar":
+            radar = comps.get("SCItemRadarComponentParams") or {}
+            aim = radar.get("aimAssist") or {}
+            out["radar"] = {"aimMin": round(float(aim.get("distanceMinAssignment") or 0), 1),
+                            "aimMax": round(float(aim.get("distanceMaxAssignment") or 0), 1),
+                            "aimBuffer": round(float(aim.get("outsideRangeBufferDistance") or 0), 1),
+                            "ping": round(float((radar.get("pingProperties") or {}).get("cooldownTime") or 0), 2)}
         ports = (comps.get("SItemPortContainerComponentParams") or {}).get("Ports") or []
         slots = [_item_slot(p, self.loc) for p in ports if isinstance(p, dict)]
         slots = [s for s in slots if _relevant(s)]

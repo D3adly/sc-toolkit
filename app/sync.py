@@ -19,6 +19,9 @@ has less (a reinstall, deleted logs).
   everything that changed since the revision the launcher last saw. The
   first sync of an account pairs local ships with online ones of the same
   model one-to-one, so ships both sides already had aren't doubled.
+- Loadouts (both ways): app.loadouts, the same way as My Ships and right
+  after it in the same job (the service drops loadouts of ships it doesn't
+  have). Shopping ticks and the saved shopping list ride on their loadout.
 
 Everything runs on one worker thread, one job at a time; the UI hears about
 it through signals. Offline is fine: the next run sends whatever is missing.
@@ -35,7 +38,8 @@ from datetime import datetime, timezone
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from app import channel as channel_mod, config, datahub, gamelog, hangar, portal, settings, stats, stats_digest
+from app import (channel as channel_mod, config, datahub, gamelog, hangar, loadouts, portal, settings, stats,
+                 stats_digest)
 from app.channel import PERSISTENT_CHANNELS
 
 SYNC_CHANNELS = [c for c in PERSISTENT_CHANNELS if c]       # LIVE, HOTFIX
@@ -177,6 +181,45 @@ def apply_remote(store: hangar.Store, changes: list[dict]) -> None:
     store.entries = [e for e in store.entries if e is not None]
 
 
+# -- loadouts: the pure parts --------------------------------------------------------------
+
+def loadout_to_input(lo: loadouts.Loadout) -> dict:
+    return {"id": lo.id, "updatedAt": _iso_ms(lo.updated_at or 1), "hangarId": lo.hangar_id, "ship": lo.ship,
+            "name": lo.name, "parts": lo.parts or {}, "ticks": lo.ticks, "basket": lo.basket,
+            "deleted": lo.deleted}
+
+
+def loadout_from_remote(r: dict) -> loadouts.Loadout:
+    parts, basket, share = r.get("parts"), r.get("basket"), r.get("share")
+    return loadouts.Loadout(hangar_id=r.get("hangarId") or "", ship=r.get("ship") or "", name=r.get("name") or "",
+                            parts=parts if isinstance(parts, dict) else {}, ticks=list(r.get("ticks") or []),
+                            basket=basket if isinstance(basket, dict) and basket else None, id=r["id"],
+                            updated_at=_ms(r.get("updatedAt")), deleted=bool(r.get("deleted")),
+                            share=share if isinstance(share, dict) and share.get("url") else None)
+
+
+def apply_remote_loadouts(store: loadouts.Store, changes: list[dict]) -> None:
+    """As apply_remote for My Ships: a change replaces the local loadout unless the local one
+    was edited later; deletions remove it. The share link always comes from online."""
+    by_id = {lo.id: i for i, lo in enumerate(store.loadouts)}
+    for r in changes:
+        incoming = loadout_from_remote(r)
+        i = by_id.get(incoming.id)
+        if i is not None and store.loadouts[i].updated_at > incoming.updated_at:
+            store.loadouts[i].share = incoming.share
+            continue
+        if incoming.deleted:
+            if i is not None:
+                store.loadouts[i] = None      # type: ignore[call-overload]
+            continue
+        if i is None:
+            by_id[incoming.id] = len(store.loadouts)
+            store.loadouts.append(incoming)
+        else:
+            store.loadouts[i] = incoming
+    store.loadouts = [lo for lo in store.loadouts if lo is not None]
+
+
 # -- the controller -------------------------------------------------------------------
 
 class SyncController(QObject):
@@ -187,6 +230,7 @@ class SyncController(QObject):
 
     status = Signal(str, str)
     hangar_updated = Signal()
+    loadouts_updated = Signal()
     owned_updated = Signal()
     needs_sign_in = Signal(str)
     _done = Signal(str, object)          # worker → UI thread: (job, result or exception)
@@ -200,6 +244,7 @@ class SyncController(QObject):
         self._jobs: queue.Queue = queue.Queue()
         self._queued: set[str] = set()
         self._lock = threading.Lock()
+        self._job_lock = threading.Lock()   # one job at a time (the worker's, or a share link's)
         self._last_live_hash = ""
         self.last_synced: datetime | None = None
         self._done.connect(self._on_done)
@@ -217,6 +262,7 @@ class SyncController(QObject):
         reader.session_ended.connect(lambda _sid: self.request("stats_live"))
         self.account.changed.connect(self._on_account)
         hangar.on_change(self._on_hangar_edit)
+        loadouts.on_change(self._on_hangar_edit)
         self._on_account(self.account.state)
 
     # -- state ------------------------------------------------------------------------
@@ -304,7 +350,8 @@ class SyncController(QObject):
             with self._lock:
                 self._queued.discard(job)
             try:
-                result = getattr(self, f"_job_{job}")()
+                with self._job_lock:
+                    result = getattr(self, f"_job_{job}")()
             except Exception as exc:          # reported on the UI thread
                 if not isinstance(exc, portal.PortalError):
                     _log(f"{job} failed:\n{traceback.format_exc()}")
@@ -333,6 +380,8 @@ class SyncController(QObject):
         result = result if isinstance(result, dict) else {}
         if result.get("hangar"):
             self.hangar_updated.emit()
+        if result.get("loadouts"):
+            self.loadouts_updated.emit()
         if result.get("owned"):
             self.owned_updated.emit()
             from app import ipc
@@ -348,10 +397,10 @@ class SyncController(QObject):
 
     # -- jobs (worker thread) ---------------------------------------------------------------
     def _job_startup(self) -> dict:
-        changed = self._job_hangar()["hangar"]
+        changed = self._job_hangar()
         self._upload_all_sessions()
         self._fetch_owned()
-        return {"hangar": changed, "owned": True}
+        return {**changed, "owned": True}
 
     def _job_hangar(self) -> dict:
         account = self.account_id
@@ -369,9 +418,12 @@ class SyncController(QObject):
                 _log(f"hangar: sending {len(store.entries)} local ships to account {account}")
             else:
                 local = None
+        renamed: dict[str, str] = {}
         if first:
             remote = self._api("GET", "/hangar").get("entries", [])
+            before = [(e, e.id) for e in store.entries]
             store.entries = pair_first_link(store.entries, remote)
+            renamed = {old: e.id for e, old in before if e.id != old}   # paired: the online entry's id
             send = store.entries
         else:
             send = store.pending()
@@ -392,7 +444,65 @@ class SyncController(QObject):
             local.claimed_by = account
             hangar.write(local)
         _log(f"hangar: sent {len(send)}, got {len(reply.get('changes', []))}, rev {latest.rev}")
-        return {"hangar": bool(reply.get("changes")) or first}
+        got_loadouts = self._sync_loadouts(account, latest, claim=local is not None, renamed=renamed)
+        return {"hangar": bool(reply.get("changes")) or first, "loadouts": got_loadouts}
+
+    def _sync_loadouts(self, account: str, ships: hangar.Store, claim: bool, renamed: dict[str, str]) -> bool:
+        """Loadouts after the hangar: the service keeps only those of ships it has."""
+        store = loadouts.read(account)
+        first = not store.rev and not store.synced_ms
+        local = None
+        if claim:
+            local = loadouts.read(None)
+            if not local.claimed_by and local.live():
+                known = {lo.id for lo in store.loadouts}
+                for lo in local.live():
+                    if lo.id not in known:
+                        lo.hangar_id = renamed.get(lo.hangar_id, lo.hangar_id)
+                        lo.updated_at = max(lo.updated_at, 1)
+                        store.loadouts.append(lo)
+            else:
+                local = None
+        # Loadouts of ships no longer in My Ships go too (removed here or from the website).
+        live_ships = {e.id for e in ships.live()}
+        orphans = {lo.hangar_id for lo in store.live() if lo.hangar_id not in live_ships}
+        if orphans:
+            loadouts.write(store)
+            loadouts.cascade(orphans, account)
+            store = loadouts.read(account)
+        send = store.live() if first else store.pending()
+        started = hangar.now_ms()
+        reply = self._api("POST", "/loadouts/sync",
+                          {"sinceRev": store.rev, "changes": [loadout_to_input(lo) for lo in send]})
+        latest = loadouts.read(account)
+        if first:
+            sent = {lo.id for lo in store.loadouts}
+            latest.loadouts = store.loadouts + [lo for lo in latest.loadouts if lo.id not in sent]
+        apply_remote_loadouts(latest, reply.get("changes", []))
+        latest.rev = int(reply.get("rev") or 0)
+        latest.synced_ms = started
+        loadouts.write(latest)
+        if local is not None:
+            local.claimed_by = account
+            loadouts.write(local)
+        _log(f"loadouts: sent {len(send)}, got {len(reply.get('changes', []))}, rev {latest.rev}")
+        return bool(reply.get("changes")) or first or bool(orphans)
+
+    # -- share links (online only; the UI calls these on its own thread) ---------------------
+    def share_loadout(self, loadout_id: str) -> dict:
+        """Shares a loadout by link (sync first: the service must have it). {token, url, sharedAt}."""
+        with self._job_lock:
+            store = loadouts.read(self.account_id)
+            if any(lo.id == loadout_id for lo in store.pending()):
+                self._job_hangar()
+            share = self._api("POST", f"/loadouts/{loadout_id}/share")
+        loadouts.set_share(loadout_id, share)
+        return share
+
+    def stop_sharing(self, loadout_id: str) -> None:
+        with self._job_lock:
+            self._api("DELETE", f"/loadouts/{loadout_id}/share")
+        loadouts.set_share(loadout_id, None)
 
     def _logs_allowed(self) -> bool:
         st = self.account.state

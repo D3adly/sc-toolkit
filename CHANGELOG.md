@@ -2,6 +2,14 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
+## Unreleased
+
+- **Loadouts sync with sc-toolbox.com.** Loadouts you make for your ships (here or on the
+  website) stay the same on both, like My Ships: the newer edit wins, removals carry over, and
+  shopping ticks and a saved shopping list go along. Removing a ship removes its loadouts on
+  both sides. Signed out, loadouts stay on this PC and go online with My Ships at your first
+  sign-in.
+
 ## 0.6.0 (2026-10-17)
 
 - **Events: your orgs' ops in the launcher.** A new tool (rail and home screen) with a month

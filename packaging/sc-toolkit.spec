@@ -23,7 +23,7 @@ datas = [
     (str(assets / "refining.json"), "assets"),  # refining table (app.refining)
 ]
 
-# The app only uses QtCore, QtGui and QtWidgets; keep the rest of Qt out.
+# The app only uses QtCore, QtGui, QtWidgets and QtSvg (loadout icons); keep the rest of Qt out.
 UNUSED_QT = """
 Qt3DAnimation Qt3DCore Qt3DExtras Qt3DInput Qt3DLogic Qt3DRender QtBluetooth
 QtCanvasPainter QtCharts QtConcurrent QtDataVisualization QtDesigner QtGraphs
@@ -76,7 +76,7 @@ _DROP = re.compile(
     r"(plugins[/\\](egldeviceintegrations|generic|networkinformation|tls|iconengines)[/\\])"
     r"|(q(gtk3|tvirtualkeyboard\w*|pdf|tiff|gif|icns|tga|wbmp|svg|eglfs\w*|linuxfb|minimalegl|vnc"
     r"|vkkhrdisplay|minimal|direct2d)\.(so|dll))"
-    r"|(qt6(pdf|quick|qml|virtualkeyboard|eglfs|svg)\w*\.(so|dll))"
+    r"|(qt6(pdf|quick|qml|virtualkeyboard|eglfs|svgwidgets)\w*\.(so|dll))"
     r"|(^|[/\\])lib(gtk-3|gdk-3|atk|atspi|cairo|pango|glycin|gdk_pixbuf|tinysparql|cloudproviders"
     r"|json-glib|epoxy|thai|datrie|lcms2|seccomp)[\w.-]*\.so"
     r"|SDL2_(gfx|image|mixer|ttf)[\w.-]*\.(so|dll)"  # only SDL2 core is used

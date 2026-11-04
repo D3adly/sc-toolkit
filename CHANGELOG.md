@@ -2,6 +2,12 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
+## Unreleased
+
+- **Built on Python 3.15 and Qt 6.12.** Running from source now needs Python 3.15 (Fedora 45 and
+  distros based on it moved to it, which stopped the old setup from starting): recreate `.venv`
+  and install `requirements.txt` again. Downloaded builds bring their own and need nothing new.
+
 ## 0.7.0 (2026-10-28)
 
 - **Loadouts in My Ships.** Opening a ship now opens its loadouts, the same editor as on

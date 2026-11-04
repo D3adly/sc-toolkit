@@ -30,10 +30,11 @@ OUT="build/layershellqt"
 mkdir -p "$WORK"
 WORK="$(cd "$WORK" && pwd)"
 
-"$PYTHON" -m pip install --quiet aqtinstall cmake meson ninja patchelf
+"$PYTHON" -m pip install --quiet uv cmake meson ninja patchelf
 PATH="$("$PYTHON" -c 'import sysconfig; print(sysconfig.get_path("scripts"))'):$PATH"
 if [ ! -d "$WORK/qt/$QT_VERSION" ]; then
-    (cd "$WORK" && "$PYTHON" -m aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 -O "$WORK/qt")
+    # On its own Python: aqtinstall's 7z libraries have no wheels for 3.15 (and it isn't bundled).
+    (cd "$WORK" && uvx --python 3.14 --from aqtinstall aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 -O "$WORK/qt")
 fi
 QT_PREFIX="$WORK/qt/$QT_VERSION/gcc_64"
 

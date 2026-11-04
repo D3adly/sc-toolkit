@@ -27,9 +27,9 @@ datas = [
 UNUSED_QT = """
 Qt3DAnimation Qt3DCore Qt3DExtras Qt3DInput Qt3DLogic Qt3DRender QtBluetooth
 QtCanvasPainter QtCharts QtConcurrent QtDataVisualization QtDesigner QtGraphs
-QtGraphsWidgets QtHelp QtHttpServer QtLocation QtMultimedia QtMultimediaWidgets
+QtGraphsWidgets QtHelp QtHttpServer QtLabsStyleKit QtLocation QtMultimedia QtMultimediaWidgets
 QtNetworkAuth QtNfc QtOpenGL QtOpenGLWidgets QtPdf QtPdfWidgets QtPositioning
-QtPrintSupport QtQml QtQuick QtQuick3D QtQuickControls2 QtQuickTest QtQuickWidgets
+QtPrintSupport QtQml QtQmlFeatures QtQuick QtQuick3D QtQuickControls2 QtQuickTest QtQuickWidgets
 QtRemoteObjects QtScxml QtSensors QtSerialBus QtSerialPort QtSpatialAudio QtSql
 QtStateMachine QtSvgWidgets QtTest QtTextToSpeech QtUiTools QtWebChannel
 QtWebEngineCore QtWebEngineQuick QtWebEngineWidgets QtWebSockets QtWebView QtXml

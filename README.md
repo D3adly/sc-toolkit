@@ -272,7 +272,7 @@ Found a bug or have an idea? [Open an issue](../../issues/new/choose).
 
 ## Running from source
 
-Requires **Python 3.14+**.
+Requires **Python 3.15+**.
 
 ```bash
 git clone https://github.com/D3adly/sc-toolkit.git

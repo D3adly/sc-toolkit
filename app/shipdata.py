@@ -267,9 +267,27 @@ def build(game, progress, catalogue_classes: set[str], crew: dict[str, int] | No
     return {"ships": ships}
 
 
+def game_class(class_id: str, known) -> str:
+    """The game entity behind a ship-list class (the wiki's) when the game no longer has that exact
+    one: 4.10.3 replaced AEGS_Hammerhead and the Constellation Andromeda/Aquila with their "_GS"
+    (gold standard) entities and turned the Hammerhead Showdown and Phoenix Emerald editions into
+    paints. Tries the class, then its "_gs" version, then shorter names (edition suffixes off) down to
+    manufacturer_model. Returns the class itself (lower case) when nothing matches."""
+    cls = (class_id or "").lower()
+    if not cls or cls in known:
+        return cls
+    parts = cls.split("_")
+    for n in range(len(parts), 1, -1):
+        stem = "_".join(parts[:n])
+        for cand in (stem, stem + "_gs"):
+            if cand in known:
+                return cand
+    return cls
+
+
 class ShipData:
     def __init__(self, data: dict):
         self._ships: dict[str, dict] = data.get("ships") or {}
 
     def get(self, class_id: str) -> dict | None:
-        return self._ships.get(class_id.lower()) if class_id else None
+        return self._ships.get(game_class(class_id, self._ships)) if class_id else None

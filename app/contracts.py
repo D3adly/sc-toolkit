@@ -501,14 +501,53 @@ def build(game, progress) -> dict:
             "blueprint_categories": _blueprint_categories(dc, ex, (packed, installed))}
 
 
-def game_version(channel_root: Path) -> str:
-    """'4.10.2 LIVE' from the channel's build_manifest.id; "" if it can't be read."""
+# The RSI Launcher logs e.g. "Delta update completed (SC LIVE 4.10.3-live.13165946)" and
+# "Verifying Star Citizen LIVE 4.10.3-live.13165946 at …".
+_LAUNCHER_VERSION = re.compile(r"(?:SC|Star Citizen) (\w+) (\d+(?:\.\d+)+)-\w+\.(\d+)\b")
+_release_cache: dict[tuple, str] = {}
+
+
+def launcher_release(log: Path | None, channel: str, build: str) -> str:
+    """'4.10.3' when the RSI Launcher's log names this channel's exact build, else ""."""
+    if not log or not build:
+        return ""
+    try:
+        stat = log.stat()
+        key = (str(log), stat.st_mtime_ns, stat.st_size, channel, build)
+        if key not in _release_cache:
+            text = log.read_text(encoding="utf-8", errors="replace")
+            hits = [m.group(2) for m in _LAUNCHER_VERSION.finditer(text)
+                    if m.group(1).upper() == channel and m.group(3) == build]
+            _release_cache.clear()
+            _release_cache[key] = hits[-1] if hits else ""
+        return _release_cache[key]
+    except OSError:
+        return ""
+
+
+def _rsi_log() -> Path | None:
+    try:
+        from app import settings
+        s = settings.current()
+        path = s.rsi_log_path or settings.find_rsi_log(s.live_dir, s.launch_path)
+    except Exception:  # noqa: BLE001 - settings not loaded (tools, tests)
+        return None
+    return Path(path) if path and Path(path).is_file() else None
+
+
+def game_version(channel_root: Path, log: Path | None = None) -> str:
+    """'4.10.3 LIVE' for the channel's build: the RSI Launcher log's version for that exact build when
+    there is one (since 4.10.3 build_manifest.id's Branch says "4.10.0"), else the manifest's branch;
+    "" if the manifest can't be read."""
     try:
         data = json.loads((channel_root / "build_manifest.id").read_text(encoding="utf-8"))["Data"]
     except (OSError, ValueError, KeyError, TypeError):
         return ""
-    branch = str(data.get("Branch") or "").removeprefix("sc-alpha-")
-    return f"{branch} {channel_root.name.upper()}".strip() if branch else ""
+    channel = channel_root.name.upper()
+    build = str(data.get("RequestedP4ChangeNum") or "")
+    branch = launcher_release(log or _rsi_log(), channel, build) \
+        or str(data.get("Branch") or "").removeprefix("sc-alpha-")
+    return f"{branch} {channel}".strip() if branch else ""
 
 
 def first_seen(channel_root: Path, ids, record: bool = True) -> tuple[dict[str, str], list[str]]:

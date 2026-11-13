@@ -491,4 +491,4 @@ class LoadoutData:
         self.properties: dict[str, dict] = data.get("properties") or {}
 
     def ship(self, class_id: str) -> dict | None:
-        return self.ships.get(class_id.lower()) if class_id else None
+        return self.ships.get(shipdata.game_class(class_id, self.ships)) if class_id else None

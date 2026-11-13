@@ -209,10 +209,14 @@ def _focus(foci) -> str:
     return ", ".join(f for f in (_en(x) for x in foci or []) if f)
 
 
+# The wiki's stand-in picture ("Platzhalter" = placeholder) is no picture.
+_PLACEHOLDER = re.compile(r"platzhalter|placeholder", re.I)
+
+
 def _image(vehicle: dict | None) -> str:
     for img in (vehicle or {}).get("images") or []:
         url = img.get("thumbnail_url") or img.get("original_url")
-        if url:
+        if url and not _PLACEHOLDER.search(url):
             return url
     return ""
 

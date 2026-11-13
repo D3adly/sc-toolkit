@@ -2,7 +2,19 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
-## Unreleased
+## 0.7.1 (2026-11-13)
+
+- **Star Citizen 4.10.3: the Hammerhead and the Constellation Andromeda and Aquila show their
+  details and loadouts again.** The patch replaced these ships in the game files with their
+  reworked versions, so My Ships showed them without a loadout or stats and the loadout editor
+  had no slots. The Hammerhead Best In Show Edition and the Constellation Phoenix Emerald (now a
+  paint on the standard ship) are back too.
+
+- **Missions first seen in 4.10.3 say 4.10.3**, not 4.10.0: the game's own files stopped naming
+  the patch, so SC-Toolbox now reads it from the RSI Launcher's log.
+
+- **No more grey placeholder pictures in My Ships.** For ships the Star Citizen Wiki has no real
+  picture of yet, the RSI store picture is used instead.
 
 - **Built on Python 3.15 and Qt 6.12.** Running from source now needs Python 3.15 (Fedora 45 and
   distros based on it moved to it, which stopped the old setup from starting): recreate `.venv`

@@ -40,7 +40,8 @@ from app import config, crafting, cryxml, p4k, shipdata
 from app.datacore import DataCore
 
 CACHE = config.CACHE_DIR / "loadoutdata"
-FORMAT = 3  # 2: basePower (what the parts outside the editable slots draw); 3: radar ranges
+FORMAT = 4  # 2: basePower (what the parts outside the editable slots draw); 3: radar ranges;
+            # 4: ships the game released ahead of the ship list
 VEHICLE_DIR = "Data\\Scripts\\Entities\\Vehicles\\Implementations\\Xml\\"
 
 # Part types a loadout can hold (seats, doors, thrusters, lights… stay out).

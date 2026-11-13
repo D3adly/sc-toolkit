@@ -161,17 +161,29 @@ class WebSource:
         return self.age() < self.max_age
 
 
+def _linked_catalogue(game: GameFiles) -> ships.Catalogue:
+    """The ship list with this channel's game files' word on ships it lags on (app.ships.link_game),
+    once per pass over the game files; the links are saved for ships.load()."""
+    catalogue = game.__dict__.get("_linked_catalogue")
+    if catalogue is None:
+        catalogue = ships.load(links=False)
+        vehicles = shipdata.player_vehicles(game, set(ships.manufacturer_prefixes(catalogue).values()))
+        ships.save_links(channel_name(game.channel_root), ships.link_game(catalogue, vehicles))
+        game.__dict__["_linked_catalogue"] = catalogue
+    return catalogue
+
+
 def _build_shipdata(game: GameFiles, progress) -> dict:
     """Ship stats for every ship in the ship list (and the rest of the player
     vehicles), with its crew size: a one-crew vehicle's turret is the driver's."""
-    catalogue = ships.load()
+    catalogue = _linked_catalogue(game)
     crew = {s.class_id: s.crew for s in catalogue.ships if s.class_id}
     return shipdata.build(game, progress, catalogue.class_ids(), crew)
 
 
 def _build_loadoutdata(game: GameFiles, progress) -> dict:
     """Slots, parts and recipes for the loadout editor, for the same ships as ship stats."""
-    return loadoutdata.build(game, progress, ships.load().class_ids())
+    return loadoutdata.build(game, progress, _linked_catalogue(game).class_ids())
 
 
 GAME_SOURCES: dict[str, GameSource] = {

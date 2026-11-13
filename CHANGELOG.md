@@ -2,6 +2,14 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
+## Unreleased
+
+- **The Galaxy and the Liberator show as flight-ready, with their stats and loadouts.** Star
+  Citizen 4.10.3 made both flyable, but the ship list (the Star Citizen Wiki, and even RSI's own
+  ship matrix) still called them concepts and linked no game ship, so My Ships had no details or
+  loadout slots for them. SC-Toolbox now checks the game files after a patch: a ship that's in
+  the game as a player ship with its own paints counts as released, whatever the ship list says.
+
 ## 0.7.1 (2026-11-13)
 
 - **Star Citizen 4.10.3: the Hammerhead and the Constellation Andromeda and Aquila show their

@@ -28,7 +28,7 @@ from app import config
 from app.datacore import DataCore
 
 CACHE = config.CACHE_DIR / "shipdata"
-FORMAT = 5  # 4: gunner_seats; 5: remote turrets are turrets
+FORMAT = 6  # 4: gunner_seats; 5: remote turrets are turrets; 6: ships the game released ahead of the ship list
 
 # Loadout groups shown on the details page, by the item's AttachDef Type.
 GROUPS = [
@@ -265,6 +265,32 @@ def build(game, progress, catalogue_classes: set[str], crew: dict[str, int] | No
         if data:
             ships[cls.lower()] = data
     return {"ships": ships}
+
+
+def player_vehicles(game, prefixes: set[str]) -> dict[str, dict]:
+    """Every player vehicle entity of these manufacturers (class prefixes, lower case):
+    {class (lower case): {"name": its display name, "painted": paint items exist for it}}.
+
+    For store ships the Star Citizen Wiki (and RSI's own ship matrix) still list as in concept
+    after a patch made them flyable: 4.10.3 released the Galaxy and the Liberator, with no wiki link
+    yet. Paint items are the release sign: NPC-only ships with full entities (the Javelin) have none."""
+    dc = game.dc
+    entities = [n.split(".", 1)[1] for n in dc.record_names("EntityClassDefinition.")]
+    paints = {e.lower() for e in entities if e.lower().startswith("paint_")}
+    out = {}
+    for cls in entities:
+        if cls.split("_", 1)[0].lower() not in prefixes or "_" not in cls or _SKIP.search(cls):
+            continue
+        comps = _components(dc.record("EntityClassDefinition." + cls, max_depth=1))
+        vehicle = comps.get("VehicleComponentParams")
+        if not vehicle or "SEntityComponentDefaultLoadoutParams" not in comps:
+            continue
+        model = cls.split("_", 1)[1].lower()           # RSI_Galaxy → galaxy; paints: Paint_Galaxy_<colours>
+        out[cls.lower()] = {
+            "name": _loc(game.loc, vehicle.get("vehicleName"), cls),
+            "painted": any(p.startswith(f"paint_{model}_") for p in paints),
+        }
+    return out
 
 
 def game_class(class_id: str, known) -> str:

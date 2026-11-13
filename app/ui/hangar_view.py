@@ -657,7 +657,7 @@ class HangarView(kit.ToolPage):
             self._close_details()
 
     def _on_hub_updated(self, name: str) -> None:
-        if name != "ships":
+        if name not in ("ships", "shipdata"):    # shipdata: the game files may have released ships
             return
         self.catalogue = ships.load()
         if self._details is None:

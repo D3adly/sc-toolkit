@@ -41,6 +41,7 @@ CACHE = config.CACHE_DIR / "ships"
 CATALOGUE_FILE = CACHE / "catalogue.json"
 IMAGE_DIR = CACHE / "images"
 SNAPSHOT_FILE = config.ASSETS_DIR / "ships.json"
+LINKS_FILE = CACHE / "game_links.json"   # what the game files say about ships the list lags on
 FORMAT = 2
 TIMEOUT = 60
 
@@ -140,10 +141,14 @@ def _read(path: Path) -> Catalogue | None:
         return None
 
 
-def load() -> Catalogue:
+def load(links: bool = True) -> Catalogue:
     """The last downloaded catalogue, else the bundled snapshot (stale, so a
-    refresh is due). Fast; no network."""
-    return _read(CATALOGUE_FILE) or _read(SNAPSHOT_FILE) or Catalogue([])
+    refresh is due), with what the LIVE game files say about ships the list
+    lags on (links=False: the list as downloaded). Fast; no network."""
+    catalogue = _read(CATALOGUE_FILE) or _read(SNAPSHOT_FILE) or Catalogue([])
+    if links:
+        _apply_links(catalogue, _read_links().get("LIVE") or {})
+    return catalogue
 
 
 def save(catalogue: Catalogue, path: Path = CATALOGUE_FILE) -> None:
@@ -162,6 +167,81 @@ def refresh(progress=lambda _msg: None) -> Catalogue:
         raise ValueError(f"only {len(catalogue)} ships in the download")
     save(catalogue)
     return catalogue
+
+
+# -- the game files' word on release ---------------------------------------------
+# After a patch the ship list lags: 4.10.3 made the Galaxy and the Liberator flyable while the
+# Star Citizen Wiki and RSI's ship matrix still said in concept, with no game class. The ship
+# stats build (app.datahub) links them from the game files and saves the links per channel.
+
+def manufacturer_prefixes(catalogue: Catalogue) -> dict[str, str]:
+    """Manufacturer name → game class prefix ("Roberts Space Industries" → "rsi"), learnt from the
+    ships the wiki links to a game class."""
+    out: dict[str, str] = {}
+    for s in catalogue.ships:
+        if s.store and s.class_id and "_" in s.class_id:
+            out.setdefault(s.manufacturer, s.class_id.split("_", 1)[0])
+    return out
+
+
+def link_game(catalogue: Catalogue, vehicles: dict[str, dict]) -> dict[str, dict]:
+    """`vehicles`: app.shipdata.player_vehicles(). A store ship with no game class gets the player
+    vehicle of its manufacturer named like it (the base entity: shortest class); an in-concept ship
+    whose vehicle has paint items becomes flight-ready. Changes the catalogue and returns the
+    changes, {ship key: {"class_id", "status"}}."""
+    prefixes = manufacturer_prefixes(catalogue)
+    taken = catalogue.class_ids()
+    changed: dict[str, dict] = {}
+    for s in catalogue.ships:
+        if not s.store:
+            continue
+        if not s.class_id:
+            prefix, name = prefixes.get(s.manufacturer), s.name.lower()
+            found = sorted((c for c, v in vehicles.items()
+                            if prefix and c.startswith(prefix + "_") and c not in taken
+                            and (v["name"].lower() == name or v["name"].lower().endswith(" " + name))),
+                           key=lambda c: (len(c), c))
+            if found:
+                s.class_id = found[0]
+                taken.add(s.class_id)
+                changed[s.key] = {}
+        if s.concept and (vehicles.get(s.class_id) or {}).get("painted"):
+            s.status = FLIGHT_READY
+            changed[s.key] = {}
+        if s.key in changed:
+            changed[s.key] = {"class_id": s.class_id, "status": s.status}
+    return changed
+
+
+def _read_links() -> dict[str, dict]:
+    try:
+        data = json.loads(LINKS_FILE.read_text(encoding="utf-8"))
+        return data.get("channels") or {} if data.get("format") == 1 else {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def save_links(channel: str, links: dict[str, dict]) -> None:
+    """Remembers a channel's links (link_game's result) for load()."""
+    channels = _read_links()
+    channels[channel.upper()] = links
+    LINKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = LINKS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"format": 1, "channels": channels}, indent=1), encoding="utf-8")
+    tmp.replace(LINKS_FILE)
+
+
+def _apply_links(catalogue: Catalogue, links: dict[str, dict]) -> None:
+    """The ship list wins once it knows a class (the wiki caught up); status only ever goes to
+    flight-ready."""
+    for key, link in links.items():
+        s = catalogue.get(key)
+        if s is None:
+            continue
+        if not s.class_id:
+            s.class_id = link.get("class_id") or ""
+        if link.get("status") == FLIGHT_READY and s.class_id == link.get("class_id"):
+            s.status = FLIGHT_READY
 
 
 # -- downloading and merging ----------------------------------------------------

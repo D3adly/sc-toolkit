@@ -1168,6 +1168,48 @@ QInputDialog QLineEdit {{
     letter-spacing: 1px;
     background: transparent;
 }}
+#BandColumn {{
+    background: transparent;
+    border: none;
+    border-left: 1px solid {border};
+}}
+#BandColumn[first="true"] {{
+    border-left: none;
+}}
+#BandColumn[state="tracked"] {{
+    background: rgba(227, 163, 59, 0.06);
+}}
+#BandColumn[state="reward"], #BandColumn[state="done"] {{
+    background: {success_soft};
+}}
+#BandColumn[state="failed"] {{
+    background: {danger_soft};
+}}
+#BandColumn[flash="true"] {{
+    background: {accent_soft};
+}}
+#BandRow {{
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+}}
+#BandRow:hover {{
+    background: {bg_hover};
+}}
+#BandRow[selected="true"], #BandColumn #PanelRow[selected="true"] {{
+    background: {info_soft};
+}}
+#BandNumber {{
+    color: {text_primary};
+    font-size: 17px;
+    font-weight: 700;
+}}
+#BandMsgTitle {{
+    color: {text_secondary};
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}}
 #BandText {{
     color: {text_primary};
     font-size: 13px;

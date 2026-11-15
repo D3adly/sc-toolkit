@@ -492,8 +492,24 @@ def _minutes(value: float | None) -> str:
 
 def _details(v: QVBoxLayout, info: dict | None) -> None:
     """The mission database's facts about the contract, a line each."""
-    if not info:
+    rows = _detail_rows(info)
+    if not rows:
         return
+    v.addWidget(_label("DETAILS", "LiveGroup"))
+    grid = QGridLayout()
+    grid.setHorizontalSpacing(8)
+    grid.setVerticalSpacing(1)
+    grid.setColumnStretch(1, 1)
+    for i, row in enumerate(rows):
+        grid.addWidget(_label(row[0], "LiveMuted"), i, 0, alignment=Qt.AlignTop)
+        grid.addWidget(_label(row[1], "LiveText", row[2] if len(row) > 2 else "", wrap=True), i, 1)
+    v.addLayout(grid)
+
+
+def _detail_rows(info: dict | None) -> list[tuple]:
+    """(name, value[, tip]) per fact the mission database has about the contract."""
+    if not info:
+        return []
     rows = []
     where = info.get("systems", []) + info.get("locations", [])
     if where:
@@ -520,17 +536,7 @@ def _details(v: QVBoxLayout, info: dict | None) -> None:
         tip = "<br>".join(f"<b>{html.escape(k.capitalize())}</b>: level {d['level']}, {html.escape(d['text'])}"
                           for k, d in detail.items())
         rows.append(("Difficulty", " · ".join(f"{k.split()[0]} {d['level']}" for k, d in detail.items()), tip))
-    if not rows:
-        return
-    v.addWidget(_label("DETAILS", "LiveGroup"))
-    grid = QGridLayout()
-    grid.setHorizontalSpacing(8)
-    grid.setVerticalSpacing(1)
-    grid.setColumnStretch(1, 1)
-    for i, row in enumerate(rows):
-        grid.addWidget(_label(row[0], "LiveMuted"), i, 0, alignment=Qt.AlignTop)
-        grid.addWidget(_label(row[1], "LiveText", row[2] if len(row) > 2 else "", wrap=True), i, 1)
-    v.addLayout(grid)
+    return rows
 
 
 class MissionsPanel(_LivePanel):

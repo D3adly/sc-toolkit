@@ -16,7 +16,7 @@ _SCREENS = _TMP / "screens.json"
 _SCREENS.write_text(json.dumps({"screens": [{"name": "s1", "x": 0, "y": 0, "width": 2560, "height": 1440,
                                              "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}))
 
-from PySide6.QtWidgets import QApplication, QWidget  # noqa: E402
+from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget  # noqa: E402
 
 if QApplication.instance() is None:
     os.environ["QT_QPA_PLATFORM"] = f"offscreen:configfile={_SCREENS}"
@@ -29,6 +29,19 @@ from app.ui import overlay  # noqa: E402
 
 _APP.setStyleSheet(build_stylesheet())
 SCREEN = _APP.primaryScreen().geometry()
+
+
+def _fake_band() -> QWidget:
+    """A band body with one list in it (the real ones read the game data and the live log)."""
+    from app.ui.overlay_panels import _combo
+
+    w = QWidget()
+    lay = QVBoxLayout(w)
+    w.jump = _combo(180)
+    for tool in overlay.TOOLS:
+        w.jump.addItem(tool)
+    lay.addWidget(w.jump)
+    return w
 
 
 def settle(seconds: float = 0.05) -> None:
@@ -45,6 +58,8 @@ class BandTest(unittest.TestCase):
         # The vertical tool panels read the game folder and the live log; these tests are about the chrome.
         self._make_panel = overlay.OverlayWindow._make_panel
         overlay.OverlayWindow._make_panel = lambda _self, _tool: QWidget()
+        self._make_band = overlay.OverlayWindow._make_band
+        overlay.OverlayWindow._make_band = lambda _self, _tool: _fake_band()
         self.windows = []
 
     def tearDown(self):
@@ -55,6 +70,7 @@ class BandTest(unittest.TestCase):
         settle()
         overlay.STATE_FILE = self._state_file
         overlay.OverlayWindow._make_panel = self._make_panel
+        overlay.OverlayWindow._make_band = self._make_band
 
     def make(self, state: dict | None = None) -> overlay.OverlayWindow:
         if state is not None:
@@ -283,6 +299,47 @@ class BandTest(unittest.TestCase):
         size = ov.size()
         self.assertEqual(0, ov.drop_room(500).height())
         self.assertEqual(size, ov.size())
+
+
+class ColumnsTest(unittest.TestCase):
+    def test_low_priority_columns_hide_when_narrow(self):
+        from app.ui.overlay_band import BandColumn, BandColumns
+
+        cols = [BandColumn("A", 2, 1, 200), BandColumn("B", 3, 1, 200), BandColumn("C", 2, 2, 200),
+                BandColumn("D", 2, 3, 200)]
+        box = BandColumns(cols)
+        box.resize(1200, 120)
+        box.show()
+        settle()
+        self.assertEqual([True] * 4, [c.isVisible() for c in cols])
+        box.resize(700, 120)
+        settle()
+        self.assertEqual([True, True, True, False], [c.isVisible() for c in cols])
+        box.resize(450, 120)
+        settle()
+        self.assertEqual([True, True, False, False], [c.isVisible() for c in cols])
+        self.assertTrue(cols[0].property("first"))
+        box.hide()
+
+    def test_a_rebuilt_page_keeps_its_scroll(self):
+        from app.ui.overlay_band import BandColumn
+
+        col = BandColumn("A")
+        col.resize(300, 120)
+        col.show()
+
+        def fill():
+            v = col.page()
+            for i in range(40):
+                v.addWidget(QWidget(minimumHeight=20))
+        fill()
+        settle(0.1)
+        bar = col.scroll.verticalScrollBar()
+        bar.setValue(200)
+        fill()
+        settle(0.4)
+        self.assertEqual(200, bar.value())
+        col.hide()
 
 
 if __name__ == "__main__":

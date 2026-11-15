@@ -10,14 +10,21 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   loadout slots for them. SC-Toolbox now checks the game files after a patch: a ship that's in
   the game as a player ship with its own paints counts as released, whatever the ship list says.
 
-- **The overlay can lie flat along the top of the screen (work in progress).** ⇆ in the overlay's
-  header, or "Horizontal layout" in ⋯, turns the tall side panel into a wide, short band, top
-  centre, that leaves the game's own side panels free. Pick a tool in the band's header row; pick
-  it again (or ▲, or Esc) to fold the band down to that row. Drag the band to move it, drag its
-  left or right edge to change its width, and choose its height (S, M or L) in ⋯. Lists and the
-  ⋯ menu open below the band without making it taller (above it when the band sits at the
-  bottom). Each layout keeps its own place, and ⇆ switches back. **For now the band shows a
-  placeholder for each tool;** their real views follow.
+- **The overlay can lie flat along the top of the screen.** ⇆ in the overlay's header, or
+  "Horizontal layout" in ⋯, turns the tall side panel into a wide, short band, top centre, which
+  leaves the game's own side panels free. Each tool lays its view out in columns side by side:
+  - Missions: the mission (pick another from the list), its objectives, the reward or outcome,
+    the blueprints it can drop (new ones first) and its details;
+  - Session: where you are, this session's numbers, blueprints and recent moments;
+  - Mining: what you're looking for, the places (click one), and that place's rocks;
+  - Salvage: the claim difficulty, its ships (click one), and that ship's fee, parts and cargo;
+  - Maps: the guide picker next to a strip of the guide (⤢ or L shows it large).
+
+  Pick the open tool again (or ▲, or Esc) to fold the band down to its header row. Drag the band
+  to move it, drag its left or right edge to change its width, and choose its height (S, M or L)
+  in ⋯. On a narrow band the least important columns step aside. Lists and the ⋯ menu open below
+  the band without making it taller (above it when the band sits at the bottom). Each layout
+  keeps its own place, and ⇆ switches back.
 
 ## 0.7.1 (2026-11-13)
 

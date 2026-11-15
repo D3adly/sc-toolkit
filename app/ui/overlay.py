@@ -78,8 +78,6 @@ BAND_WIDTH = 1480            # default width, but at most BAND_MAX_SHARE of the 
 BAND_MAX_SHARE = 0.8
 BAND_MIN_WIDTH = 760
 DROP_GAP = 4                 # px between the band and a list or menu dropped from it
-# Which step brings each tool's own columns (the band shows a placeholder until then).
-BAND_ISSUE = {"missions": 70, "session": 70, "mining": 71, "salvage": 71, "maps": 72}
 
 MIN_OPACITY, MAX_OPACITY = 30, 100
 
@@ -647,42 +645,6 @@ class _EdgeGrip(QWidget):
         event.accept()
 
 
-class _BandPlaceholder(QWidget):
-    """A tool's body in the band until its own columns are built (#74 steps 3–6).
-    Its "Jump to" list is a real dropdown, so the drop room below the band can
-    be tried in game already."""
-
-    def __init__(self, tool: str, overlay: "OverlayWindow"):
-        super().__init__(objectName="BandBody")
-        from app.ui.overlay_panels import _combo
-
-        row = QHBoxLayout(self)
-        row.setContentsMargins(14, 10, 14, 10)
-        row.setSpacing(28)
-        what, _icon, _size, caption = TOOLS[tool]
-        col = QVBoxLayout()
-        col.setSpacing(6)
-        col.addWidget(QLabel(caption.upper(), objectName="BandColLabel"))
-        text = QLabel(f"{caption} ({what}) gets its own columns here soon (#{BAND_ISSUE[tool]}). "
-                      "Until then, the vertical layout has it: ⇆ in the header.", objectName="BandText")
-        text.setWordWrap(True)
-        col.addWidget(text)
-        col.addStretch(1)
-        row.addLayout(col, stretch=3)
-        col = QVBoxLayout()
-        col.setSpacing(6)
-        col.addWidget(QLabel("JUMP TO", objectName="BandColLabel"))
-        self.jump = _combo(180)
-        tools = list(TOOLS)
-        for t in tools:
-            self.jump.addItem(TOOLS[t][3])
-        self.jump.setCurrentIndex(tools.index(tool))
-        self.jump.activated.connect(lambda i: overlay.select_tool(tools[i], force=True))
-        col.addWidget(self.jump)
-        col.addStretch(1)
-        row.addLayout(col, stretch=1)
-
-
 class OverlayWindow(QWidget):
     """The overlay panel. Its own window (X11 / Windows), or, with `host`, a
     panel inside a full-screen layer-shell surface (KDE Wayland; see
@@ -898,8 +860,11 @@ class OverlayWindow(QWidget):
 
     def toggle_large(self) -> None:
         """Maps: most of the screen, centred (L or ⤢); again or Esc: back."""
-        if self.tool != "maps" or self.minimized or self.horizontal:   # the band's comes with #72
+        if self.tool != "maps" or self.minimized or (self.horizontal and self.band_folded):
             return
+        if self.horizontal:
+            self._show_menu(False)
+            self.close_drop()
         if self._large is None:
             self._remember_size()
             self._large = self.size()
@@ -917,6 +882,8 @@ class OverlayWindow(QWidget):
             self._resizing = True
             self.resize(size)
             self._resizing = False
+            if self.horizontal:
+                self._fit_band()
 
     def fit_aspect(self, tool: str, viewer: QWidget, ratio: float) -> None:
         """A guide just opened (Maps): a landscape one widens the panel so it
@@ -1180,15 +1147,28 @@ class OverlayWindow(QWidget):
         self._update_status()
         self._fit_band()
 
+    def _make_band(self, tool: str) -> QWidget:
+        from app.ui import overlay_band
+
+        return overlay_band.make(tool)
+
     def _show_band_tool(self, tool: str) -> None:
         if tool not in self._band_panels:
-            panel = _BandPlaceholder(tool, self)
+            panel = self._make_band(tool)
             self._band_panels[tool] = panel
             self.band_stack.addWidget(panel)
         self.band_stack.setCurrentWidget(self._band_panels[tool])
         self.state["band_tool"] = tool
         self._save_timer.start()
         self._sync_buttons()
+        if not self.band_folded:
+            self._activate_band()
+
+    def _activate_band(self) -> None:
+        panel = self._band_panels.get(self.tool)
+        activate = getattr(panel, "activate", None)
+        if activate:
+            activate()
 
     def set_folded(self, on: bool) -> None:
         """Folded: only the header row is left."""
@@ -1202,6 +1182,8 @@ class OverlayWindow(QWidget):
         self.band_stack.setVisible(not on)
         self.fold_btn.setText("▼" if on else "▲")
         self._fit_band()
+        if not on:
+            self._activate_band()
 
     def set_band_height(self, preset: str) -> None:
         if preset not in BAND_HEIGHTS:
@@ -1217,7 +1199,7 @@ class OverlayWindow(QWidget):
 
     def _fit_band(self) -> None:
         """The band's size, plus any room dropped from it; then where it belongs."""
-        if not self.horizontal:
+        if not self.horizontal or self._large is not None:
             return
         width = self._band_width() if self._room == 0 or self.width() < BAND_MIN_WIDTH else self.width()
         self._bar_size = QSize(width, self.band_h)
@@ -1232,6 +1214,11 @@ class OverlayWindow(QWidget):
         self._place()
 
     def _layout_band(self) -> None:
+        if self._large is not None:      # Maps' large view: the band fills the window
+            self.band.setGeometry(self.rect())
+            for g in self.band_grips:
+                g.setGeometry(0, 0, 0, 0)
+            return
         top = self._room if self._room and self._drop_up() else 0
         self.band.setGeometry(0, top, self.width(), self.band_h)
         left, right = self.band_grips
@@ -1313,6 +1300,7 @@ class OverlayWindow(QWidget):
         if self.horizontal:
             self._show_menu(False)
             self.close_drop()
+            self._exit_large()
             if tool == self.tool and not self.band_folded:
                 if not force:
                     self.set_folded(True)
@@ -1358,11 +1346,13 @@ class OverlayWindow(QWidget):
         """The launcher has read a new game version: panels built on game
         data load it again (now, if showing; else when next opened)."""
         for tool, attr in (("mining", "data"), ("salvage", "game")):
-            panel = self._panels.get(tool)
-            if panel is not None and hasattr(panel, attr):
-                setattr(panel, attr, None)
-                if self.tool == tool and self.stack.isVisible():
-                    panel.activate()
+            for panels, shown in ((self._panels, not self.horizontal and self.stack.isVisible()),
+                                  (self._band_panels, self.horizontal and not self.band_folded)):
+                panel = panels.get(tool)
+                if panel is not None and hasattr(panel, attr):
+                    setattr(panel, attr, None)
+                    if self.tool == tool and shown:
+                        panel.activate()
 
     def fit_height(self, tool: str, content_height: int) -> None:
         """Called by auto-height panels after each render: the window grows or
@@ -1485,6 +1475,8 @@ class OverlayWindow(QWidget):
                 self.close_drop()
             elif self.menu.isVisible():
                 self._show_menu(False)
+            elif self._large is not None:
+                self.toggle_large()
             elif not self.band_folded:
                 self.set_folded(True)
             return

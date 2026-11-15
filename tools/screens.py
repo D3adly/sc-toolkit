@@ -10,6 +10,8 @@ salvage), overlay_bar, overlay_min; the horizontal band: overlay_h_<tool>,
 overlay_h_folded, overlay_h_drop (a list open), overlay_h_menu, overlay_h_up
 (at the bottom, a list open upwards), overlay_h_narrow, overlay_h_compact,
 overlay_h_tall; none = all. The offscreen screen is 2560×1440.
+SCREENS_REPLAY=1 fills the overlay's live tabs (Missions, Session) from your
+latest Game.log, as if that session were running.
 """
 
 from __future__ import annotations
@@ -46,6 +48,28 @@ def _isolate(out: Path) -> None:
     screens.write_text('{"screens": [{"name": "s1", "x": 0, "y": 0, "width": 2560, "height": 1440, '
                        '"logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}')
     os.environ["QT_QPA_PLATFORM"] = f"offscreen:configfile={screens}"
+
+
+def _replay_last_session() -> None:
+    """The live tabs read Game.log only while the game runs: feed them the
+    latest session instead (its events, as the live reader would)."""
+    from app import gamelog, settings
+    from app.ui import overlay_live
+
+    sessions = gamelog.all_sessions(settings.current().game_root)
+    if not sessions:
+        print("replay: no Game.log found", flush=True)
+        return
+    last = max(sessions, key=lambda x: x.started.timestamp() if x.started else 0)
+    events = gamelog._events_in_file(last.path, list(gamelog.EVENT_TYPES), last.id, last.channel)
+    feed = overlay_live.feed()
+    feed.enabled = True
+    feed.reader.start = lambda: None
+    feed.reader._state = "reading"
+    feed.tracker.new_session(last.id, last.channel)
+    for event in events:
+        feed.tracker.add(event)
+    print(f"replay: {len(events)} events from {last.path.name} ({last.started})", flush=True)
 
 
 def main() -> int:
@@ -98,6 +122,8 @@ def main() -> int:
             settle(3.0)
             ov.grab().save(str(out / f"{name}.png"))
             print("saved", name, flush=True)
+    if os.environ.get("SCREENS_REPLAY"):
+        _replay_last_session()
     if any(n in BAND for n in wanted):
         from app.ui import overlay
 
@@ -115,12 +141,15 @@ def main() -> int:
             what = name.removeprefix("overlay_h_")
             if what in overlay.TOOLS:
                 ov.select_tool(what, force=True)
+                settle(3.0)
             elif what == "folded":
                 ov.set_folded(True)
             elif what in ("drop", "up"):
                 if what == "up":
                     ov.move_to("bc")
-                ov._band_panels[ov.tool].jump.showPopup()
+                ov.select_tool("mining", force=True)
+                settle(3.0)
+                ov._band_panels["mining"].resource.showPopup()
             elif what == "menu":
                 ov._show_menu(True)
             elif what == "narrow":

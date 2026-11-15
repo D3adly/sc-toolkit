@@ -289,11 +289,11 @@ class _FollowMixin:
         return overlay_live.feed()
 
     def following(self) -> bool:
-        win = self.window()
+        win = _overlay_of(self) or self.window()   # on layer-shell window() is the surface
         return win.follows(self.FOLLOW_TOOL) if hasattr(win, "follows") else True
 
     def _set_follow(self, on: bool) -> None:
-        win = self.window()
+        win = _overlay_of(self) or self.window()
         if hasattr(win, "set_follows"):
             win.set_follows(self.FOLLOW_TOOL, on)
         self._follow_start()
@@ -413,7 +413,7 @@ class MapsPanel(_FollowMixin, QWidget):
         self._game_changed(force=True)
 
     def _toggle_large(self) -> None:
-        win = self.window()
+        win = _overlay_of(self) or self.window()
         if hasattr(win, "toggle_large"):
             win.toggle_large()
 
@@ -489,7 +489,7 @@ class MapsPanel(_FollowMixin, QWidget):
         self._msg("")
         if self._shape_pending and pix.height() > 0:
             self._shape_pending = False
-            win = self.window()
+            win = _overlay_of(self) or self.window()
             if hasattr(win, "fit_aspect"):
                 # Once laid out (the viewer's height is what the guide should fill).
                 ratio = pix.width() / pix.height()

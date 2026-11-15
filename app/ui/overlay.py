@@ -62,14 +62,14 @@ TOOLS = {
 }
 TOOL_ICON = QSize(20, 20)
 BAR_MIN_WIDTH = 400
-# Tools whose panel height follows their content (see fit_height); the
-# user's own resizing only changes their width.
-AUTO_HEIGHT_TOOLS = {"missions", "session"}
-AUTO_HEIGHT_MAX = 0.7        # of the screen's height, then the panel scrolls
+# The vertical panel: one size for every tool (switching tools never moves its edges); the user's
+# resize is kept for all of them. Default: PANEL_WIDTH wide, PANEL_HEIGHT_SHARE of the screen tall.
+PANEL_WIDTH = 480
+PANEL_HEIGHT_SHARE = 0.72
+PANEL_MIN_HEIGHT = 300
 SNAP = 28                    # px: dragged this close to a screen edge, it snaps to it
 EDGE = 10                    # px: the gap to the screen edge when snapped or placed
 LARGE = 0.9                  # Maps' large view: this much of the screen
-MAX_GUIDE_WIDTH = 0.62       # a landscape guide widens the panel up to this much of the screen
 # The horizontal layout (#74): a "band" along the top of the screen, a header row over the
 # open tool's columns, instead of the tall panel that covers the game's own UI.
 BAND_HEADER = 32
@@ -675,6 +675,7 @@ class OverlayWindow(QWidget):
         self._placing = False
         self._shield: _InputShield | None = None
         self._bar_width = 440   # the collapsed bar's width (set by _collapse)
+        self._bar_need = BAR_MIN_WIDTH   # the least width its buttons need
         self._resizing = False
         self._panels: dict[str, QWidget] = {}
         self.layout_mode = "horizontal" if self.state.get("layout") == "horizontal" else "vertical"
@@ -728,16 +729,21 @@ class OverlayWindow(QWidget):
         """Layer-shell: the surface changed size (another screen): place it again."""
         if self._host is not None and self._host.width() > 0:
             self._home = self._saved_home() or self._home
-            self._place()
+            if self.horizontal:
+                self._fit_band()            # its width is a share of the surface, now known
+            else:
+                self._place()
 
     # -- where it sits ------------------------------------------------------------------
     def _area(self, point: QPoint | None = None) -> QRect:
         """The screen it's on (X11, screen coordinates), or the layer-shell surface."""
         if self._host is not None:
+            # Until the compositor has mapped and sized the full-screen surface it has Qt's default
+            # size (640×480): the screen is what it will cover.
             screen = self._host.screen() or QApplication.primaryScreen()
-            w = self._host.width() if self._host.width() > 0 else screen.geometry().width()
-            h = self._host.height() if self._host.height() > 0 else screen.geometry().height()
-            return QRect(0, 0, w, h)
+            if not self._host.isVisible() or self._host.width() <= 0:
+                return QRect(QPoint(0, 0), screen.geometry().size())
+            return QRect(0, 0, self._host.width(), self._host.height())
         if point is None:
             point = (self._home or self.pos()) + QPoint(self._bar_size.width() // 2, 12)
         screen = QApplication.screenAt(point) or QApplication.primaryScreen()
@@ -918,16 +924,8 @@ class OverlayWindow(QWidget):
                 self._fit_band()
 
     def fit_aspect(self, tool: str, viewer: QWidget, ratio: float) -> None:
-        """A guide just opened (Maps): a landscape one widens the panel so it
-        fills the panel's height, within MAX_GUIDE_WIDTH of the screen; a
-        portrait one keeps the width (it fills it and scrolls)."""
-        if tool != self.tool or self._large is not None or ratio <= 1.05 or self.horizontal:
-            return
-        area = self._area()
-        want = int(viewer.height() * ratio) + (self.width() - viewer.width())
-        width = max(self.minimumWidth(), min(want, int(area.width() * MAX_GUIDE_WIDTH)))
-        if abs(width - self.width()) > 8:
-            self.resize(width, self.height())
+        """A guide opened (Maps). The panel keeps its size (one size for every tool): a wide guide
+        scrolls along, and L shows it large."""
 
     def is_shown(self) -> bool:
         return (self._host if self._host is not None else self).isVisible()
@@ -1400,7 +1398,6 @@ class OverlayWindow(QWidget):
         self._exit_large()
         if self.tool:
             self._remember_size()
-        size = self.state.get("sizes", {}).get(tool)
         self._resizing = True   # constraint changes below resize; don't record those
         self.tool = tool
         if tool not in self._panels:
@@ -1411,10 +1408,10 @@ class OverlayWindow(QWidget):
         self.stack.setVisible(True)
         self.size_grip.setVisible(True)
         # Never narrower than the bar, or its buttons get cut off.
-        min_width = max(BAR_MIN_WIDTH, self._bar_width)
+        min_width = max(BAR_MIN_WIDTH, self._bar_need)
         self.setMinimumSize(min_width, 300)
         self.setMaximumSize(16777215, 16777215)
-        size = QSize(*size) if size else TOOLS[tool][2]
+        size = self._panel_size()
         self.resize(max(size.width(), min_width), size.height())
         self._resizing = False
         self._sync_buttons()
@@ -1434,20 +1431,20 @@ class OverlayWindow(QWidget):
                     if self.tool == tool and shown:
                         panel.activate()
 
+    def _panel_size(self) -> QSize:
+        """The vertical panel's size, the same for every tool: the user's, or the default."""
+        area = self._area()
+        saved = self.state.get("panel_size")
+        if saved:
+            w, h = int(saved[0]), int(saved[1])
+        else:
+            w, h = PANEL_WIDTH, int(area.height() * PANEL_HEIGHT_SHARE)
+        return QSize(max(BAR_MIN_WIDTH, min(w, area.width() - 2 * EDGE)),
+                     max(PANEL_MIN_HEIGHT, min(h, area.height() - 2 * EDGE)))
+
     def fit_height(self, tool: str, content_height: int) -> None:
-        """Called by auto-height panels after each render: the window grows or
-        shrinks to show all of `content_height`, up to AUTO_HEIGHT_MAX of the
-        screen (the panel scrolls beyond that)."""
-        if tool != self.tool or tool not in AUTO_HEIGHT_TOOLS or tool not in self._panels or self.horizontal:
-            return
-        panel = self._panels[tool]
-        chrome = self.height() - panel.height()          # header, margins, grip
-        limit = int(self.screen().availableGeometry().height() * AUTO_HEIGHT_MAX)
-        target = max(self.minimumHeight(), min(chrome + content_height, limit))
-        if abs(target - self.height()) > 2:
-            self._resizing = True
-            self.resize(self.width(), target)
-            self._resizing = False
+        """Panels report their content's height after each render. The panel keeps
+        its size (one for every tool, set by the user), so nothing to do."""
 
     def _make_panel(self, tool: str) -> QWidget:
         from app.ui import overlay_live, overlay_panels
@@ -1503,7 +1500,9 @@ class OverlayWindow(QWidget):
                 height += max(r, self.reminder.sizeHint().height()) + self.frame.layout().spacing()
             hint.setHeight(height)
         else:
-            width = max(hint.width(), BAR_MIN_WIDTH)
+            # As wide as the open panel: opening and closing a tool never moves the sides.
+            self._bar_need = max(hint.width(), BAR_MIN_WIDTH)
+            width = max(self._bar_need, self._panel_size().width())
             self._bar_width = width
             self._bar_size = QSize(width, hint.height())
         self.setFixedSize(width, hint.height())
@@ -1759,11 +1758,8 @@ class OverlayWindow(QWidget):
 
     def _remember_size(self) -> None:
         if self.tool and self._large is None and not self.horizontal:   # the band keeps band_width
-            sizes = self.state.setdefault("sizes", {})
-            height = self.height()
-            if self.tool in AUTO_HEIGHT_TOOLS:   # its height follows the content
-                height = TOOLS[self.tool][2].height()
-            sizes[self.tool] = [self.width(), height]
+            self.state["panel_size"] = [self.width(), self.height()]   # one size for every tool
+            self.state.pop("sizes", None)                               # (was per tool)
             self._save_timer.start()
 
     def moveEvent(self, event):

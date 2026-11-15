@@ -127,12 +127,37 @@ class BandTest(unittest.TestCase):
             widths.add(ov.band.width())
         self.assertEqual(1, len(widths))
 
+    def test_vertical_has_one_size_for_every_tool(self):
+        ov = self.make({})
+        ov.select_tool("mining")
+        settle()
+        first = ov.size()
+        self.assertGreaterEqual(first.height(), int(SCREEN.height() * overlay.PANEL_HEIGHT_SHARE) - 2)
+        ov.resize(first.width() + 60, first.height() - 100)       # the user resizes it in one tool
+        settle()
+        for tool in overlay.TOOLS:
+            ov.select_tool(tool, force=True)
+            settle()
+            self.assertEqual((first.width() + 60, first.height() - 100), (ov.width(), ov.height()), tool)
+        ov.collapse()
+        settle()
+        self.assertEqual(first.width() + 60, ov.width())          # the bar keeps the panel's width
+        ov2 = self.make(self.saved(ov))
+        ov2.select_tool("session")
+        settle()
+        self.assertEqual((first.width() + 60, first.height() - 100), (ov2.width(), ov2.height()))
+
+    def test_band_width_is_the_screen_share_before_the_surface_is_sized(self):
+        ov = self.make({"layout": "horizontal"})
+        self.assertEqual(min(overlay.BAND_WIDTH, int(SCREEN.width() * overlay.BAND_MAX_SHARE)), ov.width())
+
     def test_switching_does_not_record_band_sizes(self):
         ov = self.make({"layout": "horizontal"})
         ov.set_layout("vertical")
         ov.set_layout("horizontal")
         ov.set_layout("vertical")
-        for size in (self.saved(ov).get("sizes") or {}).values():   # only the vertical panel's own
+        size = self.saved(ov).get("panel_size")       # only the vertical panel's own
+        if size:
             self.assertNotEqual(ov.band_h, size[1])
 
     def test_minimised_vertical_comes_back_minimised(self):

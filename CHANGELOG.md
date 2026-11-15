@@ -10,6 +10,11 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   loadout slots for them. SC-Toolbox now checks the game files after a patch: a ship that's in
   the game as a player ship with its own paints counts as released, whatever the ship list says.
 
+- **The overlay keeps one size.** In the side panel, every tool opens at the same size and closing
+  a tool keeps the bar as wide, so the edges no longer jump when you switch. Resizing it in any tool
+  resizes it for all of them, and it now starts taller (about ¾ of the screen). A landscape Maps
+  guide no longer widens the panel (L still shows it large). The band likewise has one width for
+  every tool, and on KDE Wayland it now starts at its full width rather than narrow.
 - **The overlay can lie flat along the top of the screen.** ⇆ in the overlay's header, or
   "Horizontal layout" in ⋯, turns the tall side panel into a wide, short band, centred at the top
   of the screen, which leaves the game's own side panels free. Each tool has its own view for the

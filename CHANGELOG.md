@@ -13,15 +13,19 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
 - **The overlay can lie flat along the top of the screen.** ⇆ in the overlay's header, or
   "Horizontal layout" in ⋯, turns the tall side panel into a wide, short band, centred at the top
   of the screen, which leaves the game's own side panels free. Each tool has its own view for the
-  band: columns you read at a glance, with no scrolling.
-  - Missions: the mission (a list switches it), the current objective with its neighbours, the
-    reward or outcome, the new blueprints it can drop, and how long you've been on it.
+  band: columns you read at a glance, with no scrolling. What you act on is on the band; when a
+  list is cut, "+n more ▾" on its title line drops the rest of the same list (one width for every
+  tool), and Esc or a click elsewhere closes it.
+  - Missions: the mission (a list switches it) and how long you've been on it; the current
+    objective, large, with what comes next; where, cargo and the other details; the reward and the
+    new blueprints it can drop. The mission brief is a click away.
   - Session: where you are, this session's six numbers, blueprints and recent moments.
   - Mining: ore, method and system; the best places (near you first); the picked place's rocks;
-    the picked rock's radar signature alone and in groups.
-  - Salvage: the claim tier, the ships ranked by value, and the claim you're on.
-  - Maps: the guide picker and a strip of the guide. Click it (or press L) and the whole guide
-    pulls out below the band as a drawer.
+    the picked rock's radar signature alone and in groups, and what's in it at what quality.
+  - Salvage: your ship (the claim you accepted, or one you pick, with its value); what it's worth;
+    the components to take off it, the most valuable first, with sell or dismantle; the cargo aboard.
+  - Maps: the guide, its pages and guides for what you're doing. Show guide (or L, or picking a
+    guide or page) pulls the whole guide out below the band as a drawer.
 
   What doesn't fit opens below the band when you ask: "all ▾" for a longer list, Details for a
   mission, a click on a ship for its fee, parts and cargo. Pick the open tool again (or ▲, or

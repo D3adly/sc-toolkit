@@ -163,18 +163,25 @@ def main() -> int:
                 ov.select_tool(tool, force=True)
                 settle(3.0)
                 p = ov._band_panels[tool]
-                if tool == "missions":
-                    p._details_drop(next(iter(live_feed().tracker.missions.values())), None)
-                elif tool == "salvage":
-                    p._breakdown(p._ranked[0])
-                else:
-                    ov.resize_band(ov.width())
+                if tool == "mining":
                     p.resource.setCurrentIndex(p.resource.findText("Quantanium"))
+                    p._fill_resources() if hasattr(p, "_fill_resources") else None
                     settle(1.0)
+                # Open the first "all ▾" / "read ▾" in the band: the extras, a click away.
+                from PySide6.QtWidgets import QLabel
+                from app.ui.overlay_band import Clickable, Line
+                for row in p.findChildren(Clickable):
+                    words = [w.text() for w in row.findChildren(QLabel)] + [w._full for w in row.findChildren(Line)]
+                    if row.isVisible() and any(t.endswith("▾") for t in words):
+                        row.clicked.emit()
+                        break
             elif what == "narrow":
                 ov.resize_band(1000)
             else:
                 ov.set_band_height(what)
+                if os.environ.get("SCREENS_TOOL"):
+                    ov.select_tool(os.environ["SCREENS_TOOL"], force=True)
+                    settle(3.0)
             settle(1.0)
             ov.grab().save(str(out / f"{name}.png"))
             print("saved", name, flush=True)

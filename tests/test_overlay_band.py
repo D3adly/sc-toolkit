@@ -118,6 +118,15 @@ class BandTest(unittest.TestCase):
         self.assertEqual("maps", ov.tool)
         self.assertTrue(ov.stack.isVisible())
 
+    def test_the_width_does_not_follow_the_tool(self):
+        ov = self.make({"layout": "horizontal"})
+        widths = set()
+        for tool in overlay.TOOLS:
+            ov.select_tool(tool, force=True)
+            settle()
+            widths.add(ov.band.width())
+        self.assertEqual(1, len(widths))
+
     def test_switching_does_not_record_band_sizes(self):
         ov = self.make({"layout": "horizontal"})
         ov.set_layout("vertical")
@@ -367,6 +376,30 @@ class ColumnsTest(unittest.TestCase):
         self.assertFalse(col.findChildren(__import__("PySide6.QtWidgets", fromlist=["QScrollArea"]).QScrollArea))
         col.hide()
 
+    def test_a_list_shows_all_it_can_and_more_only_when_cut(self):
+        """Every row is reachable: "+n more" (on the title line) shows exactly when rows don't fit."""
+        from app.ui.overlay_band import BandColumn, Line, _row, fill
+
+        col = BandColumn("A")
+        col.resize(300, overlay.BAND_HEIGHTS["normal"] - overlay.BAND_HEADER - 2)
+        col.show()
+        settle()
+        fit = col.rows()
+
+        def texts():
+            return [l._full for l in col.findChildren(Line) if l.isVisibleTo(col)]
+
+        for n in (fit - 1, fit):
+            fill(col, [(lambda i=i: _row((f"row {i}", "BandLine"))) for i in range(n)], "A")
+            settle()
+            self.assertEqual([f"row {i}" for i in range(n)], texts())
+            self.assertFalse(col.more.isVisibleTo(col))
+        fill(col, [(lambda i=i: _row((f"row {i}", "BandLine"))) for i in range(fit + 3)], "A")
+        settle()
+        self.assertEqual([f"row {i}" for i in range(fit)], texts())     # the list keeps all its lines
+        self.assertTrue(col.more.isVisibleTo(col))
+        self.assertEqual("+3 more ▾", col._more_text.text())
+        col.hide()
 
 if __name__ == "__main__":
     unittest.main()

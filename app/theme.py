@@ -1188,6 +1188,13 @@ QInputDialog QLineEdit {{
 #BandColumn[flash="true"] {{
     background: {accent_soft};
 }}
+#BandMore {{
+    background: transparent;
+    border: none;
+}}
+#BandMore:hover #BandLink {{
+    text-decoration: underline;
+}}
 #BandRow {{
     background: transparent;
     border: none;
@@ -1214,7 +1221,7 @@ QInputDialog QLineEdit {{
     background: transparent;
 }}
 #BandLine, #BandMuted, #BandSecondary, #BandStrong, #BandCurrent, #BandGood, #BandBad, #BandInfo,
-#BandLink, #BandNum, #BandNumAmber, #BandTime, #BandRank {{
+#BandLink, #BandNum, #BandNumAmber, #BandNumGood, #BandTime, #BandRank {{
     background: transparent;
     font-size: 12px;
     color: {text_primary};
@@ -1249,8 +1256,29 @@ QInputDialog QLineEdit {{
     color: {accent};
     font-weight: 600;
 }}
-#BandNum, #BandNumAmber {{
+#BandNum, #BandNumAmber, #BandNumGood {{
     font-weight: 700;
+}}
+#BandNumGood {{
+    color: {success};
+}}
+#BandObjective {{
+    background: transparent;
+    color: {accent};
+    font-size: 17px;
+    font-weight: 700;
+}}
+#BandOpen {{
+    background: {accent};
+    color: #10131a;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 6px 12px;
+}}
+#BandOpen:hover {{
+    background: {warning};
 }}
 #BandNumAmber {{
     color: {accent};

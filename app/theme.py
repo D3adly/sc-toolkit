@@ -1210,6 +1210,68 @@ QInputDialog QLineEdit {{
     font-weight: 700;
     letter-spacing: 1px;
 }}
+#BandBodyPage, #BandPreview {{
+    background: transparent;
+}}
+#BandLine, #BandMuted, #BandSecondary, #BandStrong, #BandCurrent, #BandGood, #BandBad, #BandInfo,
+#BandLink, #BandNum, #BandNumAmber, #BandTime, #BandRank {{
+    background: transparent;
+    font-size: 12px;
+    color: {text_primary};
+}}
+#BandMuted, #BandTime, #BandRank {{
+    color: {text_muted};
+}}
+#BandTime, #BandRank {{
+    font-size: 11px;
+}}
+#BandSecondary {{
+    color: {text_secondary};
+}}
+#BandStrong {{
+    font-size: 13px;
+    font-weight: 600;
+}}
+#BandCurrent {{
+    color: {accent};
+    font-weight: 600;
+}}
+#BandGood {{
+    color: {success};
+}}
+#BandBad {{
+    color: {danger};
+}}
+#BandInfo {{
+    color: {info};
+}}
+#BandLink {{
+    color: {accent};
+    font-weight: 600;
+}}
+#BandNum, #BandNumAmber {{
+    font-weight: 700;
+}}
+#BandNumAmber {{
+    color: {accent};
+}}
+#BandBig, #BandBigAmber {{
+    background: transparent;
+    color: {text_primary};
+    font-size: 22px;
+    font-weight: 700;
+}}
+#BandBigAmber {{
+    color: {accent};
+}}
+#BandNumber[tone="good"] {{
+    color: {success};
+}}
+#BandDrop, #BandDrawer {{
+    background: rgba(16, 19, 23, 0.97);
+    border: 1px solid {border_strong};
+    border-radius: 10px;
+}}
 #BandText {{
     color: {text_primary};
     font-size: 13px;

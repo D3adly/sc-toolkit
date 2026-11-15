@@ -11,20 +11,23 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   the game as a player ship with its own paints counts as released, whatever the ship list says.
 
 - **The overlay can lie flat along the top of the screen.** ⇆ in the overlay's header, or
-  "Horizontal layout" in ⋯, turns the tall side panel into a wide, short band, top centre, which
-  leaves the game's own side panels free. Each tool lays its view out in columns side by side:
-  - Missions: the mission (pick another from the list), its objectives, the reward or outcome,
-    the blueprints it can drop (new ones first) and its details;
-  - Session: where you are, this session's numbers, blueprints and recent moments;
-  - Mining: what you're looking for, the places (click one), and that place's rocks;
-  - Salvage: the claim difficulty, its ships (click one), and that ship's fee, parts and cargo;
-  - Maps: the guide picker next to a strip of the guide (⤢ or L shows it large).
+  "Horizontal layout" in ⋯, turns the tall side panel into a wide, short band, centred at the top
+  of the screen, which leaves the game's own side panels free. Each tool has its own view for the
+  band: columns you read at a glance, with no scrolling.
+  - Missions: the mission (a list switches it), the current objective with its neighbours, the
+    reward or outcome, the new blueprints it can drop, and how long you've been on it.
+  - Session: where you are, this session's six numbers, blueprints and recent moments.
+  - Mining: ore, method and system; the best places (near you first); the picked place's rocks;
+    the picked rock's radar signature alone and in groups.
+  - Salvage: the claim tier, the ships ranked by value, and the claim you're on.
+  - Maps: the guide picker and a strip of the guide. Click it (or press L) and the whole guide
+    pulls out below the band as a drawer.
 
-  Pick the open tool again (or ▲, or Esc) to fold the band down to its header row. Drag the band
-  to move it, drag its left or right edge to change its width, and choose its height (S, M or L)
-  in ⋯. On a narrow band the least important columns step aside. Lists and the ⋯ menu open below
-  the band without making it taller (above it when the band sits at the bottom). Each layout
-  keeps its own place, and ⇆ switches back.
+  What doesn't fit opens below the band when you ask: "all ▾" for a longer list, Details for a
+  mission, a click on a ship for its fee, parts and cargo. Pick the open tool again (or ▲, or
+  Esc) to fold the band down to its header row, which then shows a one-line summary. Drag the
+  band to the top or the bottom of the screen (it stays centred), drag its left or right edge
+  to change its width, and choose its height (S, M or L) in ⋯. ⇆ switches back.
 
 ## 0.7.1 (2026-11-13)
 

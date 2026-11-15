@@ -29,7 +29,8 @@ OVERLAY = ["overlay_missions", "overlay_session", "overlay_maps", "overlay_minin
            "overlay_bar", "overlay_min"]
 BAND = [f"overlay_h_{t}" for t in ("missions", "session", "mining", "salvage", "maps")] + [
     "overlay_h_folded", "overlay_h_drop", "overlay_h_menu", "overlay_h_up", "overlay_h_narrow",
-    "overlay_h_compact", "overlay_h_tall"]
+    "overlay_h_compact", "overlay_h_tall", "overlay_h_drawer", "overlay_h_salvage_ship", "overlay_h_mining_all",
+    "overlay_h_missions_all"]
 
 
 def _isolate(out: Path) -> None:
@@ -126,6 +127,7 @@ def main() -> int:
         _replay_last_session()
     if any(n in BAND for n in wanted):
         from app.ui import overlay
+        from app.ui.overlay_live import feed as live_feed
 
         ov = overlay.OverlayWindow()
         ov.set_minimized(False)
@@ -152,8 +154,25 @@ def main() -> int:
                 ov._band_panels["mining"].resource.showPopup()
             elif what == "menu":
                 ov._show_menu(True)
+            elif what == "drawer":
+                ov.select_tool("maps", force=True)
+                settle(3.0)
+                ov.toggle_large()
+            elif what in ("missions_all", "salvage_ship", "mining_all"):
+                tool = what.split("_")[0]
+                ov.select_tool(tool, force=True)
+                settle(3.0)
+                p = ov._band_panels[tool]
+                if tool == "missions":
+                    p._details_drop(next(iter(live_feed().tracker.missions.values())), None)
+                elif tool == "salvage":
+                    p._breakdown(p._ranked[0])
+                else:
+                    ov.resize_band(ov.width())
+                    p.resource.setCurrentIndex(p.resource.findText("Quantanium"))
+                    settle(1.0)
             elif what == "narrow":
-                ov.resize_band(1000, ov._home, ov.width(), keep_right=False)
+                ov.resize_band(1000)
             else:
                 ov.set_band_height(what)
             settle(1.0)

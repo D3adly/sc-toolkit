@@ -162,9 +162,21 @@ class BandTest(unittest.TestCase):
         ov.set_layout("horizontal")
         settle()
         self.assertEqual(band, ov.pos())
-        positions = self.saved(ov)["positions"]
-        self.assertEqual(2, len(positions))
-        self.assertTrue(any(k.endswith("|h") for k in positions))
+        self.assertEqual("bottom", self.saved(ov)["band_edge"])
+
+    def test_the_band_is_always_centred(self):
+        ov = self.make({"layout": "horizontal", "positions": {"0,0,2560x1440|h": [100, 600]}, "pos_h": [100, 600]})
+        self.assertEqual((SCREEN.width() - ov.width()) // 2, ov.x())     # old saved spots don't count
+        self.assertEqual(overlay.EDGE, ov.y())
+        ov.move_to("tl")                                                  # (not offered, but still centred)
+        self.assertEqual((SCREEN.width() - ov.width()) // 2, ov.x())
+        ov.set_folded(True)
+        self.assertEqual((SCREEN.width() - ov.width()) // 2, ov.x())
+        ov.move_to("bc")
+        ov.set_folded(False)                                              # at the bottom it stays on the edge
+        self.assertEqual(SCREEN.height() - overlay.EDGE, ov.y() + ov.height())
+        ov.reset_position()
+        self.assertEqual(overlay.EDGE, ov.y())
 
     def test_height_presets(self):
         ov = self.make({"layout": "horizontal"})
@@ -174,23 +186,18 @@ class BandTest(unittest.TestCase):
         self.assertEqual("tall", self.saved(ov)["band_height"])
         self.assertEqual("tall", self.make().band_height)
 
-    def test_edge_resize_keeps_the_other_edge(self):
+    def test_edge_resize_keeps_it_centred(self):
         ov = self.make({"layout": "horizontal"})
-        left, right = ov.x(), ov.x() + ov.width()
-        ov.resize_band(1000, ov._home, ov.width(), keep_right=True)       # the left edge, dragged
+        ov.resize_band(1000)
         self.assertEqual(1000, ov.width())
-        self.assertEqual(right, ov.x() + ov.width())
+        self.assertEqual((SCREEN.width() - 1000) // 2, ov.x())
         ov.band_resized()
-        ov.resize_band(1200, ov._home, ov.width(), keep_right=False)      # the right edge
-        self.assertEqual(right - 1000, ov.x())
-        self.assertEqual(1200, ov.width())
-        ov.band_resized()
-        self.assertEqual(1200, self.saved(ov)["band_width"])
-        self.assertNotEqual(left, ov.x())
+        self.assertEqual(1000, self.saved(ov)["band_width"])
+        self.assertEqual(1000, self.make().width())
 
     def test_width_has_a_minimum(self):
         ov = self.make({"layout": "horizontal"})
-        ov.resize_band(200, ov._home, ov.width(), keep_right=False)
+        ov.resize_band(200)
         self.assertEqual(overlay.BAND_MIN_WIDTH, ov.width())
 
     # -- fold, keys ---------------------------------------------------------------------
@@ -258,6 +265,29 @@ class BandTest(unittest.TestCase):
         self.assertEqual(band, ov.height())
         self.assertEqual(0, ov._room)
 
+    def test_a_drop_opens_below_the_band_and_a_click_elsewhere_closes_it(self):
+        ov = self.make({"layout": "horizontal"})
+        anchor = ov._band_panels[ov.tool].jump
+        drop = QWidget()
+        ov.show_drop(drop, 200, anchor=anchor, width=300)
+        self.assertTrue(drop.isVisible())
+        self.assertGreaterEqual(drop.y(), ov.band_h)
+        self.assertEqual(ov.band_h, ov.band.height())
+        ov._drop_click(ov.band_header)            # a click on the band
+        settle()
+        self.assertFalse(drop.isVisible())
+        self.assertEqual(ov.band_h, ov.height())
+
+    def test_a_sticky_drop_stays_until_esc(self):
+        ov = self.make({"layout": "horizontal"})
+        drawer = QWidget()
+        ov.show_drop(drawer, 500, width=ov.width(), sticky=True)
+        ov._drop_click(ov.band_header)
+        settle()
+        self.assertTrue(drawer.isVisible())
+        ov._escape()
+        self.assertFalse(drawer.isVisible())
+
     def test_a_low_band_drops_upwards(self):
         ov = self.make({"layout": "horizontal"})
         ov.move_to("bc")
@@ -321,24 +351,20 @@ class ColumnsTest(unittest.TestCase):
         self.assertTrue(cols[0].property("first"))
         box.hide()
 
-    def test_a_rebuilt_page_keeps_its_scroll(self):
+    def test_columns_fit_their_lines_and_never_scroll(self):
         from app.ui.overlay_band import BandColumn
 
         col = BandColumn("A")
-        col.resize(300, 120)
         col.show()
-
-        def fill():
-            v = col.page()
-            for i in range(40):
-                v.addWidget(QWidget(minimumHeight=20))
-        fill()
-        settle(0.1)
-        bar = col.scroll.verticalScrollBar()
-        bar.setValue(200)
-        fill()
-        settle(0.4)
-        self.assertEqual(200, bar.value())
+        counts = {}
+        for preset, height in overlay.BAND_HEIGHTS.items():
+            col.resize(300, height - overlay.BAND_HEADER - 2)
+            settle()
+            counts[preset] = col.rows()
+        self.assertGreaterEqual(counts["compact"], 2)
+        self.assertGreaterEqual(counts["normal"], 4)
+        self.assertGreater(counts["tall"], counts["normal"])
+        self.assertFalse(col.findChildren(__import__("PySide6.QtWidgets", fromlist=["QScrollArea"]).QScrollArea))
         col.hide()
 
 

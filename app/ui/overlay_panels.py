@@ -74,9 +74,10 @@ class _InlineCombo(kit.Dropdown):
         row = lst.sizeHintForRow(0) if self.count() else self.height()
         wanted = min(self.count(), self.maxVisibleItems()) * row + 8
         overlay = _overlay_of(self)
-        if overlay is not None and overlay.horizontal:
+        if overlay is not None and overlay.horizontal and not overlay.has_sticky_drop():
             # The band (#68): one drop at a time, and the list opens below (or above) the band,
             # not squeezed inside it. On layer-shell `win` is the full-screen surface: room enough.
+            # (Over Maps' drawer it just opens: the drawer stays out, and its room is enough.)
             overlay.claim_drop(self.hidePopup)
             if win is overlay:
                 overlay.drop_room(wanted + self.MARGIN)

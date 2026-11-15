@@ -438,8 +438,7 @@ class _InlineMenu(QFrame):
             "vertical": self._positions(v, (("tl", "↖", "top left"), ("tr", "↗", "top right"),
                                             ("ml", "◂", "left, middle"), ("mr", "▸", "right, middle"),
                                             ("bl", "↙", "bottom left"), ("br", "↘", "bottom right"))),
-            "horizontal": self._positions(v, (("tl", "↖", "top left"), ("tc", "↑", "top centre"),
-                                              ("tr", "↗", "top right"), ("bc", "↓", "bottom centre"))),
+            "horizontal": self._positions(v, (("tc", "↑", "top centre"), ("bc", "↓", "bottom centre"))),
         }
         self._item(v, "Reset position", "", overlay.reset_position)
         sep = QFrame(objectName="OverlayMenuSep")
@@ -635,7 +634,7 @@ class _EdgeGrip(QWidget):
             return
         x0, w0, home = self._start
         dx = event.globalPosition().toPoint().x() - x0
-        self.overlay.resize_band(w0 + (dx if self.side == "r" else -dx), home, w0, keep_right=self.side == "l")
+        self.overlay.resize_band(w0 + 2 * (dx if self.side == "r" else -dx))   # it stays centred
         event.accept()
 
     def mouseReleaseEvent(self, event):
@@ -684,6 +683,9 @@ class OverlayWindow(QWidget):
         self._band_panels: dict[str, QWidget] = {}
         self._room = 0                       # band: extra height for a list or menu dropped from it
         self._drop_close = None              # band: closes whatever is dropped now
+        self._drop = None                    # band: (widget, anchor, sticky) shown by show_drop
+        self._drop_watch = _DropWatch(self)
+        self._summary_timer = QTimer(self, interval=5000, timeout=self._update_status)
         self._save_timer = QTimer(self, singleShot=True, interval=400, timeout=self._save_state)
         self._build_ui()
         self._build_band()
@@ -751,7 +753,17 @@ class OverlayWindow(QWidget):
             key = " ".join(f"{g.x()},{g.y()},{g.width()}x{g.height()}" for g in rects)
         return key + ("|h" if self.horizontal else "")
 
+    def _band_home(self) -> QPoint:
+        """The band is always centred: at the top (the default) or the bottom of the screen."""
+        area = self._area()
+        x = area.x() + (area.width() - self._bar_size.width()) // 2
+        if self.state.get("band_edge") == "bottom":
+            return QPoint(x, area.bottom() + 1 - self.band_h - EDGE)
+        return QPoint(x, area.top() + EDGE)
+
     def _saved_home(self) -> QPoint | None:
+        if self.horizontal:
+            return self._band_home()
         pos = (self.state.get("positions") or {}).get(self._setup_key()) or self.state.get(self._pos_key)
         home = QPoint(*pos) if pos else None
         return home if home is not None and self._reachable(home) else None
@@ -764,6 +776,12 @@ class OverlayWindow(QWidget):
 
     def _save_home(self) -> None:
         if self._home is None:
+            return
+        if self.horizontal:
+            area = self._area()
+            self.state["band_edge"] = "bottom" if self._home.y() + self.band_h // 2 > area.center().y() else "top"
+            self._home = self._band_home()
+            self._save_timer.start()
             return
         pos = [self._home.x(), self._home.y()]
         self.state.setdefault("positions", {})[self._setup_key()] = pos
@@ -782,6 +800,9 @@ class OverlayWindow(QWidget):
         if self._placing or self._manual:
             return
         area = self._area(self._home + QPoint(self._bar_size.width() // 2, 12) if self._home else None)
+        if self.horizontal and self._large is None:
+            self._home = self._band_home()
+            area = self._area()
         if self._home is None or not self._reachable(self._home):
             area = self._area(QApplication.primaryScreen().geometry().center()) if self._host is None else area
             self._home = self._default_home(area)
@@ -838,11 +859,18 @@ class OverlayWindow(QWidget):
         ys = {"t": area.top() + EDGE, "m": area.center().y() - bar.height() // 2,
               "b": area.bottom() + 1 - bar.height() - EDGE}
         self._home = QPoint(xs[where[1]], ys[where[0]])
+        if self.horizontal:
+            self.state["band_edge"] = "bottom" if where[0] == "b" else "top"
         self._place()
         self._save_home()
 
     def reset_position(self) -> None:
         self.close_drop()
+        if self.horizontal:
+            self.state["band_edge"] = "top"
+            self._place()
+            self._save_home()
+            return
         self._home = None
         area = self._area() if self._host is not None else QApplication.primaryScreen().geometry()
         self._home = self._default_home(area)
@@ -860,11 +888,15 @@ class OverlayWindow(QWidget):
 
     def toggle_large(self) -> None:
         """Maps: most of the screen, centred (L or ⤢); again or Esc: back."""
-        if self.tool != "maps" or self.minimized or (self.horizontal and self.band_folded):
+        if self.tool != "maps" or self.minimized:
             return
-        if self.horizontal:
-            self._show_menu(False)
-            self.close_drop()
+        if self.horizontal:              # the band has a drawer instead of a large view
+            if self.band_folded:
+                self.set_folded(False)
+            panel = self._band_panels.get("maps")
+            if panel is not None and hasattr(panel, "toggle_drawer"):
+                panel.toggle_drawer()
+            return
         if self._large is None:
             self._remember_size()
             self._large = self.size()
@@ -1184,6 +1216,7 @@ class OverlayWindow(QWidget):
         self._fit_band()
         if not on:
             self._activate_band()
+        self._update_status()
 
     def set_band_height(self, preset: str) -> None:
         if preset not in BAND_HEIGHTS:
@@ -1225,12 +1258,10 @@ class OverlayWindow(QWidget):
         left.setGeometry(0, top, _EdgeGrip.WIDTH, self.band_h)
         right.setGeometry(self.width() - _EdgeGrip.WIDTH, top, _EdgeGrip.WIDTH, self.band_h)
 
-    def resize_band(self, width: int, home: QPoint | None, start_width: int, keep_right: bool) -> None:
-        """Dragging an edge: the other edge stays where it is."""
+    def resize_band(self, width: int) -> None:
+        """Dragging an edge: both edges move, so the band stays centred."""
         area = self._area()
-        width = max(min(BAND_MIN_WIDTH, area.width()), min(width, area.width()))
-        if home is not None and keep_right:
-            self._home = QPoint(home.x() + start_width - width, home.y())
+        width = max(min(BAND_MIN_WIDTH, area.width()), min(width, area.width() - 2 * EDGE))
         self.state["band_width"] = width
         self._bar_size = QSize(width, self.band_h)
         self._resizing = True
@@ -1240,8 +1271,7 @@ class OverlayWindow(QWidget):
         self._place()
 
     def band_resized(self) -> None:
-        self._home = self._home_from(QRect(self.pos(), self.size()))
-        self._save_home()
+        self._save_timer.start()
 
     def drop_room(self, need: int) -> QRect:
         """Room for something dropped from the band (a list, the ⋯ menu,
@@ -1284,6 +1314,56 @@ class OverlayWindow(QWidget):
             self._drop_close = None
         if self._drop_close is None:
             self.release_room()
+
+    def show_drop(self, drop: QWidget, height: int, anchor: QWidget | None = None, width: int | None = None,
+                  sticky: bool = False) -> None:
+        """Opens `drop` below the band (above it when the band is at the
+        bottom), under `anchor`'s left edge or centred. A click anywhere else
+        closes it, unless `sticky` (Maps' drawer: it stays out while you pick
+        another guide); Esc and folding always do."""
+        import time
+
+        last = getattr(self, "_drop_closed_at", (None, 0.0))
+        if anchor is not None and last[0] is anchor and time.monotonic() - last[1] < 0.35:
+            return          # the click that closed it was on its own button: that's a toggle
+        if drop.parent() is not self:
+            drop.setParent(self)
+        self.claim_drop(lambda d=drop: self._hide_drop(d))
+        room = self.drop_room(height)
+        w = min(width or drop.sizeHint().width(), self.width() - 8)
+        x = (anchor.mapTo(self, QPoint(0, 0)).x() - 4) if anchor is not None else (self.width() - w) // 2
+        x = max(4, min(x, self.width() - w - 4))
+        h = min(height, room.height())
+        y = room.bottom() + 1 - h if self._drop_up() else room.top()
+        drop.setGeometry(x, y, w, h)
+        drop.show()
+        drop.raise_()
+        self._drop = (drop, anchor, sticky)
+        QApplication.instance().installEventFilter(self._drop_watch)
+
+    def has_sticky_drop(self) -> bool:
+        return bool(self._drop and self._drop[2] and self._drop[0].isVisible())
+
+    def _hide_drop(self, drop: QWidget) -> None:
+        import time
+
+        drop.hide()
+        current = getattr(self, "_drop", None)
+        if current and current[0] is drop:
+            self._drop_closed_at = (current[1], time.monotonic())
+            self._drop = None
+            QApplication.instance().removeEventFilter(self._drop_watch)
+
+    def _drop_click(self, obj) -> None:
+        """A click while a drop is open: outside it (and its lists), it closes."""
+        current = getattr(self, "_drop", None)
+        if not current or current[2] or not isinstance(obj, QWidget):
+            return
+        drop = current[0]
+        if obj is drop or drop.isAncestorOf(obj) or obj.objectName() == "InlineComboList" or (
+                obj.parentWidget() is not None and obj.parentWidget().objectName() == "InlineComboList"):
+            return
+        QTimer.singleShot(0, self.close_drop)
 
     def close_drop(self) -> None:
         """Closes whatever is dropped from the band (a list, the ⋯ menu)."""
@@ -1511,8 +1591,19 @@ class OverlayWindow(QWidget):
             self.status.setText(f"Click-through <b>off</b> · the overlay takes clicks · <kbd>{key}</kbd>")
         self.ct_dot.set_on(not self.click_through)
         if hasattr(self, "band_hint"):
-            self.band_hint.setText(self.status.text())
             self.band_ct_dot.set_on(not self.click_through)
+            text = ""
+            if self.horizontal and self.band_folded:
+                panel = self._band_panels.get(self.tool)
+                try:
+                    text = panel.summary() if panel is not None and hasattr(panel, "summary") else ""
+                except Exception:          # a summary must never break the header
+                    text = ""
+            self.band_hint.setText(text)
+            if self.horizontal and self.band_folded and self.isVisible():
+                self._summary_timer.start()
+            else:
+                self._summary_timer.stop()
 
     def _show_menu(self, on: bool) -> None:
         if not hasattr(self, "menu"):
@@ -1739,7 +1830,12 @@ class OverlayWindow(QWidget):
                 p = self.mapToParent(event.position().toPoint()) - self._drag
             else:
                 p = event.globalPosition().toPoint() - self._drag
-            self._anchor = self._snap(p)
+            if self.horizontal:          # the band stays centred: it only moves up and down
+                area = self._area()
+                p = QPoint(self.x(), max(area.top(), min(p.y(), area.bottom() + 1 - self.height())))
+                self._anchor = p
+            else:
+                self._anchor = self._snap(p)
             self._placing = True
             self.move(self._anchor)
             self._placing = False
@@ -1751,10 +1847,27 @@ class OverlayWindow(QWidget):
     def mouseReleaseEvent(self, event):
         if getattr(self, "_drag", None) is not None:
             self._drag = None
+            if self.horizontal:          # let go: to the top or the bottom, whichever is nearer
+                self._home = QPoint(self.x(), self.y())
             self._save_home()
+            if self.horizontal:
+                self._place()
             event.accept()
             return
         super().mouseReleaseEvent(event)
+
+
+class _DropWatch(QObject):
+    """While something is dropped from the band: tells it about clicks."""
+
+    def __init__(self, overlay: "OverlayWindow"):
+        super().__init__(overlay)
+        self.overlay = overlay
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.MouseButtonPress:
+            self.overlay._drop_click(obj)
+        return False
 
 
 class _NoToolTips(QObject):

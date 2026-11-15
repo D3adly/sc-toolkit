@@ -6,7 +6,10 @@ platform and every XDG directory points into OUT_DIR/xdg, which starts as a
 copy of your SC-Toolbox config and cache (so the tools show real data).
 Names: home, salvage, mining, stats, hangar, maps, missions, bindings,
 settings, whatsnew, overlay_<tool> (missions, session, maps, mining,
-salvage), overlay_bar, overlay_min; none = all.
+salvage), overlay_bar, overlay_min; the horizontal band: overlay_h_<tool>,
+overlay_h_folded, overlay_h_drop (a list open), overlay_h_menu, overlay_h_up
+(at the bottom, a list open upwards), overlay_h_narrow, overlay_h_compact,
+overlay_h_tall; none = all. The offscreen screen is 2560×1440.
 """
 
 from __future__ import annotations
@@ -22,6 +25,9 @@ LAUNCHER = ["home", "salvage", "mining", "stats", "hangar", "maps", "missions", 
             "whatsnew"]
 OVERLAY = ["overlay_missions", "overlay_session", "overlay_maps", "overlay_mining", "overlay_salvage",
            "overlay_bar", "overlay_min"]
+BAND = [f"overlay_h_{t}" for t in ("missions", "session", "mining", "salvage", "maps")] + [
+    "overlay_h_folded", "overlay_h_drop", "overlay_h_menu", "overlay_h_up", "overlay_h_narrow",
+    "overlay_h_compact", "overlay_h_tall"]
 
 
 def _isolate(out: Path) -> None:
@@ -36,12 +42,15 @@ def _isolate(out: Path) -> None:
         src = Path(os.environ.get(f"REAL_{env}", real)) / "sc-toolkit"
         if src.is_dir() and not (target / "sc-toolkit").exists():
             shutil.copytree(src, target / "sc-toolkit")
-    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    screens = out / "screens.json"
+    screens.write_text('{"screens": [{"name": "s1", "x": 0, "y": 0, "width": 2560, "height": 1440, '
+                       '"logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}')
+    os.environ["QT_QPA_PLATFORM"] = f"offscreen:configfile={screens}"
 
 
 def main() -> int:
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "screens").resolve()
-    wanted = sys.argv[2:] or LAUNCHER + OVERLAY
+    wanted = sys.argv[2:] or LAUNCHER + OVERLAY + BAND
     _isolate(out)
     sys.path.insert(0, str(ROOT))
     from PySide6.QtWidgets import QApplication
@@ -87,6 +96,38 @@ def main() -> int:
                 ov.set_minimized(False)
                 ov.select_tool(name.removeprefix("overlay_"), force=True)
             settle(3.0)
+            ov.grab().save(str(out / f"{name}.png"))
+            print("saved", name, flush=True)
+    if any(n in BAND for n in wanted):
+        from app.ui import overlay
+
+        ov = overlay.OverlayWindow()
+        ov.set_minimized(False)
+        ov.set_layout("horizontal")
+        ov.show()
+        settle(0.5)
+        for name in [n for n in BAND if n in wanted]:
+            ov.close_drop()
+            ov.set_band_height("normal")
+            ov.state.pop("band_width", None)
+            ov.move_to("tc")
+            ov.set_folded(False)
+            what = name.removeprefix("overlay_h_")
+            if what in overlay.TOOLS:
+                ov.select_tool(what, force=True)
+            elif what == "folded":
+                ov.set_folded(True)
+            elif what in ("drop", "up"):
+                if what == "up":
+                    ov.move_to("bc")
+                ov._band_panels[ov.tool].jump.showPopup()
+            elif what == "menu":
+                ov._show_menu(True)
+            elif what == "narrow":
+                ov.resize_band(1000, ov._home, ov.width(), keep_right=False)
+            else:
+                ov.set_band_height(what)
+            settle(1.0)
             ov.grab().save(str(out / f"{name}.png"))
             print("saved", name, flush=True)
     return 0

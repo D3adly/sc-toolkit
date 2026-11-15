@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizeGrip,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -69,6 +70,16 @@ SNAP = 28                    # px: dragged this close to a screen edge, it snaps
 EDGE = 10                    # px: the gap to the screen edge when snapped or placed
 LARGE = 0.9                  # Maps' large view: this much of the screen
 MAX_GUIDE_WIDTH = 0.62       # a landscape guide widens the panel up to this much of the screen
+# The horizontal layout (#74): a "band" along the top of the screen, a header row over the
+# open tool's columns, instead of the tall panel that covers the game's own UI.
+BAND_HEADER = 32
+BAND_HEIGHTS = {"compact": 120, "normal": 152, "tall": 220}   # the whole band, header included
+BAND_WIDTH = 1480            # default width, but at most BAND_MAX_SHARE of the screen
+BAND_MAX_SHARE = 0.8
+BAND_MIN_WIDTH = 760
+DROP_GAP = 4                 # px between the band and a list or menu dropped from it
+# Which step brings each tool's own columns (the band shows a placeholder until then).
+BAND_ISSUE = {"missions": 70, "session": 70, "mining": 71, "salvage": 71, "maps": 72}
 
 MIN_OPACITY, MAX_OPACITY = 30, 100
 
@@ -245,7 +256,7 @@ def reset_saved_position() -> None:
     monitors); the next start puts it in its default place. For when it
     isn't running (the launcher's Settings); a running one: "reset-position"."""
     state = _load_state()
-    for key in ("positions", "pos", "layer_pos"):
+    for key in ("positions", "pos", "layer_pos", "pos_h", "layer_pos_h"):
         state.pop(key, None)
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -345,11 +356,11 @@ class _Dot(QWidget):
     """The click-through state: filled green while the overlay takes clicks,
     hollow while they go through to the game."""
 
-    def __init__(self, parent: QWidget):
+    def __init__(self, parent: QWidget, size: QSize = QSize(30, 30)):
         super().__init__(parent)
         self.on = True
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.setFixedSize(30, 30)
+        self.setFixedSize(size)
 
     def set_on(self, on: bool) -> None:
         self.on = on
@@ -360,7 +371,7 @@ class _Dot(QWidget):
 
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        r = QRectF(10, 10, 10, 10)
+        r = QRectF(self.width() / 2 - 5, self.height() / 2 - 5, 10, 10)
         if self.on:
             halo = QColor(PALETTE["success"])
             halo.setAlpha(60)
@@ -403,24 +414,35 @@ class _InlineMenu(QFrame):
         row.addWidget(plus)
         v.addLayout(row)
         self.ct = self._item(v, "Click-through", hotkey_label("toggle-clickthrough"), overlay.toggle_click_through)
-        self._item(v, "Minimise to one line", "", lambda: overlay.set_minimized(True))
+        self.mini = self._item(v, "Minimise to one line", "", lambda: overlay.set_minimized(True))
+        self.layout_item = self._item(v, "Horizontal layout", "", overlay.toggle_layout)
+        # The band's height: three presets, so its columns stay predictable (no free height drag).
+        self.heights = QWidget()
+        row = QHBoxLayout(self.heights)
+        row.setContentsMargins(9, 2, 4, 2)
+        row.setSpacing(3)
+        row.addWidget(QLabel("Band height", objectName="OverlayMenuText"), stretch=1)
+        self.height_btns = {}
+        for preset, glyph in (("compact", "S"), ("normal", "M"), ("tall", "L")):
+            btn = QPushButton(glyph, objectName="OverlayStep")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda _c=False, h=preset: overlay.set_band_height(h))
+            overlay._hint(btn, f"<b>{preset.capitalize()}</b> band · {BAND_HEIGHTS[preset]} px")
+            row.addWidget(btn)
+            self.height_btns[preset] = btn
+        v.addWidget(self.heights)
         sep = QFrame(objectName="OverlayMenuSep")
         sep.setFixedHeight(1)
         v.addWidget(sep)
-        # Quick positions: the bar to a corner or the middle of a side.
-        pos = QHBoxLayout()
-        pos.setContentsMargins(9, 2, 4, 2)
-        pos.setSpacing(3)
-        pos.addWidget(QLabel("Move to", objectName="OverlayMenuText"), stretch=1)
-        for where, glyph, name in (("tl", "↖", "top left"), ("tr", "↗", "top right"), ("ml", "◂", "left, middle"),
-                                   ("mr", "▸", "right, middle"), ("bl", "↙", "bottom left"),
-                                   ("br", "↘", "bottom right")):
-            btn = QPushButton(glyph, objectName="OverlayStep")
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda _c=False, w=where: (overlay._show_menu(False), overlay.move_to(w)))
-            overlay._hint(btn, f"<b>Move</b> the overlay to the screen's {name}")
-            pos.addWidget(btn)
-        v.addLayout(pos)
+        # Quick positions: the bar to a corner or the middle of a side; the band along the top or bottom.
+        self.positions = {
+            "vertical": self._positions(v, (("tl", "↖", "top left"), ("tr", "↗", "top right"),
+                                            ("ml", "◂", "left, middle"), ("mr", "▸", "right, middle"),
+                                            ("bl", "↙", "bottom left"), ("br", "↘", "bottom right"))),
+            "horizontal": self._positions(v, (("tl", "↖", "top left"), ("tc", "↑", "top centre"),
+                                              ("tr", "↗", "top right"), ("bc", "↓", "bottom centre"))),
+        }
         self._item(v, "Reset position", "", overlay.reset_position)
         sep = QFrame(objectName="OverlayMenuSep")
         sep.setFixedHeight(1)
@@ -428,12 +450,28 @@ class _InlineMenu(QFrame):
         self._item(v, "Hide overlay", hotkey_label("toggle-overlay"), overlay.hide_overlay)
         self._item(v, "Overlay settings in SC-Toolbox", "", lambda: ipc.send(ipc.MAIN, "settings"))
 
+    def _positions(self, v, places) -> QWidget:
+        box = QWidget()
+        pos = QHBoxLayout(box)
+        pos.setContentsMargins(9, 2, 4, 2)
+        pos.setSpacing(3)
+        pos.addWidget(QLabel("Move to", objectName="OverlayMenuText"), stretch=1)
+        overlay = self.overlay
+        for where, glyph, name in places:
+            btn = QPushButton(glyph, objectName="OverlayStep")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda _c=False, w=where: (overlay._show_menu(False), overlay.move_to(w)))
+            overlay._hint(btn, f"<b>Move</b> the overlay to the screen's {name}")
+            pos.addWidget(btn)
+        v.addWidget(box)
+        return box
+
     def _item(self, v, text: str, key: str, slot) -> QPushButton:
         btn = QPushButton(objectName="OverlayMenuItem")
         btn.setCursor(Qt.PointingHandCursor)
         row = QHBoxLayout(btn)
         row.setContentsMargins(9, 0, 6, 0)
-        t = QLabel(text, objectName="OverlayMenuText")
+        t = btn.text_label = QLabel(text, objectName="OverlayMenuText")
         t.setAttribute(Qt.WA_TransparentForMouseEvents)
         row.addWidget(t, stretch=1)
         if key:
@@ -450,7 +488,15 @@ class _InlineMenu(QFrame):
         return btn
 
     def sync(self) -> None:
-        self.set_opacity(self.overlay._opacity)
+        ov = self.overlay
+        self.set_opacity(ov._opacity)
+        self.mini.setVisible(not ov.horizontal)
+        self.layout_item.text_label.setText("Vertical layout" if ov.horizontal else "Horizontal layout")
+        self.heights.setVisible(ov.horizontal)
+        for preset, btn in self.height_btns.items():
+            btn.setChecked(preset == ov.band_height)
+        for mode, box in self.positions.items():
+            box.setVisible(mode == ov.layout_mode)
 
     def set_opacity(self, value: int) -> None:
         self.value.setText(f"{value}%")
@@ -540,6 +586,103 @@ class _MinimisedBar(QFrame):
             QTimer.singleShot(0, win._fit_bar)
 
 
+class _BandTab(QPushButton):
+    """A tool in the band's header row: icon, caption and its key, side by side."""
+
+    def __init__(self, icon: str, caption: str, key: str, parent=None):
+        super().__init__(parent, objectName="BandTab")
+        self.setCheckable(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(BAND_HEADER - 8)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(8, 0, 8, 0)
+        row.setSpacing(6)
+        ic = QLabel()
+        ic.setPixmap(QIcon(str(config.ICONS_DIR / f"{icon}.png")).pixmap(QSize(16, 16)))
+        cap = self.caption = QLabel(caption, objectName="BandTabCaption")
+        k = QLabel(key, objectName="BandTabKey")
+        for w in (ic, cap, k):
+            w.setAttribute(Qt.WA_TransparentForMouseEvents)
+            row.addWidget(w)
+        self.setMinimumWidth(row.sizeHint().width())   # a button doesn't size to its layout
+        self.toggled.connect(self._on)
+
+    def _on(self, on: bool) -> None:
+        # `#BandTab:checked #BandTabCaption` isn't re-evaluated when the tab changes; a property is.
+        self.caption.setProperty("on", on)
+        self.caption.style().unpolish(self.caption)
+        self.caption.style().polish(self.caption)
+
+
+class _EdgeGrip(QWidget):
+    """The band's left or right edge: drag it to change the band's width (its
+    height comes from the presets in ⋯)."""
+
+    WIDTH = 6
+
+    def __init__(self, side: str, overlay: "OverlayWindow"):
+        super().__init__(overlay)
+        self.side, self.overlay = side, overlay
+        self.setCursor(Qt.SizeHorCursor)
+        self._start = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.overlay.close_drop()
+            self._start = (event.globalPosition().toPoint().x(), self.overlay.width(), self.overlay._home)
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self._start is None:
+            return
+        x0, w0, home = self._start
+        dx = event.globalPosition().toPoint().x() - x0
+        self.overlay.resize_band(w0 + (dx if self.side == "r" else -dx), home, w0, keep_right=self.side == "l")
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if self._start is not None:
+            self._start = None
+            self.overlay.band_resized()
+        event.accept()
+
+
+class _BandPlaceholder(QWidget):
+    """A tool's body in the band until its own columns are built (#74 steps 3–6).
+    Its "Jump to" list is a real dropdown, so the drop room below the band can
+    be tried in game already."""
+
+    def __init__(self, tool: str, overlay: "OverlayWindow"):
+        super().__init__(objectName="BandBody")
+        from app.ui.overlay_panels import _combo
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(14, 10, 14, 10)
+        row.setSpacing(28)
+        what, _icon, _size, caption = TOOLS[tool]
+        col = QVBoxLayout()
+        col.setSpacing(6)
+        col.addWidget(QLabel(caption.upper(), objectName="BandColLabel"))
+        text = QLabel(f"{caption} ({what}) gets its own columns here soon (#{BAND_ISSUE[tool]}). "
+                      "Until then, the vertical layout has it: ⇆ in the header.", objectName="BandText")
+        text.setWordWrap(True)
+        col.addWidget(text)
+        col.addStretch(1)
+        row.addLayout(col, stretch=3)
+        col = QVBoxLayout()
+        col.setSpacing(6)
+        col.addWidget(QLabel("JUMP TO", objectName="BandColLabel"))
+        self.jump = _combo(180)
+        tools = list(TOOLS)
+        for t in tools:
+            self.jump.addItem(TOOLS[t][3])
+        self.jump.setCurrentIndex(tools.index(tool))
+        self.jump.activated.connect(lambda i: overlay.select_tool(tools[i], force=True))
+        col.addWidget(self.jump)
+        col.addStretch(1)
+        row.addLayout(col, stretch=1)
+
+
 class OverlayWindow(QWidget):
     """The overlay panel. Its own window (X11 / Windows), or, with `host`, a
     panel inside a full-screen layer-shell surface (KDE Wayland; see
@@ -573,8 +716,15 @@ class OverlayWindow(QWidget):
         self._bar_width = 440   # the collapsed bar's width (set by _collapse)
         self._resizing = False
         self._panels: dict[str, QWidget] = {}
+        self.layout_mode = "horizontal" if self.state.get("layout") == "horizontal" else "vertical"
+        self.band_height = self.state.get("band_height") if self.state.get("band_height") in BAND_HEIGHTS else "normal"
+        self.band_folded = bool(self.state.get("band_folded"))
+        self._band_panels: dict[str, QWidget] = {}
+        self._room = 0                       # band: extra height for a list or menu dropped from it
+        self._drop_close = None              # band: closes whatever is dropped now
         self._save_timer = QTimer(self, singleShot=True, interval=400, timeout=self._save_state)
         self._build_ui()
+        self._build_band()
         self.minimized = False
         self._apply_opacity(self.state.get("opacity", 92))
         for i, tool in enumerate(TOOLS, 1):
@@ -583,15 +733,20 @@ class OverlayWindow(QWidget):
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self._escape, context=Qt.WindowShortcut)
         QShortcut(QKeySequence("L"), self, activated=lambda: self.tool == "maps" and self.toggle_large(),
                   context=Qt.WindowShortcut)
-        self._home = self._saved_home()
-        self._collapse()
-        if self.state.get("minimized"):
-            self.set_minimized(True)
+        if self.horizontal:
+            self._enter_band()
+        else:
+            self._enter_vertical()
+
+    @property
+    def horizontal(self) -> bool:
+        return self.layout_mode == "horizontal"
 
     @property
     def _pos_key(self) -> str:
-        # Screen coordinates for the X11 window, surface (screen-local) ones on layer-shell.
-        return "layer_pos" if self._host is not None else "pos"
+        # Screen coordinates for the X11 window, surface (screen-local) ones on layer-shell;
+        # each layout has its own.
+        return ("layer_pos" if self._host is not None else "pos") + ("_h" if self.horizontal else "")
 
     def _apply_opacity(self, value: int) -> None:
         """Fades the panel's background only: text and icons stay readable
@@ -600,6 +755,8 @@ class OverlayWindow(QWidget):
         alpha = max(0.0, min(1.0, value / 100))
         self.frame.setStyleSheet(
             f"#OverlayFrame {{ background: rgba(16, 19, 23, {alpha * 0.97:.3f}); }}")
+        if hasattr(self, "band"):
+            self.band.setStyleSheet(f"#BandFrame {{ background: rgba(16, 19, 23, {alpha * 0.97:.3f}); }}")
         if hasattr(self, "menu"):
             self.menu.set_opacity(value)
 
@@ -626,9 +783,11 @@ class OverlayWindow(QWidget):
         """Positions are kept per screen setup (adding or moving a monitor starts afresh)."""
         if self._host is not None:
             area = self._area()
-            return f"layer {area.width()}x{area.height()}"
-        rects = sorted((s.geometry() for s in QApplication.screens()), key=lambda g: (g.x(), g.y()))
-        return " ".join(f"{g.x()},{g.y()},{g.width()}x{g.height()}" for g in rects)
+            key = f"layer {area.width()}x{area.height()}"
+        else:
+            rects = sorted((s.geometry() for s in QApplication.screens()), key=lambda g: (g.x(), g.y()))
+            key = " ".join(f"{g.x()},{g.y()},{g.width()}x{g.height()}" for g in rects)
+        return key + ("|h" if self.horizontal else "")
 
     def _saved_home(self) -> QPoint | None:
         pos = (self.state.get("positions") or {}).get(self._setup_key()) or self.state.get(self._pos_key)
@@ -650,6 +809,8 @@ class OverlayWindow(QWidget):
         self._save_timer.start()
 
     def _default_home(self, area: QRect) -> QPoint:
+        if self.horizontal:     # the band: top centre
+            return QPoint(area.x() + (area.width() - self._bar_size.width()) // 2, area.top() + EDGE)
         return QPoint(area.right() + 1 - self._bar_size.width() - EDGE, area.top() + EDGE)
 
     def _place(self) -> None:
@@ -707,9 +868,11 @@ class OverlayWindow(QWidget):
         return QPoint(x, y)
 
     def move_to(self, where: str) -> None:
-        """Quick positions: tl, tr (top), ml, mr (middle of a side), bl, br."""
+        """Quick positions: tl, tr (top), ml, mr (middle of a side), bl, br; the band also tc, bc."""
+        self.close_drop()
         area, bar = self._area(), self._bar_size
-        xs = {"l": area.left() + EDGE, "r": area.right() + 1 - bar.width() - EDGE}
+        xs = {"l": area.left() + EDGE, "r": area.right() + 1 - bar.width() - EDGE,
+              "c": area.x() + (area.width() - bar.width()) // 2}
         ys = {"t": area.top() + EDGE, "m": area.center().y() - bar.height() // 2,
               "b": area.bottom() + 1 - bar.height() - EDGE}
         self._home = QPoint(xs[where[1]], ys[where[0]])
@@ -717,6 +880,7 @@ class OverlayWindow(QWidget):
         self._save_home()
 
     def reset_position(self) -> None:
+        self.close_drop()
         self._home = None
         area = self._area() if self._host is not None else QApplication.primaryScreen().geometry()
         self._home = self._default_home(area)
@@ -734,7 +898,7 @@ class OverlayWindow(QWidget):
 
     def toggle_large(self) -> None:
         """Maps: most of the screen, centred (L or ⤢); again or Esc: back."""
-        if self.tool != "maps" or self.minimized:
+        if self.tool != "maps" or self.minimized or self.horizontal:   # the band's comes with #72
             return
         if self._large is None:
             self._remember_size()
@@ -758,7 +922,7 @@ class OverlayWindow(QWidget):
         """A guide just opened (Maps): a landscape one widens the panel so it
         fills the panel's height, within MAX_GUIDE_WIDTH of the screen; a
         portrait one keeps the width (it fills it and scrolls)."""
-        if tool != self.tool or self._large is not None or ratio <= 1.05:
+        if tool != self.tool or self._large is not None or ratio <= 1.05 or self.horizontal:
             return
         area = self._area()
         want = int(viewer.height() * ratio) + (self.width() - viewer.width())
@@ -818,6 +982,7 @@ class OverlayWindow(QWidget):
         mini.clicked.connect(lambda: self.set_minimized(True))
         self._hint(mini, "<b>Minimise</b> to one line: objective, time on it, location")
         head.addWidget(mini)
+        head.addWidget(self._layout_button(QSize(30, 30)))
         self.menu_btn = QPushButton("⋯", objectName="OverlayIcon")
         self.menu_btn.setCursor(Qt.PointingHandCursor)
         self.menu_btn.setCheckable(True)
@@ -860,10 +1025,303 @@ class OverlayWindow(QWidget):
         # Takes the slack when the panel is closed (e.g. the window grew for the ⋯ menu).
         v.addStretch(0)
 
+    def _layout_button(self, size: QSize) -> QPushButton:
+        btn = QPushButton("⇆", objectName="OverlayIcon")
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setFixedSize(size)
+        btn.clicked.connect(self.toggle_layout)
+        self._hint(btn, lambda: "<b>Vertical layout</b>: the tall panel" if self.horizontal
+                   else "<b>Horizontal layout</b>: a wide, short band along the top of the screen")
+        return btn
+
+    def _build_band(self) -> None:
+        """The horizontal layout: a header row (tools, hints, fold, layout,
+        click-through, ⋯) over the open tool's body. Placed by hand, not by a
+        layout: the window can be taller than the band while a list or the ⋯
+        menu is dropped from it (see drop_room)."""
+        self.band = QFrame(self, objectName="BandFrame")
+        v = QVBoxLayout(self.band)
+        v.setContentsMargins(1, 1, 1, 1)
+        v.setSpacing(0)
+        self.band_header = QFrame(objectName="BandHeader")
+        self.band_header.setFixedHeight(BAND_HEADER)
+        head = QHBoxLayout(self.band_header)
+        head.setContentsMargins(6, 0, 6, 0)
+        head.setSpacing(2)
+        grip = QLabel("⠿", objectName="OverlayGrip")
+        self._hint(grip, "<b>Drag</b> to move the band · drag its left or right edge to resize it")
+        head.addWidget(grip)
+        self.band_tabs = QButtonGroup(self)
+        self.band_tabs.setExclusive(False)
+        for i, (tool, (what, icon, _size, caption)) in enumerate(TOOLS.items(), 1):
+            btn = _BandTab(icon, caption, str(i))
+            btn.setProperty("tool", tool)
+            btn.clicked.connect(lambda _c=False, t=tool: self.select_tool(t))
+            self.band_tabs.addButton(btn)
+            self._hint(btn, f"<b>{caption}</b> · {what} · <kbd>{i}</kbd> · again: fold")
+            head.addWidget(btn)
+        head.addSpacing(10)
+        self.band_hint = QLabel("", objectName="BandHint")
+        self.band_hint.setTextFormat(Qt.RichText)
+        self.band_hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        head.addWidget(self.band_hint, stretch=1)
+        icon = QSize(30, BAND_HEADER - 6)
+        self.fold_btn = QPushButton("▲", objectName="OverlayIcon")
+        self.fold_btn.setCursor(Qt.PointingHandCursor)
+        self.fold_btn.setFixedSize(icon)
+        self.fold_btn.clicked.connect(lambda: self.set_folded(not self.band_folded))
+        self._hint(self.fold_btn, lambda: "<b>Unfold</b> the band" if self.band_folded
+                   else "<b>Fold</b> to this row · <kbd>Esc</kbd>")
+        head.addWidget(self.fold_btn)
+        self.band_layout_btn = self._layout_button(icon)
+        head.addWidget(self.band_layout_btn)
+        ct = QPushButton(objectName="OverlayIcon")
+        ct.setCursor(Qt.PointingHandCursor)
+        ct.setFixedSize(icon)
+        ct.clicked.connect(self.toggle_click_through)
+        self.band_ct_dot = _Dot(ct, icon)
+        self._hint(ct, lambda: (
+            "<b>Click-through</b> " + ("on: clicks go to the game" if self.click_through
+                                       else "off: the band takes clicks")
+            + f" · <kbd>{hotkey_label('toggle-clickthrough')}</kbd>"))
+        head.addWidget(ct)
+        self.band_menu_btn = QPushButton("⋯", objectName="OverlayIcon")
+        self.band_menu_btn.setCursor(Qt.PointingHandCursor)
+        self.band_menu_btn.setCheckable(True)
+        self.band_menu_btn.setFixedSize(icon)
+        self.band_menu_btn.toggled.connect(self._show_menu)
+        self._hint(self.band_menu_btn, "<b>More</b>: band height, layout, position, opacity, hide")
+        head.addWidget(self.band_menu_btn)
+        v.addWidget(self.band_header)
+        self.band_stack = QStackedWidget(objectName="BandStack")
+        v.addWidget(self.band_stack, stretch=1)
+        self.band_grips = (_EdgeGrip("l", self), _EdgeGrip("r", self))
+        self.band.hide()
+        for g in self.band_grips:
+            g.hide()
+
+    # -- the band (horizontal layout) -----------------------------------------------------
+    @property
+    def band_h(self) -> int:
+        """The band's own height: the header row only when folded."""
+        return BAND_HEADER + 2 if self.band_folded else BAND_HEIGHTS[self.band_height]
+
+    def _band_width(self) -> int:
+        area = self._area()
+        default = min(BAND_WIDTH, int(area.width() * BAND_MAX_SHARE))
+        width = self.state.get("band_width") or default
+        return max(min(BAND_MIN_WIDTH, area.width()), min(int(width), area.width() - 2 * EDGE))
+
+    def _drop_up(self) -> bool:
+        """A band in the screen's lower half drops lists and menus upwards."""
+        return self._home is not None and self._home.y() > self._area().center().y()
+
+    def toggle_layout(self) -> None:
+        self.set_layout("vertical" if self.horizontal else "horizontal")
+
+    def set_layout(self, mode: str) -> None:
+        """Vertical (the tall panel) or horizontal (the band). The open tool stays open."""
+        if mode == self.layout_mode or mode not in ("vertical", "horizontal"):
+            return
+        self._show_menu(False)
+        self.close_drop()
+        self._exit_large()
+        if self.horizontal:
+            tool = None if self.band_folded else self.tool
+        else:
+            if self.tool:
+                self._remember_size()
+            tool = self.tool
+        self.layout_mode = mode
+        self.state["layout"] = mode
+        self._save_timer.start()
+        if self.horizontal:
+            self._enter_band(tool)
+        else:
+            self._enter_vertical(tool)
+
+    def _enter_vertical(self, tool: str | None = None) -> None:
+        self.tool = None             # first: showing the frame resizes, which must not record a size
+        self.band.hide()
+        for g in self.band_grips:
+            g.hide()
+        self.frame.show()
+        self._bar_size = QSize(self._bar_width, self._bar_size.height())
+        self._home = self._saved_home()
+        if tool:
+            self.select_tool(tool)
+        else:
+            self._collapse()
+        if self.state.get("minimized"):      # minimised stays minimised; expanding brings back `tool`
+            self.set_minimized(True)
+        self._update_status()
+        self._place()
+
+    def _enter_band(self, tool: str | None = None) -> None:
+        if self.minimized:           # the band has its own way down: folding (state["minimized"] stays)
+            self.minimized = False
+            self.mini_bar.stop()
+            self.mini_bar.hide()
+            self.header.show()
+            self.status.show()
+        self.frame.hide()
+        self.band.show()
+        for g in self.band_grips:
+            g.show()
+            g.raise_()
+        saved = self.state.get("band_tool")
+        self.tool = tool or (saved if saved in TOOLS else next(iter(TOOLS)))
+        if tool:
+            self.band_folded = False
+        self._show_band_tool(self.tool)
+        self.band_stack.setVisible(not self.band_folded)
+        self._bar_size = QSize(self._band_width(), self.band_h)
+        self._home = self._saved_home()
+        self._update_status()
+        self._fit_band()
+
+    def _show_band_tool(self, tool: str) -> None:
+        if tool not in self._band_panels:
+            panel = _BandPlaceholder(tool, self)
+            self._band_panels[tool] = panel
+            self.band_stack.addWidget(panel)
+        self.band_stack.setCurrentWidget(self._band_panels[tool])
+        self.state["band_tool"] = tool
+        self._save_timer.start()
+        self._sync_buttons()
+
+    def set_folded(self, on: bool) -> None:
+        """Folded: only the header row is left."""
+        if not self.horizontal:
+            return
+        self._show_menu(False)
+        self.close_drop()
+        self.band_folded = on
+        self.state["band_folded"] = on
+        self._save_timer.start()
+        self.band_stack.setVisible(not on)
+        self.fold_btn.setText("▼" if on else "▲")
+        self._fit_band()
+
+    def set_band_height(self, preset: str) -> None:
+        if preset not in BAND_HEIGHTS:
+            return
+        self.band_height = preset
+        self.state["band_height"] = preset
+        self._save_timer.start()
+        self.menu.sync()
+        if self.horizontal:
+            self._fit_band()
+            if self.menu.isVisible():
+                self._show_menu(True)       # the band moved under it: place it again
+
+    def _fit_band(self) -> None:
+        """The band's size, plus any room dropped from it; then where it belongs."""
+        if not self.horizontal:
+            return
+        width = self._band_width() if self._room == 0 or self.width() < BAND_MIN_WIDTH else self.width()
+        self._bar_size = QSize(width, self.band_h)
+        self.setMinimumSize(0, 0)
+        self.setMaximumSize(16777215, 16777215)
+        self._resizing = True
+        self.resize(width, self.band_h + self._room)
+        self._resizing = False
+        self._layout_band()
+        if self._home is None or not self._reachable(self._home):
+            self._home = None
+        self._place()
+
+    def _layout_band(self) -> None:
+        top = self._room if self._room and self._drop_up() else 0
+        self.band.setGeometry(0, top, self.width(), self.band_h)
+        left, right = self.band_grips
+        left.setGeometry(0, top, _EdgeGrip.WIDTH, self.band_h)
+        right.setGeometry(self.width() - _EdgeGrip.WIDTH, top, _EdgeGrip.WIDTH, self.band_h)
+
+    def resize_band(self, width: int, home: QPoint | None, start_width: int, keep_right: bool) -> None:
+        """Dragging an edge: the other edge stays where it is."""
+        area = self._area()
+        width = max(min(BAND_MIN_WIDTH, area.width()), min(width, area.width()))
+        if home is not None and keep_right:
+            self._home = QPoint(home.x() + start_width - width, home.y())
+        self.state["band_width"] = width
+        self._bar_size = QSize(width, self.band_h)
+        self._resizing = True
+        self.resize(width, self.band_h + self._room)
+        self._resizing = False
+        self._layout_band()
+        self._place()
+
+    def band_resized(self) -> None:
+        self._home = self._home_from(QRect(self.pos(), self.size()))
+        self._save_home()
+
+    def drop_room(self, need: int) -> QRect:
+        """Room for something dropped from the band (a list, the ⋯ menu,
+        details): below it, or above it when the band sits in the screen's
+        lower half. The band itself never grows: the window does, by a
+        transparent area, until release_room(). Returns the room, in window
+        coordinates."""
+        if not self.horizontal:
+            return QRect()
+        limit = max(0, self._area().height() - self.band_h - 2 * EDGE - DROP_GAP)
+        want = min(max(0, need), limit) + DROP_GAP
+        if want > self._room:
+            self._room = want
+            self._fit_band()
+        return self._room_rect()
+
+    def _room_rect(self) -> QRect:
+        if not self._room:
+            return QRect()
+        if self._drop_up():
+            return QRect(0, 0, self.width(), self._room - DROP_GAP)
+        return QRect(0, self.band_h + DROP_GAP, self.width(), self._room - DROP_GAP)
+
+    def release_room(self) -> None:
+        if self._room:
+            self._room = 0
+            self._fit_band()
+
+    def claim_drop(self, close) -> None:
+        """One thing dropped from the band at a time: `close` closes this one,
+        and whatever was open before closes now."""
+        if self._drop_close is not None and self._drop_close != close:
+            previous, self._drop_close = self._drop_close, None
+            previous()
+        self._drop_close = close
+
+    def drop_closed(self, close) -> None:
+        """A drop closed itself (a pick, Esc, a click elsewhere)."""
+        if self._drop_close == close:
+            self._drop_close = None
+        if self._drop_close is None:
+            self.release_room()
+
+    def close_drop(self) -> None:
+        """Closes whatever is dropped from the band (a list, the ⋯ menu)."""
+        if self._drop_close is not None:
+            close, self._drop_close = self._drop_close, None
+            close()
+        self.release_room()
+
     # -- tools ------------------------------------------------------------------------
     def select_tool(self, tool: str, force: bool = False) -> None:
         """Opens a tool's panel; picking the open one again collapses to the
-        bar (unless `force`: keys 1–5 always open)."""
+        bar (unless `force`: keys 1–5 always open). In the band: picking
+        the open one folds it."""
+        if self.horizontal:
+            self._show_menu(False)
+            self.close_drop()
+            if tool == self.tool and not self.band_folded:
+                if not force:
+                    self.set_folded(True)
+                return
+            self.tool = tool
+            self._show_band_tool(tool)
+            if self.band_folded:
+                self.set_folded(False)
+            return
         if self.minimized:
             self.set_minimized(False)
         self._show_menu(False)
@@ -910,7 +1368,7 @@ class OverlayWindow(QWidget):
         """Called by auto-height panels after each render: the window grows or
         shrinks to show all of `content_height`, up to AUTO_HEIGHT_MAX of the
         screen (the panel scrolls beyond that)."""
-        if tool != self.tool or tool not in AUTO_HEIGHT_TOOLS or tool not in self._panels:
+        if tool != self.tool or tool not in AUTO_HEIGHT_TOOLS or tool not in self._panels or self.horizontal:
             return
         panel = self._panels[tool]
         chrome = self.height() - panel.height()          # header, margins, grip
@@ -936,6 +1394,9 @@ class OverlayWindow(QWidget):
         self._collapse()
 
     def _collapse(self) -> None:
+        if self.horizontal:
+            self.set_folded(True)
+            return
         self._exit_large()
         if self.tool:
             self._remember_size()
@@ -948,6 +1409,9 @@ class OverlayWindow(QWidget):
     def _fit_bar(self) -> None:
         """Collapsed (or minimised) size: as wide as the bar needs, as tall
         as its content."""
+        if self.horizontal:
+            self._fit_band()
+            return
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
         # A child shown while the overlay is hidden (the event reminder) doesn't reach the outer
@@ -984,7 +1448,11 @@ class OverlayWindow(QWidget):
             QTimer.singleShot(0, self._fit_bar)
 
     def set_minimized(self, on: bool) -> None:
-        """One line (#53): the current objective, time on it, location."""
+        """One line (#53): the current objective, time on it, location.
+        The band folds instead."""
+        if self.horizontal:
+            self.set_folded(on)
+            return
         if on == self.minimized:
             return
         self._show_menu(False)
@@ -1012,6 +1480,14 @@ class OverlayWindow(QWidget):
         self._save_timer.start()
 
     def _escape(self) -> None:
+        if self.horizontal:
+            if self._drop_close is not None:
+                self.close_drop()
+            elif self.menu.isVisible():
+                self._show_menu(False)
+            elif not self.band_folded:
+                self.set_folded(True)
+            return
         if self.menu.isVisible():
             self._show_menu(False)
         elif self._large is not None:
@@ -1029,7 +1505,7 @@ class OverlayWindow(QWidget):
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Enter and (obj.property("hint") or getattr(obj, "_hint_fn", None)):
             fn = getattr(obj, "_hint_fn", None)
-            self.status.setText(fn() if fn else obj.property("hint"))
+            (self.band_hint if self.horizontal else self.status).setText(fn() if fn else obj.property("hint"))
         elif event.type() == QEvent.Leave and (obj.property("hint") or getattr(obj, "_hint_fn", None)):
             self._update_status()
         return super().eventFilter(obj, event)
@@ -1042,9 +1518,15 @@ class OverlayWindow(QWidget):
         else:
             self.status.setText(f"Click-through <b>off</b> · the overlay takes clicks · <kbd>{key}</kbd>")
         self.ct_dot.set_on(not self.click_through)
+        if hasattr(self, "band_hint"):
+            self.band_hint.setText(self.status.text())
+            self.band_ct_dot.set_on(not self.click_through)
 
     def _show_menu(self, on: bool) -> None:
         if not hasattr(self, "menu"):
+            return
+        if self.horizontal and hasattr(self, "band"):
+            self._show_band_menu(on)
             return
         if on:
             self.menu.sync()
@@ -1072,9 +1554,36 @@ class OverlayWindow(QWidget):
             self.menu_btn.setChecked(on)
             self.menu_btn.blockSignals(False)
 
+    def _show_band_menu(self, on: bool) -> None:
+        """The ⋯ menu drops from the band like a list does (see drop_room)."""
+        if on:
+            self.claim_drop(self._close_band_menu)
+            self.menu.sync()
+            self.menu.adjustSize()
+            room = self.drop_room(self.menu.height())
+            right = self.band_menu_btn.mapTo(self, self.band_menu_btn.rect().topRight()).x()
+            x = max(4, min(right - self.menu.width() + 1, self.width() - self.menu.width() - 4))
+            y = room.bottom() + 1 - self.menu.height() if self._drop_up() else room.top()
+            self.menu.move(x, y)
+            self.menu.show()
+            self.menu.raise_()
+        else:
+            self.menu.hide()
+            self.drop_closed(self._close_band_menu)
+        if self.band_menu_btn.isChecked() != on:
+            self.band_menu_btn.blockSignals(True)
+            self.band_menu_btn.setChecked(on)
+            self.band_menu_btn.blockSignals(False)
+
+    def _close_band_menu(self) -> None:
+        self._show_menu(False)
+
     def _sync_buttons(self) -> None:
         for btn in self.tool_group.buttons():
             btn.setChecked(btn.property("tool") == self.tool)
+        if hasattr(self, "band_tabs"):
+            for btn in self.band_tabs.buttons():
+                btn.setChecked(btn.property("tool") == self.tool)
 
     # -- visibility / click-through ------------------------------------------------------
     def toggle(self) -> None:
@@ -1132,12 +1641,16 @@ class OverlayWindow(QWidget):
         if self._shield is not None:
             self._shield.hide()
 
+    def _polish_click_through(self) -> None:
+        for frame in (self.frame, self.band):
+            frame.setProperty("clickThrough", self.click_through)
+            frame.style().unpolish(frame)
+            frame.style().polish(frame)
+
     def toggle_click_through(self) -> None:
         if self._host is not None:
             self.click_through = not self.click_through
-            self.frame.setProperty("clickThrough", self.click_through)
-            self.frame.style().unpolish(self.frame)
-            self.frame.style().polish(self.frame)
+            self._polish_click_through()
             self._update_status()
             self.show_overlay()        # click-through shows it too, like on X11
             return
@@ -1145,13 +1658,11 @@ class OverlayWindow(QWidget):
         visible = self.isVisible()
         # Changing window flags re-creates the native window; show it again.
         self.setWindowFlag(Qt.WindowTransparentForInput, self.click_through)
-        self.frame.setProperty("clickThrough", self.click_through)
-        self.frame.style().unpolish(self.frame)
-        self.frame.style().polish(self.frame)
+        self._polish_click_through()
         self._update_status()
         if visible or self.click_through:
             self.show_overlay()
-        if self.tool is None:
+        if self.tool is None or self.horizontal:
             self._fit_bar()
 
     # -- persistence ------------------------------------------------------------------------
@@ -1164,7 +1675,7 @@ class OverlayWindow(QWidget):
         self._save_timer.start()
 
     def _remember_size(self) -> None:
-        if self.tool and self._large is None:
+        if self.tool and self._large is None and not self.horizontal:   # the band keeps band_width
             sizes = self.state.setdefault("sizes", {})
             height = self.height()
             if self.tool in AUTO_HEIGHT_TOOLS:   # its height follows the content
@@ -1187,6 +1698,8 @@ class OverlayWindow(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if self.horizontal:
+            self._layout_band()
         if self.isVisible():
             self._place()            # the bar keeps its place; the panel opens towards the free side
         self._sync_hole()
@@ -1205,11 +1718,22 @@ class OverlayWindow(QWidget):
     def _drag_zone(self, pos: QPoint) -> bool:
         """The bar, the status line and the minimised line move the overlay
         (their buttons still click)."""
+        if self.horizontal:
+            return self.band_header.geometry().translated(self.band.pos()).contains(pos)
         at = self.frame.mapFrom(self, pos)
         return any(w.isVisible() and w.geometry().contains(at) for w in (self.header, self.status, self.mini_bar))
 
     def mousePressEvent(self, event):
+        if self.horizontal and not self.band.geometry().contains(event.position().toPoint()):
+            # The transparent room under (or over) the band, outside what's dropped: closes it.
+            self._show_menu(False)
+            self.close_drop()
+            event.accept()
+            return
         if event.button() == Qt.LeftButton and self._large is None and self._drag_zone(event.position().toPoint()):
+            if self.horizontal:
+                self._show_menu(False)
+                self.close_drop()
             self._drag = event.globalPosition().toPoint() - self.pos()
             if self._host is not None:   # surface coordinates (Wayland has no global ones)
                 self._drag = event.position().toPoint()

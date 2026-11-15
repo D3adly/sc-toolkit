@@ -71,10 +71,17 @@ class _InlineCombo(kit.Dropdown):
             self._list = lst
         lst = self._list
         lst.setCurrentIndex(self.model().index(self.currentIndex(), self.modelColumn()))
-        # Below the combo if the list fits there (or there's more room), else above.
-        top = self.mapTo(win, QPoint(0, 0))
         row = lst.sizeHintForRow(0) if self.count() else self.height()
         wanted = min(self.count(), self.maxVisibleItems()) * row + 8
+        overlay = _overlay_of(self)
+        if overlay is not None and overlay.horizontal:
+            # The band (#68): one drop at a time, and the list opens below (or above) the band,
+            # not squeezed inside it. On layer-shell `win` is the full-screen surface: room enough.
+            overlay.claim_drop(self.hidePopup)
+            if win is overlay:
+                overlay.drop_room(wanted + self.MARGIN)
+        # Below the combo if the list fits there (or there's more room), else above.
+        top = self.mapTo(win, QPoint(0, 0))
         below = win.height() - (top.y() + self.height()) - self.MARGIN
         above = top.y() - self.MARGIN
         if wanted <= below or below >= above:
@@ -96,6 +103,9 @@ class _InlineCombo(kit.Dropdown):
         if self._list is not None and self._list.isVisible():
             self._list.hide()
             self.setFocus()
+            overlay = _overlay_of(self)
+            if overlay is not None and overlay.horizontal:
+                overlay.drop_closed(self.hidePopup)
 
     def _pick(self, index) -> None:
         self.setCurrentIndex(index.row())
@@ -114,6 +124,16 @@ class _InlineCombo(kit.Dropdown):
                 self.hidePopup()
                 return True
         return False
+
+
+def _overlay_of(widget: QWidget):
+    """The OverlayWindow a panel widget is in (None outside the overlay)."""
+    from app.ui.overlay import OverlayWindow
+
+    w = widget.parentWidget()
+    while w is not None and not isinstance(w, OverlayWindow):
+        w = w.parentWidget()
+    return w
 
 
 def _combo(min_width: int = 0, marks: bool = False) -> QComboBox:

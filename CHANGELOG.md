@@ -10,6 +10,15 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   loadout slots for them. SC-Toolbox now checks the game files after a patch: a ship that's in
   the game as a player ship with its own paints counts as released, whatever the ship list says.
 
+- **The overlay can lie flat along the top of the screen (work in progress).** ⇆ in the overlay's
+  header, or "Horizontal layout" in ⋯, turns the tall side panel into a wide, short band, top
+  centre, that leaves the game's own side panels free. Pick a tool in the band's header row; pick
+  it again (or ▲, or Esc) to fold the band down to that row. Drag the band to move it, drag its
+  left or right edge to change its width, and choose its height (S, M or L) in ⋯. Lists and the
+  ⋯ menu open below the band without making it taller (above it when the band sits at the
+  bottom). Each layout keeps its own place, and ⇆ switches back. **For now the band shows a
+  placeholder for each tool;** their real views follow.
+
 ## 0.7.1 (2026-11-13)
 
 - **Star Citizen 4.10.3: the Hammerhead and the Constellation Andromeda and Aquila show their

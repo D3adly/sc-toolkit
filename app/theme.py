@@ -1105,6 +1105,74 @@ QInputDialog QLineEdit {{
 #OverlayStep:hover {{
     border: 1px solid {border_hover};
 }}
+#OverlayStep:checked {{
+    background: {accent_soft};
+    border: 1px solid {accent_dim};
+    color: {accent};
+}}
+/* the overlay's horizontal layout: the band (#74) */
+#BandFrame {{
+    background: rgba(16, 19, 23, 0.90);
+    border: 1px solid {border_strong};
+    border-radius: 10px;
+}}
+#BandFrame[clickThrough="true"] {{
+    border: 1px dashed {text_muted};
+}}
+#BandHeader {{
+    background: rgba(255, 255, 255, 0.02);
+    border: none;
+    border-bottom: 1px solid {border};
+    border-top-left-radius: 9px;
+    border-top-right-radius: 9px;
+}}
+#BandTab {{
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+}}
+#BandTab:hover {{
+    background: {bg_hover};
+}}
+#BandTab:checked {{
+    background: {accent_soft};
+}}
+#BandTabCaption {{
+    color: {text_secondary};
+    font-size: 12px;
+    font-weight: 500;
+    background: transparent;
+}}
+#BandTabCaption[on="true"] {{
+    color: {accent};
+    font-weight: 600;
+}}
+#BandTabKey {{
+    color: {text_muted};
+    font-size: 9px;
+    font-weight: 700;
+    background: transparent;
+}}
+#BandHint {{
+    color: {text_muted};
+    font-size: 12px;
+    background: transparent;
+}}
+#BandStack, #BandBody {{
+    background: transparent;
+}}
+#BandColLabel {{
+    color: {text_secondary};
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    background: transparent;
+}}
+#BandText {{
+    color: {text_primary};
+    font-size: 13px;
+    background: transparent;
+}}
 #OverlayMenuSep {{
     background: {border};
     margin: 3px 6px;

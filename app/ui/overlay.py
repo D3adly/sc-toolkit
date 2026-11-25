@@ -611,6 +611,20 @@ class _BandTab(QPushButton):
         self.caption.style().polish(self.caption)
 
 
+def hud_style(widget: QWidget, on: bool, up: bool = False) -> None:
+    """Gives a popup (a drop, the ⋯ menu, a combo's list) the band's visor look
+    while the overlay is the band: QSS keys on the `hud` and `up` properties."""
+    if widget.property("hud") == on and widget.property("up") == up:
+        return
+    widget.setProperty("hud", on)
+    widget.setProperty("up", up)
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
+    for child in widget.findChildren(QWidget):
+        child.style().unpolish(child)
+        child.style().polish(child)
+
+
 class _BandFrame(QFrame):
     """The band's frame, drawn like a visor rim: flush with the screen edge it
     hangs from, wider there, its sides angled in towards the free edge, with a
@@ -625,6 +639,7 @@ class _BandFrame(QFrame):
         self.mode = "top"            # "top" (hangs from the top edge), "bottom" or "rect"
         self.fill_alpha = 0.94
         self.header_h = BAND_HEADER
+        self.header_top = 0          # the bottom band's header sits below the fold tab
         self.fold_tab = _FoldTab(self)
 
     def slant(self) -> int:
@@ -697,9 +712,9 @@ class _BandFrame(QFrame):
             sep = QColor(accent)
             sep.setAlphaF(0.22)
             p.setPen(QPen(sep, 1))
-            y = self.header_h + 0.5
+            y = self.header_top + self.header_h + 0.5
             if self.mode == "bottom":
-                y = h - self.header_h - 0.5
+                y = h - y
             if h > self.header_h + 4:
                 inset = self.slant() * y / h + 8
                 p.drawLine(QPointF(inset, y), QPointF(w - inset, y))
@@ -717,7 +732,8 @@ class _BandFrame(QFrame):
 
 class _FoldTab(QWidget):
     """The small tab in the middle of the band's free edge: click to fold the
-    band to its header row (▲ and Esc do the same)."""
+    band to its header row (▲ and Esc do the same); folded, it stays in the
+    same place, below the header row, and unfolds it."""
 
     SIZE = (100, 9)
 
@@ -725,6 +741,7 @@ class _FoldTab(QWidget):
         super().__init__(frame)
         self.frame = frame
         self.flip = False
+        self.folded = False          # the chevron points the way the band will go
         self.setCursor(Qt.PointingHandCursor)
 
     def paintEvent(self, _event):
@@ -743,7 +760,8 @@ class _FoldTab(QWidget):
         p.setPen(QPen(edge, 1))
         p.drawPolygon(shape)
         p.setPen(QPen(accent, 1.4))
-        p.drawPolyline(QPolygonF([QPointF(w / 2 - 7, h - 2.5), QPointF(w / 2, 2.5), QPointF(w / 2 + 7, h - 2.5)]))
+        tip, base = (h - 2.5, 2.5) if self.folded else (2.5, h - 2.5)
+        p.drawPolyline(QPolygonF([QPointF(w / 2 - 7, base), QPointF(w / 2, tip), QPointF(w / 2 + 7, base)]))
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -1233,6 +1251,7 @@ class OverlayWindow(QWidget):
         v.addWidget(self.band_header)
         self.band_stack = QStackedWidget(objectName="BandStack")
         v.addWidget(self.band_stack, stretch=1)
+        v.addStretch(0)              # folded: the header stays put, the fold tab below it
         self.band_grips = (_EdgeGrip("l", self), _EdgeGrip("r", self))
         self.band.hide()
         for g in self.band_grips:
@@ -1242,7 +1261,7 @@ class OverlayWindow(QWidget):
     @property
     def band_h(self) -> int:
         """The band's own height: the header row only when folded."""
-        return BAND_HEADER + 2 if self.band_folded else BAND_HEIGHTS[self.band_height]
+        return BAND_HEADER + _FoldTab.SIZE[1] + 2 if self.band_folded else BAND_HEIGHTS[self.band_height]
 
     def _band_width(self) -> int:
         area = self._area()
@@ -1399,9 +1418,14 @@ class OverlayWindow(QWidget):
         slant = self.band.slant()
         # Inside the angled sides; the bottom band's header sits at the narrow edge.
         self.band_stack.setContentsMargins(slant + 4, 0, slant + 4, 4)
-        edge = slant + 8 if self.band.mode == "bottom" else 22
+        bottom = self.band.mode == "bottom"
+        edge = slant + 8 if bottom else 22
         self.band_header.layout().setContentsMargins(edge, 0, edge, 0)
-        self.band.fold_tab.setVisible(not self.band_folded)
+        tab = _FoldTab.SIZE[1] if bottom else 0     # the fold tab is at the free edge: above the bottom band
+        self.band.layout().setContentsMargins(0, tab, 0, 0)
+        self.band.header_top = tab
+        self.band.fold_tab.folded = self.band_folded
+        self.band.fold_tab.update()
         left, right = self.band_grips
         left.setGeometry(0, top, _EdgeGrip.WIDTH, self.band_h)
         right.setGeometry(self.width() - _EdgeGrip.WIDTH, top, _EdgeGrip.WIDTH, self.band_h)
@@ -1484,6 +1508,7 @@ class OverlayWindow(QWidget):
         h = min(height, room.height())
         y = room.bottom() + 1 - h if self._drop_up() else room.top()
         drop.setGeometry(x, y, w, h)
+        hud_style(drop, True, self._drop_up())
         drop.show()
         drop.raise_()
         self._drop = (drop, anchor, sticky)
@@ -1761,6 +1786,7 @@ class OverlayWindow(QWidget):
             self._show_band_menu(on)
             return
         if on:
+            hud_style(self.menu, False)
             self.menu.sync()
             self.menu.adjustSize()
             pos = self.menu_btn.mapTo(self, self.menu_btn.rect().bottomRight())
@@ -1797,6 +1823,7 @@ class OverlayWindow(QWidget):
             x = max(4, min(right - self.menu.width() + 1, self.width() - self.menu.width() - 4))
             y = room.bottom() + 1 - self.menu.height() if self._drop_up() else room.top()
             self.menu.move(x, y)
+            hud_style(self.menu, True, self._drop_up())
             self.menu.show()
             self.menu.raise_()
         else:

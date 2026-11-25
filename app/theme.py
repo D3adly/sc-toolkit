@@ -1293,10 +1293,45 @@ QInputDialog QLineEdit {{
 #BandNumber[tone="good"] {{
     color: {success};
 }}
-#BandDrop, #BandDrawer {{
-    background: rgba(16, 19, 23, 0.97);
-    border: 1px solid {border_strong};
-    border-radius: 10px;
+/* Popups from the band: the visor look, the bright edge towards the band (#74). */
+#BandDrop, #BandDrawer, #OverlayMenu[hud="true"], #InlineComboList[hud="true"] {{
+    background: rgba(8, 14, 20, 0.97);
+    border: 1px solid rgba(95, 212, 230, 0.40);
+    border-top: 2px solid {hud};
+    border-radius: 0;
+}}
+#BandDrop[up="true"], #BandDrawer[up="true"], #OverlayMenu[hud="true"][up="true"],
+#InlineComboList[hud="true"][up="true"] {{
+    border-top: 1px solid rgba(95, 212, 230, 0.40);
+    border-bottom: 2px solid {hud};
+}}
+#BandDrop #BandColLabel, #BandDrawer #BandColLabel {{
+    padding-bottom: 2px;
+}}
+#OverlayMenu[hud="true"] #OverlayMenuItem, #InlineComboList[hud="true"]::item {{
+    border-radius: 0;
+}}
+#OverlayMenu[hud="true"] #OverlayMenuItem:hover, #InlineComboList[hud="true"]::item:hover {{
+    background: rgba(95, 212, 230, 0.10);
+}}
+#InlineComboList[hud="true"]::item:selected {{
+    background: rgba(95, 212, 230, 0.18);
+}}
+#OverlayMenu[hud="true"] #OverlayMenuSep {{
+    background: rgba(95, 212, 230, 0.22);
+}}
+#OverlayMenu[hud="true"] #OverlayStep {{
+    border-radius: 0;
+    border: 1px solid rgba(95, 212, 230, 0.25);
+}}
+#OverlayMenu[hud="true"] #OverlayStep:checked {{
+    background: rgba(95, 212, 230, 0.16);
+    border: 1px solid {hud};
+    color: {hud};
+}}
+#OverlayMenu[hud="true"] #OverlayMenuKey {{
+    border-radius: 0;
+    border: 1px solid rgba(95, 212, 230, 0.35);
 }}
 #BandText {{
     color: {text_primary};

@@ -93,6 +93,10 @@ class _InlineCombo(kit.Dropdown):
         width = min(max(self.width(), 160), win.width() - 2 * self.MARGIN)
         x = max(self.MARGIN, min(top.x(), win.width() - width - self.MARGIN))
         lst.setGeometry(x, y, width, max(height, row))
+        if overlay is not None:
+            from app.ui.overlay import hud_style
+
+            hud_style(lst, overlay.horizontal, y < top.y())
         lst.show()
         lst.raise_()
         lst.scrollTo(lst.currentIndex(), QListView.PositionAtCenter)

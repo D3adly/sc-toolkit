@@ -240,7 +240,7 @@ class BandTest(unittest.TestCase):
         tool = ov.tool
         ov.select_tool(tool)                    # the open tab again: fold
         self.assertTrue(ov.band_folded)
-        self.assertEqual(overlay.BAND_HEADER + 2, ov.height())
+        self.assertEqual(overlay.BAND_HEADER + overlay._FoldTab.SIZE[1] + 2, ov.height())
         self.assertFalse(ov.band_stack.isVisible())
         ov.select_tool(tool)                    # and again: open
         self.assertFalse(ov.band_folded)

@@ -13,7 +13,9 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
 - **The band looks like part of the visor.** It hangs flush from the edge of the screen (no more
   gap of a few millimetres), wider at the screen edge with its sides angled in, and has a thin
   glowing rim in place of the boxed border. The open tool is underlined, and a small tab in the
-  middle of the free edge folds the band. At the bottom of the screen the shape is mirrored.
+  middle of the free edge folds the band, and stays in the same place on the folded band to
+  unfold it. Lists, "+n more" drops and the ⋯ menu that open from the band have the same look.
+  At the bottom of the screen the shape is mirrored.
 - **The overlay keeps one size.** In the side panel, every tool opens at the same size and closing
   a tool keeps the bar as wide, so the edges no longer jump when you switch. Resizing it in any tool
   resizes it for all of them, and it now starts taller (about ¾ of the screen). A landscape Maps

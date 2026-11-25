@@ -2,48 +2,18 @@
 
 What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The newest version is at the top.
 
-## Unreleased
+## 0.8.0 (2026-11-25)
 
-- **The Galaxy and the Liberator show as flight-ready, with their stats and loadouts.** Star
-  Citizen 4.10.3 made both flyable, but the ship list (the Star Citizen Wiki, and even RSI's own
-  ship matrix) still called them concepts and linked no game ship, so My Ships had no details or
-  loadout slots for them. SC-Toolbox now checks the game files after a patch: a ship that's in
-  the game as a player ship with its own paints counts as released, whatever the ship list says.
+The overlay, redesigned: a new horizontal layout along the top of the screen, and a new look made
+to sit in the game's own visor.
 
-- **The band looks like part of the visor.** It hangs flush from the edge of the screen (no more
-  gap of a few millimetres), wider at the screen edge with its sides angled in, and has a thin
-  glowing rim in place of the boxed border. The open tool is underlined, and a small tab in the
-  middle of the free edge folds the band, and stays in the same place on the folded band to
-  unfold it. Lists, "+n more" drops and the ⋯ menu that open from the band have the same look.
-  At the bottom of the screen the shape is mirrored.
-- **The side panel has the same visor look as the band.** A plate with two cut corners and a thin
-  cyan rim; the tools are tabs along the top, with the status and buttons on a row under them, and
-  its lists and ⋯ menu match. Dragged near an edge of the screen (the sides, the top or the
-  bottom) it now snaps flush against it, with no gap.
-- **Clearer overlay buttons.** The layout button shows a small picture of the layout it switches
-  to (the wide band, or the tall panel) with a turn arrow, and ⋯ says "Switch to … layout". The
-  side panel's minimise button is an arrow up to a line, so it no longer looks like the band.
-- **The side panel folds up, not down.** Closing a tool or minimising keeps the panel's top edge
-  where it is (it used to drop to the bottom of a tall panel), and opening a tool unfolds it
-  downwards from there.
-- **Everything inside the overlay matches the visor look.** Lists, mission cards, dropdowns,
-  segmented filters, buttons, the "Following your game" line, the Maps viewer and scrollbars are
-  square with cyan rims and accents, in the side panel and the band alike, including the
-  "Waiting for Star Citizen" card before the game runs. The launcher itself keeps its look.
-- **The size you give the side panel stays.** Only dragging its corner changes it: switching tools,
-  opening the ⋯ menu, minimising or the large Maps view no longer resize it or change the size it
-  comes back to.
-- **The overlay keeps one size.** In the side panel, every tool opens at the same size and closing
-  a tool keeps the bar as wide, so the edges no longer jump when you switch. Resizing it in any tool
-  resizes it for all of them, and it now starts taller (about ¾ of the screen). A landscape Maps
-  guide no longer widens the panel (L still shows it large). The band likewise has one width for
-  every tool, and on KDE Wayland it now starts at its full width rather than narrow.
-- **The overlay can lie flat along the top of the screen.** ⇆ in the overlay's header, or
-  "Switch to horizontal layout" in ⋯, turns the tall side panel into a wide, short band, centred at the top
+- **The overlay can lie flat along the top of the screen.** The layout button in the overlay's
+  header (a small picture of the layout it switches to, with a turn arrow), or "Switch to
+  horizontal layout" in ⋯, turns the tall side panel into a wide, short band, centred at the top
   of the screen, which leaves the game's own side panels free. Each tool has its own view for the
   band: columns you read at a glance, with no scrolling. What you act on is on the band; when a
-  list is cut, "+n more ▾" on its title line drops the rest of the same list (one width for every
-  tool), and Esc or a click elsewhere closes it.
+  list is cut, "+n more ▾" on its title line drops the rest of the same list, and Esc or a click
+  elsewhere closes it.
   - Missions: the mission (a list switches it) and how long you've been on it; the current
     objective, large, with what comes next; where, cargo and the other details; the reward and the
     new blueprints it can drop. The mission brief is a click away.
@@ -55,11 +25,32 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   - Maps: the guide, its pages and guides for what you're doing. Show guide (or L, or picking a
     guide or page) pulls the whole guide out below the band as a drawer.
 
-  What doesn't fit opens below the band when you ask: "all ▾" for a longer list, Details for a
-  mission, a click on a ship for its fee, parts and cargo. Pick the open tool again (or ▲, or
-  Esc) to fold the band down to its header row, which then shows a one-line summary. Drag the
-  band to the top or the bottom of the screen (it stays centred), drag its left or right edge
-  to change its width, and choose its height (S, M or L) in ⋯. ⇆ switches back.
+  Pick the open tool again, click the small tab in the middle of the band's lower edge, or press
+  Esc to fold the band down to its header row, which then shows a one-line summary; the tab stays
+  in the same place to unfold it. Drag the band to the top or the bottom of the screen (it stays
+  centred and sits flush against the edge), drag its left or right edge to change its width, and
+  choose its height (S, M or L) in ⋯.
+- **A new look, made for the game's visor.** The band hangs from the edge of the screen like a
+  visor rim: wider at the screen edge, its sides angled in, with a thin glowing cyan rim. The side
+  panel is a plate with two cut corners and the same rim, its tools as tabs along the top and the
+  status and buttons on a row under them. Everything inside matches: lists, mission cards,
+  dropdowns, filters, buttons, the "Following your game" line, the Maps viewer, the "Waiting for
+  Star Citizen" card, scrollbars, and the lists and ⋯ menu that open from the overlay. In
+  click-through mode the rim just dims. The launcher's own window keeps its look.
+- **Snaps flush to the screen edges.** Dragged near an edge (the sides, the top or the bottom), the
+  side panel now sits right against it, with no gap; so does the band at the top or bottom.
+- **The side panel keeps the size you give it.** Every tool opens at the same size, and only
+  dragging its corner changes it: switching tools, opening ⋯, minimising or the large Maps view no
+  longer resize it or change the size it comes back to. It now starts taller (about ¾ of the
+  screen), and a landscape Maps guide no longer widens it (L still shows it large).
+- **The side panel folds up, not down.** Closing a tool or minimising keeps the panel's top edge
+  where it is (it used to drop to the bottom of a tall panel), and opening a tool unfolds it
+  downwards from there. The minimise button is now an arrow up to a line.
+- **The Galaxy and the Liberator show as flight-ready, with their stats and loadouts.** Star
+  Citizen 4.10.3 made both flyable, but the ship list (the Star Citizen Wiki, and even RSI's own
+  ship matrix) still called them concepts and linked no game ship, so My Ships had no details or
+  loadout slots for them. SC-Toolbox now checks the game files after a patch: a ship that's in
+  the game as a player ship with its own paints counts as released, whatever the ship list says.
 
 ## 0.7.1 (2026-11-13)
 

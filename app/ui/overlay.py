@@ -31,7 +31,7 @@ import json
 import sys
 
 import psutil
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QRegion, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -596,7 +596,7 @@ class _BandTab(QPushButton):
         row.setSpacing(6)
         ic = QLabel()
         ic.setPixmap(QIcon(str(config.ICONS_DIR / f"{icon}.png")).pixmap(QSize(16, 16)))
-        cap = self.caption = QLabel(caption, objectName="BandTabCaption")
+        cap = self.caption = QLabel(caption.upper(), objectName="BandTabCaption")
         k = QLabel(key, objectName="BandTabKey")
         for w in (ic, cap, k):
             w.setAttribute(Qt.WA_TransparentForMouseEvents)
@@ -609,6 +609,147 @@ class _BandTab(QPushButton):
         self.caption.setProperty("on", on)
         self.caption.style().unpolish(self.caption)
         self.caption.style().polish(self.caption)
+
+
+class _BandFrame(QFrame):
+    """The band's frame, drawn like a visor rim: flush with the screen edge it
+    hangs from, wider there, its sides angled in towards the free edge, with a
+    thin glowing outline (#74, frame A "Visor Lip"). Mirrored when the band is
+    at the bottom; a plain rectangle for Maps' large view."""
+
+    SLANT = 0.22                 # the sides' run per pixel of height (34 px on the normal band)
+    ACCENT = "#5fd4e6"
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent, objectName="BandFrame")
+        self.mode = "top"            # "top" (hangs from the top edge), "bottom" or "rect"
+        self.fill_alpha = 0.94
+        self.header_h = BAND_HEADER
+        self.fold_tab = _FoldTab(self)
+
+    def slant(self) -> int:
+        return 0 if self.mode == "rect" else round(self.height() * self.SLANT)
+
+    def set_mode(self, mode: str) -> None:
+        if mode != self.mode:
+            self.mode = mode
+            self.update()
+        self._place_tab()
+
+    def set_fill_alpha(self, alpha: float) -> None:
+        self.fill_alpha = alpha
+        self.update()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._place_tab()
+
+    def _place_tab(self) -> None:
+        w, h = _FoldTab.SIZE
+        y = 0 if self.mode == "bottom" else self.height() - h
+        self.fold_tab.flip = self.mode == "bottom"
+        self.fold_tab.setGeometry((self.width() - w) // 2, y, w, h)
+        self.fold_tab.raise_()
+
+    def outline(self) -> list[QPointF]:
+        """The open outline (no line along the screen edge), top-mode coordinates."""
+        w, h, s = self.width(), self.height(), self.slant()
+        if self.mode == "rect":
+            return [QPointF(0.5, 0.5), QPointF(0.5, h - 0.5), QPointF(w - 0.5, h - 0.5),
+                    QPointF(w - 0.5, 0.5), QPointF(0.5, 0.5)]
+        return [QPointF(0.5, 0), QPointF(s + 0.5, h - 0.5), QPointF(w - s - 0.5, h - 0.5), QPointF(w - 0.5, 0)]
+
+    def paintEvent(self, _event):
+        from PySide6.QtGui import QPainterPath, QPen, QPolygonF, QTransform
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        flip = QTransform(1, 0, 0, -1, 0, h) if self.mode == "bottom" else QTransform()
+        p.setTransform(flip)
+        pts = self.outline()
+        body = QPainterPath()
+        body.addPolygon(QPolygonF(pts))
+        body.closeSubpath()
+        top, bottom = QColor(8, 14, 20), QColor(10, 18, 26)
+        top.setAlphaF(self.fill_alpha)
+        bottom.setAlphaF(self.fill_alpha * 0.92)
+        from PySide6.QtGui import QLinearGradient
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0, top)
+        grad.setColorAt(1, bottom)
+        p.fillPath(body, grad)
+
+        accent = QColor(self.ACCENT)
+        dashed = bool(self.property("clickThrough"))
+        line = QPainterPath()
+        line.addPolygon(QPolygonF(pts))
+        glow = QColor(accent)
+        glow.setAlphaF(0.10 if dashed else 0.18)
+        p.strokePath(line, QPen(glow, 5, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
+        edge = QColor(accent)
+        edge.setAlphaF(0.45 if dashed else 0.8)
+        pen = QPen(edge, 1, Qt.DashLine if dashed else Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin)
+        p.strokePath(line, pen)
+
+        if self.mode != "rect":
+            # the header's separator, end marks at the screen edge and near the free edge
+            sep = QColor(accent)
+            sep.setAlphaF(0.22)
+            p.setPen(QPen(sep, 1))
+            y = self.header_h + 0.5
+            if self.mode == "bottom":
+                y = h - self.header_h - 0.5
+            if h > self.header_h + 4:
+                inset = self.slant() * y / h + 8
+                p.drawLine(QPointF(inset, y), QPointF(w - inset, y))
+            p.setPen(QPen(accent, 2))
+            p.drawLine(QPointF(10, 0), QPointF(10, 6))
+            p.drawLine(QPointF(w - 10, 0), QPointF(w - 10, 6))
+            if h > 60:
+                tick = QColor(accent)
+                tick.setAlphaF(0.6)
+                p.setPen(QPen(tick, 1))
+                s = self.slant()
+                p.drawLine(QPointF(s + 6, h - 12.5), QPointF(s + 18, h - 12.5))
+                p.drawLine(QPointF(w - s - 18, h - 12.5), QPointF(w - s - 6, h - 12.5))
+
+
+class _FoldTab(QWidget):
+    """The small tab in the middle of the band's free edge: click to fold the
+    band to its header row (▲ and Esc do the same)."""
+
+    SIZE = (100, 9)
+
+    def __init__(self, frame: _BandFrame):
+        super().__init__(frame)
+        self.frame = frame
+        self.flip = False
+        self.setCursor(Qt.PointingHandCursor)
+
+    def paintEvent(self, _event):
+        from PySide6.QtGui import QPen, QPolygonF, QTransform
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        if self.flip:
+            p.setTransform(QTransform(1, 0, 0, -1, 0, h))
+        accent = QColor(_BandFrame.ACCENT)
+        shape = QPolygonF([QPointF(0, h), QPointF(10, 0.5), QPointF(w - 10, 0.5), QPointF(w, h)])
+        p.setBrush(QColor(8, 14, 20, 240))
+        edge = QColor(accent)
+        edge.setAlphaF(0.75)
+        p.setPen(QPen(edge, 1))
+        p.drawPolygon(shape)
+        p.setPen(QPen(accent, 1.4))
+        p.drawPolyline(QPolygonF([QPointF(w / 2 - 7, h - 2.5), QPointF(w / 2, 2.5), QPointF(w / 2 + 7, h - 2.5)]))
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            overlay = self.frame.parent()
+            overlay.set_folded(not overlay.band_folded)
+        event.accept()
 
 
 class _EdgeGrip(QWidget):
@@ -721,7 +862,7 @@ class OverlayWindow(QWidget):
         self.frame.setStyleSheet(
             f"#OverlayFrame {{ background: rgba(16, 19, 23, {alpha * 0.97:.3f}); }}")
         if hasattr(self, "band"):
-            self.band.setStyleSheet(f"#BandFrame {{ background: rgba(16, 19, 23, {alpha * 0.97:.3f}); }}")
+            self.band.set_fill_alpha(alpha * 0.97)
         if hasattr(self, "menu"):
             self.menu.set_opacity(value)
 
@@ -1036,14 +1177,14 @@ class OverlayWindow(QWidget):
         click-through, ⋯) over the open tool's body. Placed by hand, not by a
         layout: the window can be taller than the band while a list or the ⋯
         menu is dropped from it (see drop_room)."""
-        self.band = QFrame(self, objectName="BandFrame")
+        self.band = _BandFrame(self)
         v = QVBoxLayout(self.band)
-        v.setContentsMargins(1, 1, 1, 1)
+        v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
         self.band_header = QFrame(objectName="BandHeader")
         self.band_header.setFixedHeight(BAND_HEADER)
         head = QHBoxLayout(self.band_header)
-        head.setContentsMargins(6, 0, 6, 0)
+        head.setContentsMargins(22, 0, 22, 0)
         head.setSpacing(2)
         grip = QLabel("⠿", objectName="OverlayGrip")
         self._hint(grip, "<b>Drag</b> to move the band · drag its left or right edge to resize it")
@@ -1246,12 +1387,21 @@ class OverlayWindow(QWidget):
 
     def _layout_band(self) -> None:
         if self._large is not None:      # Maps' large view: the band fills the window
+            self.band.set_mode("rect")
+            self.band_stack.setContentsMargins(1, 0, 1, 1)
             self.band.setGeometry(self.rect())
             for g in self.band_grips:
                 g.setGeometry(0, 0, 0, 0)
             return
         top = self._room if self._room and self._drop_up() else 0
+        self.band.set_mode("bottom" if self.state.get("band_edge") == "bottom" else "top")
         self.band.setGeometry(0, top, self.width(), self.band_h)
+        slant = self.band.slant()
+        # Inside the angled sides; the bottom band's header sits at the narrow edge.
+        self.band_stack.setContentsMargins(slant + 4, 0, slant + 4, 4)
+        edge = slant + 8 if self.band.mode == "bottom" else 22
+        self.band_header.layout().setContentsMargins(edge, 0, edge, 0)
+        self.band.fold_tab.setVisible(not self.band_folded)
         left, right = self.band_grips
         left.setGeometry(0, top, _EdgeGrip.WIDTH, self.band_h)
         right.setGeometry(self.width() - _EdgeGrip.WIDTH, top, _EdgeGrip.WIDTH, self.band_h)
@@ -1728,6 +1878,7 @@ class OverlayWindow(QWidget):
             frame.setProperty("clickThrough", self.click_through)
             frame.style().unpolish(frame)
             frame.style().polish(frame)
+        self.band.update()
 
     def toggle_click_through(self) -> None:
         if self._host is not None:

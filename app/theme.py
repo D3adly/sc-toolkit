@@ -32,6 +32,7 @@ PALETTE = {
     "accent_dim": "#8a6524",
     "accent_soft": "rgba(227, 163, 59, 0.18)",
     "info": "#8db4cf",
+    "hud": "#5fd4e6",            # the overlay band's visor colour (#74)
     "info_dim": "#4d6a80",
     "info_soft": "rgba(141, 180, 207, 0.14)",
     "text_primary": "#f3ede2",
@@ -1111,41 +1112,37 @@ QInputDialog QLineEdit {{
     color: {accent};
 }}
 /* the overlay's horizontal layout: the band (#74) */
-#BandFrame {{
-    background: rgba(16, 19, 23, 0.90);
-    border: 1px solid {border_strong};
-    border-radius: 10px;
-}}
-#BandFrame[clickThrough="true"] {{
-    border: 1px dashed {text_muted};
+#BandFrame, #BandFrame[clickThrough="true"] {{
+    background: transparent;       /* drawn by _BandFrame: the visor rim (#74) */
+    border: none;
 }}
 #BandHeader {{
-    background: rgba(255, 255, 255, 0.02);
+    background: transparent;
     border: none;
-    border-bottom: 1px solid {border};
-    border-top-left-radius: 9px;
-    border-top-right-radius: 9px;
 }}
 #BandTab {{
     background: transparent;
     border: none;
-    border-radius: 5px;
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
 }}
 #BandTab:hover {{
-    background: {bg_hover};
+    background: rgba(95, 212, 230, 0.08);
 }}
 #BandTab:checked {{
-    background: {accent_soft};
+    background: transparent;
+    border-bottom: 2px solid {hud};
 }}
 #BandTabCaption {{
     color: {text_secondary};
-    font-size: 12px;
-    font-weight: 500;
+    font-family: "Rajdhani";
+    font-size: 14px;
+    font-weight: 600;
     background: transparent;
 }}
 #BandTabCaption[on="true"] {{
-    color: {accent};
-    font-weight: 600;
+    color: {hud};
+    font-weight: 700;
 }}
 #BandTabKey {{
     color: {text_muted};
@@ -1162,8 +1159,9 @@ QInputDialog QLineEdit {{
     background: transparent;
 }}
 #BandColLabel {{
-    color: {text_secondary};
-    font-size: 10px;
+    color: {hud};
+    font-family: "Rajdhani";
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 1px;
     background: transparent;
@@ -1171,7 +1169,7 @@ QInputDialog QLineEdit {{
 #BandColumn {{
     background: transparent;
     border: none;
-    border-left: 1px solid {border};
+    border-left: 1px solid rgba(95, 212, 230, 0.22);
 }}
 #BandColumn[first="true"] {{
     border-left: none;

@@ -178,7 +178,7 @@ class BandTest(unittest.TestCase):
         self.assertEqual(width, ov.width())
         self.assertEqual(overlay.BAND_HEIGHTS["normal"], ov.height())
         self.assertEqual((SCREEN.width() - width) // 2, ov.x())
-        self.assertEqual(overlay.EDGE, ov.y())
+        self.assertEqual(0, ov.y())
 
     def test_each_layout_keeps_its_own_position(self):
         ov = self.make({})
@@ -186,10 +186,10 @@ class BandTest(unittest.TestCase):
         vertical = ov._home                              # the bar's place (an open panel opens upwards)
         ov.set_layout("horizontal")
         settle()
-        self.assertEqual(overlay.EDGE, ov.y())          # the band's own default, not the bar's place
+        self.assertEqual(0, ov.y())          # the band's own default, not the bar's place
         ov.move_to("bc")
         band = ov.pos()
-        self.assertEqual(SCREEN.height() - overlay.EDGE - ov.height(), band.y())
+        self.assertEqual(SCREEN.height() - ov.height(), band.y())
         ov.set_layout("vertical")
         settle()
         self.assertEqual(vertical, ov._home)
@@ -201,16 +201,16 @@ class BandTest(unittest.TestCase):
     def test_the_band_is_always_centred(self):
         ov = self.make({"layout": "horizontal", "positions": {"0,0,2560x1440|h": [100, 600]}, "pos_h": [100, 600]})
         self.assertEqual((SCREEN.width() - ov.width()) // 2, ov.x())     # old saved spots don't count
-        self.assertEqual(overlay.EDGE, ov.y())
+        self.assertEqual(0, ov.y())
         ov.move_to("tl")                                                  # (not offered, but still centred)
         self.assertEqual((SCREEN.width() - ov.width()) // 2, ov.x())
         ov.set_folded(True)
         self.assertEqual((SCREEN.width() - ov.width()) // 2, ov.x())
         ov.move_to("bc")
         ov.set_folded(False)                                              # at the bottom it stays on the edge
-        self.assertEqual(SCREEN.height() - overlay.EDGE, ov.y() + ov.height())
+        self.assertEqual(SCREEN.height(), ov.y() + ov.height())
         ov.reset_position()
-        self.assertEqual(overlay.EDGE, ov.y())
+        self.assertEqual(0, ov.y())
 
     def test_height_presets(self):
         ov = self.make({"layout": "horizontal"})

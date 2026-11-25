@@ -10,6 +10,8 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   loadout slots for them. SC-Toolbox now checks the game files after a patch: a ship that's in
   the game as a player ship with its own paints counts as released, whatever the ship list says.
 
+- **The band sits flush with the edge of the screen.** At the top (or the bottom) it now touches
+  the screen edge, like the game's own HUD, rather than floating a few millimetres below it.
 - **The overlay keeps one size.** In the side panel, every tool opens at the same size and closing
   a tool keeps the bar as wide, so the edges no longer jump when you switch. Resizing it in any tool
   resizes it for all of them, and it now starts taller (about ¾ of the screen). A landscape Maps

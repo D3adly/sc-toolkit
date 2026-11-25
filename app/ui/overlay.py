@@ -764,8 +764,8 @@ class OverlayWindow(QWidget):
         area = self._area()
         x = area.x() + (area.width() - self._bar_size.width()) // 2
         if self.state.get("band_edge") == "bottom":
-            return QPoint(x, area.bottom() + 1 - self.band_h - EDGE)
-        return QPoint(x, area.top() + EDGE)
+            return QPoint(x, area.bottom() + 1 - self.band_h)
+        return QPoint(x, area.top())       # flush with the screen edge, like the game's own HUD
 
     def _saved_home(self) -> QPoint | None:
         if self.horizontal:
@@ -796,7 +796,7 @@ class OverlayWindow(QWidget):
 
     def _default_home(self, area: QRect) -> QPoint:
         if self.horizontal:     # the band: top centre
-            return QPoint(area.x() + (area.width() - self._bar_size.width()) // 2, area.top() + EDGE)
+            return QPoint(area.x() + (area.width() - self._bar_size.width()) // 2, area.top())
         return QPoint(area.right() + 1 - self._bar_size.width() - EDGE, area.top() + EDGE)
 
     def _place(self) -> None:

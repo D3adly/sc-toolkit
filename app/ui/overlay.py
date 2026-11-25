@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QPushButton,
     QSizeGrip,
     QSizePolicy,
@@ -68,7 +69,7 @@ PANEL_WIDTH = 480
 PANEL_HEIGHT_SHARE = 0.72
 PANEL_MIN_HEIGHT = 300
 SNAP = 28                    # px: dragged this close to a screen edge, it snaps to it
-EDGE = 10                    # px: the gap to the screen edge when snapped or placed
+EDGE = 0                     # px: the gap to the screen edge when snapped or placed (flush, like the HUD)
 LARGE = 0.9                  # Maps' large view: this much of the screen
 # The horizontal layout (#74): a "band" along the top of the screen, a header row over the
 # open tool's columns, instead of the tall panel that covers the game's own UI.
@@ -187,7 +188,7 @@ class _ResizeGrip(QSizeGrip):
             return
         win = self._overlay()
         delta = event.globalPosition().toPoint() - start[0]
-        minimum = win.minimumSizeHint()
+        minimum = win.panel_min() if hasattr(win, "panel_min") else win.minimumSizeHint()
         win.resize(max(minimum.width(), start[1].width() + delta.x()),
                    max(minimum.height(), start[1].height() + delta.y()))
         event.accept()
@@ -199,7 +200,19 @@ class _ResizeGrip(QSizeGrip):
             win._manual = False
             win._home = win._home_from(win.geometry())
             win._save_home()
+            if hasattr(win, "_remember_size"):
+                win._remember_size()        # the user's size: the only thing that sets it
         event.accept()
+
+    def paintEvent(self, _event):
+        from PySide6.QtGui import QPen
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        p.setPen(QPen(QColor(_PanelFrame.ACCENT), 1.5))
+        for d in (5, 10):
+            p.drawLine(QPointF(w - d - 1, h - 1), QPointF(w - 1, h - d - 1))
 
 
 def _copy_shape_to_input(win_id: int) -> None:
@@ -323,31 +336,6 @@ class _InputShield(QWidget):
         event.accept()
         self.overlay.raise_()
         self.overlay.activateWindow()
-
-
-class _ToolButton(QPushButton):
-    """A tool in the bar: its icon, a one-word caption under it, and its key."""
-
-    def __init__(self, icon: str, caption: str, key: str, parent=None):
-        super().__init__(parent, objectName="OverlayTool")
-        self.setCheckable(True)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(52, 44)
-        v = QVBoxLayout(self)
-        v.setContentsMargins(0, 4, 0, 3)
-        v.setSpacing(1)
-        ic = QLabel()
-        ic.setPixmap(QIcon(str(config.ICONS_DIR / f"{icon}.png")).pixmap(TOOL_ICON))
-        ic.setAlignment(Qt.AlignHCenter)
-        ic.setAttribute(Qt.WA_TransparentForMouseEvents)
-        v.addWidget(ic)
-        cap = QLabel(caption, objectName="OverlayCaption")
-        cap.setAlignment(Qt.AlignHCenter)
-        cap.setAttribute(Qt.WA_TransparentForMouseEvents)
-        v.addWidget(cap)
-        k = QLabel(key, self, objectName="OverlayKey")
-        k.setAttribute(Qt.WA_TransparentForMouseEvents)
-        k.move(40, 2)
 
 
 class _Dot(QWidget):
@@ -586,7 +574,7 @@ class _MinimisedBar(QFrame):
 class _BandTab(QPushButton):
     """A tool in the band's header row: icon, caption and its key, side by side."""
 
-    def __init__(self, icon: str, caption: str, key: str, parent=None):
+    def __init__(self, icon: str | None, caption: str, key: str, parent=None):
         super().__init__(parent, objectName="BandTab")
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
@@ -594,11 +582,15 @@ class _BandTab(QPushButton):
         row = QHBoxLayout(self)
         row.setContentsMargins(8, 0, 8, 0)
         row.setSpacing(6)
-        ic = QLabel()
-        ic.setPixmap(QIcon(str(config.ICONS_DIR / f"{icon}.png")).pixmap(QSize(16, 16)))
+        parts = []
+        if icon:
+            ic = QLabel()
+            ic.setPixmap(QIcon(str(config.ICONS_DIR / f"{icon}.png")).pixmap(QSize(16, 16)))
+            parts.append(ic)
         cap = self.caption = QLabel(caption.upper(), objectName="BandTabCaption")
         k = QLabel(key, objectName="BandTabKey")
-        for w in (ic, cap, k):
+        parts += [cap, k]
+        for w in parts:
             w.setAttribute(Qt.WA_TransparentForMouseEvents)
             row.addWidget(w)
         self.setMinimumWidth(row.sizeHint().width())   # a button doesn't size to its layout
@@ -609,6 +601,60 @@ class _BandTab(QPushButton):
         self.caption.setProperty("on", on)
         self.caption.style().unpolish(self.caption)
         self.caption.style().polish(self.caption)
+
+
+class _PanelFrame(QFrame):
+    """The vertical panel's frame (design V3 "Visor Card"): a plate with two cut
+    corners (top left, bottom right), a thin glowing cyan rim like the band's,
+    and a faint line under the header."""
+
+    CUT = 22
+    ACCENT = "#5fd4e6"
+
+    def __init__(self):
+        super().__init__(objectName="OverlayFrame")
+        self.fill_alpha = 0.94
+        self.header: QWidget | None = None
+
+    def set_fill_alpha(self, alpha: float) -> None:
+        self.fill_alpha = alpha
+        self.update()
+
+    def paintEvent(self, _event):
+        from PySide6.QtGui import QLinearGradient, QPainterPath, QPen, QPolygonF
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h, c = self.width() - 0.5, self.height() - 0.5, self.CUT
+        pts = [QPointF(c, 0.5), QPointF(w, 0.5), QPointF(w, h - c), QPointF(w - c, h),
+               QPointF(0.5, h), QPointF(0.5, c)]
+        path = QPainterPath()
+        path.addPolygon(QPolygonF(pts))
+        path.closeSubpath()
+        top, bottom = QColor(8, 14, 20), QColor(10, 18, 26)
+        top.setAlphaF(self.fill_alpha)
+        bottom.setAlphaF(self.fill_alpha * 0.92)
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0, top)
+        grad.setColorAt(1, bottom)
+        p.fillPath(path, grad)
+        accent = QColor(self.ACCENT)
+        dashed = bool(self.property("clickThrough"))
+        glow = QColor(accent)
+        glow.setAlphaF(0.10 if dashed else 0.16)
+        p.strokePath(path, QPen(glow, 5, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
+        edge = QColor(accent)
+        edge.setAlphaF(0.45 if dashed else 0.7)
+        p.strokePath(path, QPen(edge, 1, Qt.DashLine if dashed else Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
+        p.setPen(QPen(accent, 2.5))
+        p.drawLine(pts[5], pts[0])
+        p.drawLine(pts[2], pts[3])
+        if self.header is not None and self.header.isVisible():
+            sep = QColor(accent)
+            sep.setAlphaF(0.22)
+            p.setPen(QPen(sep, 1))
+            y = self.header.geometry().bottom() + 3.5
+            p.drawLine(QPointF(8, y), QPointF(w - 8, y))
 
 
 def hud_style(widget: QWidget, on: bool, up: bool = False) -> None:
@@ -877,8 +923,7 @@ class OverlayWindow(QWidget):
         over any scene (#51)."""
         self._opacity = value
         alpha = max(0.0, min(1.0, value / 100))
-        self.frame.setStyleSheet(
-            f"#OverlayFrame {{ background: rgba(16, 19, 23, {alpha * 0.97:.3f}); }}")
+        self.frame.set_fill_alpha(alpha * 0.97)
         if hasattr(self, "band"):
             self.band.set_fill_alpha(alpha * 0.97)
         if hasattr(self, "menu"):
@@ -1063,7 +1108,6 @@ class OverlayWindow(QWidget):
                 panel.toggle_drawer()
             return
         if self._large is None:
-            self._remember_size()
             self._large = self.size()
             area = self._area()
             self._resizing = True
@@ -1099,29 +1143,46 @@ class OverlayWindow(QWidget):
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        self.frame = QFrame(objectName="OverlayFrame")
+        # The window never sizes itself to its content's minimum: the user's size rules.
+        outer.setSizeConstraint(QLayout.SetNoConstraint)
+        self.frame = _PanelFrame()
         outer.addWidget(self.frame)
         v = QVBoxLayout(self.frame)
-        v.setContentsMargins(8, 6, 8, 8)
+        v.setContentsMargins(8, 2, 12, 12)
         v.setSpacing(6)
 
+        # Two rows (V3 "Visor Card"): the tools as tabs, then grip, status and buttons.
         self.header = QFrame(objectName="OverlayHeader")
-        head = QHBoxLayout(self.header)
+        rows = QVBoxLayout(self.header)
+        rows.setContentsMargins(0, 0, 0, 0)
+        rows.setSpacing(0)
+        tabs = QHBoxLayout()
+        tabs.setContentsMargins(_PanelFrame.CUT - 8, 0, 0, 0)   # clear of the cut corner
+        tabs.setSpacing(0)
+        rows.addLayout(tabs)
+        head = QHBoxLayout()
         head.setContentsMargins(0, 0, 0, 0)
         head.setSpacing(2)
-        grip = QLabel("⠿", objectName="OverlayGrip")
-        self._hint(grip, "<b>Drag</b> to move the overlay")
-        head.addWidget(grip)
+        rows.addLayout(head)
         self.tool_group = QButtonGroup(self)
         self.tool_group.setExclusive(False)
         for i, (tool, (what, icon, _size, caption)) in enumerate(TOOLS.items(), 1):
-            btn = _ToolButton(icon, caption, str(i))
+            btn = _BandTab(None, caption, str(i))
+            btn.setFixedHeight(32)
             btn.clicked.connect(lambda _c=False, t=tool: self.select_tool(t))
             self.tool_group.addButton(btn)
             btn.setProperty("tool", tool)
             self._hint(btn, f"<b>{caption}</b> · {what} · <kbd>{i}</kbd>")
-            head.addWidget(btn)
-        head.addStretch(1)
+            tabs.addWidget(btn)
+        tabs.addStretch(1)
+        grip = QLabel("⠿", objectName="OverlayGrip")
+        self._hint(grip, "<b>Drag</b> to move the overlay · near an edge it snaps flush to it")
+        head.addWidget(grip)
+        # The status line: the click-through state, or what the pointer is on.
+        self.status = QLabel("", objectName="OverlayStatus")
+        self.status.setTextFormat(Qt.RichText)
+        self.status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        head.addWidget(self.status, stretch=1)
         self.ct_btn = QPushButton(objectName="OverlayIcon")
         self.ct_btn.setCursor(Qt.PointingHandCursor)
         self.ct_btn.clicked.connect(self.toggle_click_through)
@@ -1147,11 +1208,7 @@ class OverlayWindow(QWidget):
         self._hint(self.menu_btn, "<b>More</b>: background opacity, hide, settings")
         head.addWidget(self.menu_btn)
         v.addWidget(self.header)
-
-        # The status line: the click-through state, or what the pointer is on.
-        self.status = QLabel("", objectName="OverlayStatus")
-        self.status.setTextFormat(Qt.RichText)
-        v.addWidget(self.status)
+        self.frame.header = self.header
         self._update_status()
 
         # The next op you're signed up for (from the launcher), in both the bar and one-line mode.
@@ -1286,8 +1343,6 @@ class OverlayWindow(QWidget):
         if self.horizontal:
             tool = None if self.band_folded else self.tool
         else:
-            if self.tool:
-                self._remember_size()
             tool = self.tool
         self.layout_mode = mode
         self.state["layout"] = mode
@@ -1571,9 +1626,7 @@ class OverlayWindow(QWidget):
                 self._collapse()
             return
         self._exit_large()
-        if self.tool:
-            self._remember_size()
-        self._resizing = True   # constraint changes below resize; don't record those
+        self._resizing = True
         self.tool = tool
         if tool not in self._panels:
             panel = self._make_panel(tool)
@@ -1582,12 +1635,10 @@ class OverlayWindow(QWidget):
         self.stack.setCurrentWidget(self._panels[tool])
         self.stack.setVisible(True)
         self.size_grip.setVisible(True)
-        # Never narrower than the bar, or its buttons get cut off.
-        min_width = max(BAR_MIN_WIDTH, self._bar_need)
-        self.setMinimumSize(min_width, 300)
+        # The user's size, the same for every tool (the grip never goes below panel_min).
+        self.setMinimumSize(self.panel_min())
         self.setMaximumSize(16777215, 16777215)
-        size = self._panel_size()
-        self.resize(max(size.width(), min_width), size.height())
+        self.resize(self._panel_size())
         self._resizing = False
         self._sync_buttons()
         activate = getattr(self._panels[tool], "activate", None)
@@ -1606,16 +1657,23 @@ class OverlayWindow(QWidget):
                     if self.tool == tool and shown:
                         panel.activate()
 
+    def panel_min(self) -> QSize:
+        """The least size of the vertical panel: its header's tabs and buttons."""
+        m = self.frame.layout().contentsMargins()
+        width = self.header.minimumSizeHint().width() + m.left() + m.right() + 2
+        return QSize(max(BAR_MIN_WIDTH, width), PANEL_MIN_HEIGHT)
+
     def _panel_size(self) -> QSize:
-        """The vertical panel's size, the same for every tool: the user's, or the default."""
+        """The vertical panel's size, the same for every tool: the user's (set only by
+        dragging the grip), or the default. Nothing else changes it."""
         area = self._area()
         saved = self.state.get("panel_size")
         if saved:
             w, h = int(saved[0]), int(saved[1])
         else:
             w, h = PANEL_WIDTH, int(area.height() * PANEL_HEIGHT_SHARE)
-        return QSize(max(BAR_MIN_WIDTH, min(w, area.width() - 2 * EDGE)),
-                     max(PANEL_MIN_HEIGHT, min(h, area.height() - 2 * EDGE)))
+        least = self.panel_min()
+        return QSize(max(least.width(), min(w, area.width())), max(least.height(), min(h, area.height())))
 
     def fit_height(self, tool: str, content_height: int) -> None:
         """Panels report their content's height after each render. The panel keeps
@@ -1640,8 +1698,6 @@ class OverlayWindow(QWidget):
             self.set_folded(True)
             return
         self._exit_large()
-        if self.tool:
-            self._remember_size()
         self.tool = None
         self.stack.setVisible(False)
         self.size_grip.setVisible(False)
@@ -1676,8 +1732,8 @@ class OverlayWindow(QWidget):
             hint.setHeight(height)
         else:
             # As wide as the open panel: opening and closing a tool never moves the sides.
-            self._bar_need = max(hint.width(), BAR_MIN_WIDTH)
-            width = max(self._bar_need, self._panel_size().width())
+            self._bar_need = self.panel_min().width()
+            width = self._panel_size().width()
             self._bar_width = width
             self._bar_size = QSize(width, hint.height())
         self.setFixedSize(width, hint.height())
@@ -1702,8 +1758,6 @@ class OverlayWindow(QWidget):
         self._show_menu(False)
         if on:
             self._exit_large()
-        if on and self.tool:
-            self._remember_size()
         self.minimized = on
         self.header.setVisible(not on)
         self.status.setVisible(not on)
@@ -1786,7 +1840,7 @@ class OverlayWindow(QWidget):
             self._show_band_menu(on)
             return
         if on:
-            hud_style(self.menu, False)
+            hud_style(self.menu, True)
             self.menu.sync()
             self.menu.adjustSize()
             pos = self.menu_btn.mapTo(self, self.menu_btn.rect().bottomRight())
@@ -1794,9 +1848,10 @@ class OverlayWindow(QWidget):
             self.menu.move(x, pos.y() + 4)
             self.menu.show()
             self.menu.raise_()
-            # Short bar (collapsed): the window grows so the menu fits inside it.
+            # Short bar (collapsed): the window grows so the menu fits inside it. An open
+            # panel keeps the user's size.
             need = self.menu.geometry().bottom() + 8
-            if self.height() < need:
+            if self.tool is None and self.height() < need:
                 self._menu_grew = self.height()
                 self.setMinimumHeight(need)
                 self.resize(self.width(), need)
@@ -1906,6 +1961,7 @@ class OverlayWindow(QWidget):
             frame.style().unpolish(frame)
             frame.style().polish(frame)
         self.band.update()
+        self.frame.update()
 
     def toggle_click_through(self) -> None:
         if self._host is not None:
@@ -1960,8 +2016,6 @@ class OverlayWindow(QWidget):
         if self.isVisible():
             self._place()            # the bar keeps its place; the panel opens towards the free side
         self._sync_hole()
-        if self.tool and not self._resizing:
-            self._remember_size()
 
     def _save_state(self) -> None:
         try:

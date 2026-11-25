@@ -51,6 +51,13 @@ def settle(seconds: float = 0.05) -> None:
         time.sleep(0.005)
 
 
+class _Release:
+    """A stand-in for the grip's mouse release."""
+
+    def accept(self):
+        pass
+
+
 class BandTest(unittest.TestCase):
     def setUp(self):
         self._state_file = overlay.STATE_FILE
@@ -134,6 +141,10 @@ class BandTest(unittest.TestCase):
         first = ov.size()
         self.assertGreaterEqual(first.height(), int(SCREEN.height() * overlay.PANEL_HEIGHT_SHARE) - 2)
         ov.resize(first.width() + 60, first.height() - 100)       # the user resizes it in one tool
+        ov._manual = True                                          # (by the grip: its release saves it)
+        ov.size_grip.mouseReleaseEvent(_Release())
+        settle()
+        ov.resize(first.width() + 200, first.height() - 300)      # anything else resizing it doesn't count
         settle()
         for tool in overlay.TOOLS:
             ov.select_tool(tool, force=True)

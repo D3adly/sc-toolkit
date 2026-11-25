@@ -96,7 +96,7 @@ class _InlineCombo(kit.Dropdown):
         if overlay is not None:
             from app.ui.overlay import hud_style
 
-            hud_style(lst, overlay.horizontal, y < top.y())
+            hud_style(lst, True, y < top.y())
         lst.show()
         lst.raise_()
         lst.scrollTo(lst.currentIndex(), QListView.PositionAtCenter)

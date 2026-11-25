@@ -1001,13 +1001,9 @@ QInputDialog QLineEdit {{
 }}
 
 /* -- in-game overlay ------------------------------------------------------ */
-#OverlayFrame {{
-    background: rgba(16, 19, 23, 0.90);
-    border: 1px solid {border_strong};
-    border-radius: 12px;
-}}
-#OverlayFrame[clickThrough="true"] {{
-    border: 1px dashed {text_muted};
+#OverlayFrame, #OverlayFrame[clickThrough="true"] {{
+    background: transparent;       /* drawn by _PanelFrame: the visor card (V3) */
+    border: none;
 }}
 #OverlayHeader, #OverlayMini {{
     background: transparent;

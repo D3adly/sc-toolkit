@@ -20,6 +20,12 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   cyan rim; the tools are tabs along the top, with the status and buttons on a row under them, and
   its lists and ⋯ menu match. Dragged near an edge of the screen (the sides, the top or the
   bottom) it now snaps flush against it, with no gap.
+- **Clearer overlay buttons.** The layout button shows a small picture of the layout it switches
+  to (the wide band, or the tall panel) with a turn arrow, and ⋯ says "Switch to … layout". The
+  side panel's minimise button is an arrow up to a line, so it no longer looks like the band.
+- **The side panel folds up, not down.** Closing a tool or minimising keeps the panel's top edge
+  where it is (it used to drop to the bottom of a tall panel), and opening a tool unfolds it
+  downwards from there.
 - **Everything inside the overlay matches the visor look.** Lists, mission cards, dropdowns,
   segmented filters, buttons, the "Following your game" line, the Maps viewer and scrollbars are
   square with cyan rims and accents, in the side panel and the band alike. The launcher itself
@@ -33,7 +39,7 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   guide no longer widens the panel (L still shows it large). The band likewise has one width for
   every tool, and on KDE Wayland it now starts at its full width rather than narrow.
 - **The overlay can lie flat along the top of the screen.** ⇆ in the overlay's header, or
-  "Horizontal layout" in ⋯, turns the tall side panel into a wide, short band, centred at the top
+  "Switch to horizontal layout" in ⋯, turns the tall side panel into a wide, short band, centred at the top
   of the screen, which leaves the game's own side panels free. Each tool has its own view for the
   band: columns you read at a glance, with no scrolling. What you act on is on the band; when a
   list is cut, "+n more ▾" on its title line drops the rest of the same list (one width for every

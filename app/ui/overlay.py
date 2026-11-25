@@ -401,7 +401,7 @@ class _InlineMenu(QFrame):
         v.addLayout(row)
         self.ct = self._item(v, "Click-through", hotkey_label("toggle-clickthrough"), overlay.toggle_click_through)
         self.mini = self._item(v, "Minimise to one line", "", lambda: overlay.set_minimized(True))
-        self.layout_item = self._item(v, "Horizontal layout", "", overlay.toggle_layout)
+        self.layout_item = self._item(v, "Switch to horizontal layout", "", overlay.toggle_layout)
         # The band's height: three presets, so its columns stay predictable (no free height drag).
         self.heights = QWidget()
         row = QHBoxLayout(self.heights)
@@ -476,7 +476,7 @@ class _InlineMenu(QFrame):
         ov = self.overlay
         self.set_opacity(ov._opacity)
         self.mini.setVisible(not ov.horizontal)
-        self.layout_item.text_label.setText("Vertical layout" if ov.horizontal else "Horizontal layout")
+        self.layout_item.text_label.setText("Switch to vertical layout" if ov.horizontal else "Switch to horizontal layout")
         self.heights.setVisible(ov.horizontal)
         for preset, btn in self.height_btns.items():
             btn.setChecked(preset == ov.band_height)
@@ -601,6 +601,50 @@ class _BandTab(QPushButton):
         self.caption.setProperty("on", on)
         self.caption.style().unpolish(self.caption)
         self.caption.style().polish(self.caption)
+
+
+class _GlyphButton(QPushButton):
+    """A header button with a drawn icon: "minimise" (a line with an arrow up
+    to it: down to one line), "layout" (a small picture of the layout it
+    switches TO, with a turn arrow: a wide band from the panel, a tall panel
+    from the band)."""
+
+    def __init__(self, kind: str, overlay: "OverlayWindow", size: QSize):
+        super().__init__(objectName="OverlayIcon")
+        self.kind, self.overlay = kind, overlay
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(size)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)            # the hover background from the stylesheet
+        from PySide6.QtGui import QPainterPath, QPen
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        color = QColor("#ffffff" if self.underMouse() else "#cfd8de")
+        pen = QPen(color, 1.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        p.setPen(pen)
+        cx, cy = self.width() / 2, self.height() / 2
+        if self.kind == "minimise":
+            p.drawLine(QPointF(cx - 7, cy - 5), QPointF(cx + 7, cy - 5))
+            p.drawLine(QPointF(cx, cy - 1), QPointF(cx, cy + 6))
+            p.drawPolyline([QPointF(cx - 4, cy + 2), QPointF(cx, cy - 2), QPointF(cx + 4, cy + 2)])
+            return
+        # layout: the target layout's outline (its header row drawn in), then a turn arrow ↷
+        if self.overlay.horizontal:
+            box = QRectF(cx - 9, cy - 4, 9, 13)          # back to the tall panel
+        else:
+            box = QRectF(cx - 10, cy + 1, 16, 7)         # to the wide band along the top
+        p.drawRect(box)
+        p.drawLine(QPointF(box.left(), box.top() + 3), QPointF(box.right(), box.top() + 3))
+        turn = QRectF(cx + 1, cy - 10, 9, 8)
+        arc = QPainterPath()
+        arc.arcMoveTo(turn, 180)
+        arc.arcTo(turn, 180, -180)
+        p.setPen(QPen(QColor(_PanelFrame.ACCENT), 1.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        p.drawPath(arc)
+        tip = QPointF(turn.right(), turn.center().y() + 2)
+        p.drawPolyline([QPointF(tip.x() - 3, tip.y() - 3), tip, QPointF(tip.x() + 3, tip.y() - 3)])
 
 
 class _PanelFrame(QFrame):
@@ -1025,7 +1069,9 @@ class OverlayWindow(QWidget):
             x, y = home.x(), home.y()
             if home.x() + bar.width() / 2 > area.center().x():
                 x = home.x() + bar.width() - size.width()
-            if home.y() > area.center().y():       # the bar's top in the lower half (the middle opens down)
+            # The panel opens down from the bar (its top stays put); near the bottom the clamp
+            # below lifts it just enough to stay on screen.
+            if self.horizontal and home.y() > area.center().y():   # the band at the bottom grows upwards
                 y = home.y() + bar.height() - size.height()
         x = max(area.left(), min(x, area.right() + 1 - size.width()))
         y = max(area.top(), min(y, area.bottom() + 1 - size.height()))
@@ -1040,8 +1086,7 @@ class OverlayWindow(QWidget):
         """The bar's home for a window at `rect` (after dragging or resizing it)."""
         area, bar = self._area(rect.center()), self._bar_size
         x = rect.x() if rect.center().x() <= area.center().x() else rect.right() + 1 - bar.width()
-        y = rect.y() if rect.bottom() + 1 - bar.height() <= area.center().y() else rect.bottom() + 1 - bar.height()
-        return QPoint(x, y)
+        return QPoint(x, rect.y())      # the panel's top: collapsing or minimising keeps the top edge
 
     def _snap(self, p: QPoint) -> QPoint:
         """A dragged position, snapped to the screen's edges and kept on it."""
@@ -1193,9 +1238,7 @@ class OverlayWindow(QWidget):
                                        else "off: the overlay takes clicks")
             + f" · <kbd>{hotkey_label('toggle-clickthrough')}</kbd>"))
         head.addWidget(self.ct_btn)
-        mini = QPushButton("▭", objectName="OverlayIcon")
-        mini.setCursor(Qt.PointingHandCursor)
-        mini.setFixedSize(30, 30)
+        mini = _GlyphButton("minimise", self, QSize(30, 30))
         mini.clicked.connect(lambda: self.set_minimized(True))
         self._hint(mini, "<b>Minimise</b> to one line: objective, time on it, location")
         head.addWidget(mini)
@@ -1239,12 +1282,10 @@ class OverlayWindow(QWidget):
         v.addStretch(0)
 
     def _layout_button(self, size: QSize) -> QPushButton:
-        btn = QPushButton("⇆", objectName="OverlayIcon")
-        btn.setCursor(Qt.PointingHandCursor)
-        btn.setFixedSize(size)
+        btn = _GlyphButton("layout", self, size)
         btn.clicked.connect(self.toggle_layout)
-        self._hint(btn, lambda: "<b>Vertical layout</b>: the tall panel" if self.horizontal
-                   else "<b>Horizontal layout</b>: a wide, short band along the top of the screen")
+        self._hint(btn, lambda: "<b>Switch layout</b> → vertical: the tall side panel" if self.horizontal
+                   else "<b>Switch layout</b> → horizontal: a wide band along the top of the screen")
         return btn
 
     def _build_band(self) -> None:

@@ -132,7 +132,16 @@ variable points the launcher at another one (e.g. `SCT_PORTAL_URL=http://localho
 
 ## In-game overlay
 
-A small always-on-top bar with five tabs, picked by icon:
+An always-on-top panel with five tools, drawn to sit in the game's visor (thin cyan rims,
+square edges). It comes in two layouts; the layout button in its header (a small picture of
+the layout it switches to) or **⋯ → Switch to … layout** swaps them:
+
+- **Side panel** (vertical): a tall plate with the tools as tabs along the top.
+- **Band** (horizontal): a wide, short strip hanging from the top (or bottom) edge of the
+  screen, leaving the game's own side panels free. Each tool shows columns you read at a
+  glance, with no scrolling; "+n more ▾" drops the rest of a cut list below the band.
+
+The tools:
 
 - **Missions** (needs LIVE LOG): every mission shows its contractor, reputation and
   item rewards, its type (with Ship combat / FPS combat when it spawns enemies), the
@@ -151,8 +160,9 @@ A small always-on-top bar with five tabs, picked by icon:
   nothing moves while the pointer is over the panel. Maps shows a guide filling the
   panel's width; **L** (or ⤢) shows it large, Esc goes back.
 
-Picking a tab opens its panel underneath (keys 1–5 while the overlay has the keyboard);
-picking it again folds it back to the bar.
+Picking a tab opens its panel (keys 1–5 while the overlay has the keyboard); picking it
+again folds it back to its header row. The band also folds from the small tab in the middle
+of its lower edge, or with Esc.
 
 Switch it on with **IN-GAME OVERLAY** under *IN GAME* in the launcher's left panel. While
 it's off, nothing runs and the hotkeys do nothing. Then:
@@ -164,13 +174,19 @@ it's off, nothing runs and the hotkeys do nothing. Then:
 
 Change the keys in **Settings → In-game overlay hotkeys**: an F-key, Insert, Home, End,
 Page Up/Down, Pause or Scroll Lock on its own, or a letter/digit with Ctrl, Alt or Meta.
-**Settings → In-game overlay → Open the overlay** opens it too. The tray menu has the same actions. Drag the overlay by its
-bar (it snaps to the screen's edges), or put it in a corner from **⋯ → Move to**; resize it
-from its bottom-right corner. A panel opens towards the free side of the screen (from a
-bar at the bottom, upwards), so it never ends up off-screen; **⋯ → Reset position** (or
-*Reset its position* in Settings) brings it back after changing monitors. Its position
-(per screen setup), sizes and background opacity are remembered. **Settings → Overlay
-size** scales its text and controls (90–150 %; Automatic picks by your screen).
+**Settings → In-game overlay → Open the overlay** opens it too. The tray menu has the same actions.
+
+- **Side panel:** drag it by its header; near a screen edge it snaps flush against it. Or put
+  it in a corner from **⋯ → Move to**. Resize it from its bottom-right corner: that size is
+  used for every tool, and nothing else changes it. Folding or minimising (the arrow-up-to-a-
+  line button: one line with the current objective) keeps its top edge in place.
+- **Band:** always centred, flush against the top or the bottom of the screen (drag it, or
+  **⋯ → Move to**). Drag its left or right edge for its width; its height is S, M or L in ⋯.
+
+**⋯ → Reset position** (or *Reset its position* in Settings) brings it back after changing
+monitors. Its layout, position (per screen setup), size and background opacity are
+remembered. **Settings → Overlay size** scales its text and controls (90–150 %; Automatic
+picks by your screen).
 
 - **Run the game in Borderless mode** (Graphics → Window Mode). Nothing but injected
   overlays can draw over exclusive fullscreen.

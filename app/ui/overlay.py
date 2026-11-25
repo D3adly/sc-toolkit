@@ -683,13 +683,13 @@ class _PanelFrame(QFrame):
         grad.setColorAt(1, bottom)
         p.fillPath(path, grad)
         accent = QColor(self.ACCENT)
-        dashed = bool(self.property("clickThrough"))
+        through = bool(self.property("clickThrough"))   # a little dimmer, never dashed
         glow = QColor(accent)
-        glow.setAlphaF(0.10 if dashed else 0.16)
+        glow.setAlphaF(0.10 if through else 0.16)
         p.strokePath(path, QPen(glow, 5, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
         edge = QColor(accent)
-        edge.setAlphaF(0.45 if dashed else 0.7)
-        p.strokePath(path, QPen(edge, 1, Qt.DashLine if dashed else Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
+        edge.setAlphaF(0.5 if through else 0.7)
+        p.strokePath(path, QPen(edge, 1, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
         p.setPen(QPen(accent, 2.5))
         p.drawLine(pts[5], pts[0])
         p.drawLine(pts[2], pts[3])
@@ -786,15 +786,15 @@ class _BandFrame(QFrame):
         p.fillPath(body, grad)
 
         accent = QColor(self.ACCENT)
-        dashed = bool(self.property("clickThrough"))
+        through = bool(self.property("clickThrough"))   # a little dimmer, never dashed
         line = QPainterPath()
         line.addPolygon(QPolygonF(pts))
         glow = QColor(accent)
-        glow.setAlphaF(0.10 if dashed else 0.18)
+        glow.setAlphaF(0.10 if through else 0.18)
         p.strokePath(line, QPen(glow, 5, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
         edge = QColor(accent)
-        edge.setAlphaF(0.45 if dashed else 0.8)
-        pen = QPen(edge, 1, Qt.DashLine if dashed else Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin)
+        edge.setAlphaF(0.5 if through else 0.8)
+        pen = QPen(edge, 1, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin)
         p.strokePath(line, pen)
 
         if self.mode != "rect":

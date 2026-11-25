@@ -386,7 +386,7 @@ class _LiveBand(_BandBody):
                               "session here.", button=("Turn on live log", f.request_enable))
             return True
         if f.state in ("off", "waiting") and not f.tracker.session:
-            self.show_message("Waiting for Star Citizen… This fills in as soon as the game is running.")
+            self.show_message("This fills in as soon as the game is running.", "WAITING FOR STAR CITIZEN")
             return True
         self.show_columns()
         return False

@@ -254,7 +254,7 @@ class _LivePanel(_ScrollPanel):
             v.addStretch(2)
             return True
         if state in ("off", "waiting") and not feed().tracker.session:
-            self._message("Waiting for Star Citizen…\nThis fills in as soon as the game is running.")
+            self._message("This fills in as soon as the game is running.", "WAITING FOR STAR CITIZEN")
             return True
         return False
 

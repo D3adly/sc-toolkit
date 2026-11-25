@@ -28,8 +28,8 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   downwards from there.
 - **Everything inside the overlay matches the visor look.** Lists, mission cards, dropdowns,
   segmented filters, buttons, the "Following your game" line, the Maps viewer and scrollbars are
-  square with cyan rims and accents, in the side panel and the band alike. The launcher itself
-  keeps its look.
+  square with cyan rims and accents, in the side panel and the band alike, including the
+  "Waiting for Star Citizen" card before the game runs. The launcher itself keeps its look.
 - **The size you give the side panel stays.** Only dragging its corner changes it: switching tools,
   opening the ⋯ menu, minimising or the large Maps view no longer resize it or change the size it
   comes back to.

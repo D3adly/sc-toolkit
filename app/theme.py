@@ -2293,6 +2293,10 @@ HUD_RULES = {
     "#BandOpen, #KitButton[kind=\"primary\"]": "background: rgba(95, 212, 230, 0.14); border: 1px solid #5fd4e6;"
                                              " border-radius: 0; color: #5fd4e6;",
     "#BandOpen:hover, #KitButton[kind=\"primary\"]:hover": "background: rgba(95, 212, 230, 0.26); color: #ffffff;",
+    "#EmptyState": "background: rgba(95, 212, 230, 0.03); border: 1px solid rgba(95, 212, 230, 0.20);"
+                   " border-radius: 0;",
+    "#EmptyTitle": "color: #5fd4e6; font-family: \"Rajdhani\"; font-size: 17px; letter-spacing: 1px;",
+    "#EmptyText": "color: #cfd8de;",
     "#MapFrame": "background: rgba(8, 14, 20, 0.7); border: 1px solid rgba(95, 212, 230, 0.22);"
                  " border-radius: 0;",
     "QScrollBar::handle:vertical, QScrollBar::handle:horizontal": "background: rgba(95, 212, 230, 0.30);"

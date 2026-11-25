@@ -20,6 +20,10 @@ What changed in each SC-Toolbox release (called SC-Toolkit until 0.2.x). The new
   cyan rim; the tools are tabs along the top, with the status and buttons on a row under them, and
   its lists and ⋯ menu match. Dragged near an edge of the screen (the sides, the top or the
   bottom) it now snaps flush against it, with no gap.
+- **Everything inside the overlay matches the visor look.** Lists, mission cards, dropdowns,
+  segmented filters, buttons, the "Following your game" line, the Maps viewer and scrollbars are
+  square with cyan rims and accents, in the side panel and the band alike. The launcher itself
+  keeps its look.
 - **The size you give the side panel stays.** Only dragging its corner changes it: switching tools,
   opening the ⋯ menu, minimising or the large Maps view no longer resize it or change the size it
   comes back to.

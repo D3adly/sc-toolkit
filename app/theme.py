@@ -2250,10 +2250,70 @@ QInputDialog QLineEdit {{
 """
 
 
+# The overlay's content in the visor look (#74): square edges, cyan rims and accents. Scoped to the
+# overlay's frames and drops, so the launcher keeps its own look. Plain CSS (no format fields).
+HUD_SCOPES = ("#OverlayFrame", "#BandFrame", "#BandDrop", "#BandDrawer")
+HUD_RULES = {
+    "#Panel": "background: rgba(95, 212, 230, 0.03); border: 1px solid rgba(95, 212, 230, 0.20);"
+              " border-radius: 0;",
+    "#PanelRow": "border-bottom: 1px solid rgba(95, 212, 230, 0.10);",
+    "#PanelRow:hover": "background: rgba(95, 212, 230, 0.08);",
+    "#PanelRow[open=\"true\"]": "background: rgba(95, 212, 230, 0.05); border-bottom: none;",
+    "#PanelRow[flagged=\"true\"]": "border-left: 2px solid #5fd4e6;",
+    "#RowDetail": "background: rgba(95, 212, 230, 0.04);",
+    "#FollowLine": "background: rgba(95, 212, 230, 0.07); border: none;"
+                   " border-left: 2px solid #5fd4e6; border-radius: 0;",
+    "#SectionLabel": "color: #5fd4e6; font-family: \"Rajdhani\"; font-size: 12px; letter-spacing: 1px;",
+    "#ConfigCombo": "background: rgba(8, 14, 20, 0.6); border: 1px solid rgba(95, 212, 230, 0.30);"
+                    " border-radius: 0;",
+    "#ConfigCombo:hover, #ConfigCombo:focus": "border: 1px solid rgba(95, 212, 230, 0.65);",
+    "#ConfigCombo::drop-down": "border-left: 1px solid rgba(95, 212, 230, 0.20);",
+    "#Segment": "background: rgba(8, 14, 20, 0.6); border: 1px solid rgba(95, 212, 230, 0.22);"
+                " border-left: none; border-radius: 0;",
+    "#Segment[pos=\"first\"], #Segment[pos=\"only\"]": "border-left: 1px solid rgba(95, 212, 230, 0.22);"
+                                                       " border-radius: 0;",
+    "#Segment[pos=\"last\"]": "border-radius: 0;",
+    "#Segment:hover": "background: rgba(95, 212, 230, 0.08);",
+    "#Segment:checked": "background: rgba(95, 212, 230, 0.16); border: 1px solid #5fd4e6; color: #5fd4e6;",
+    "#KitButton, #MiniButton": "background: rgba(8, 14, 20, 0.6); border: 1px solid rgba(95, 212, 230, 0.30);"
+                               " border-radius: 0;",
+    "#KitButton:hover, #MiniButton:hover": "background: rgba(95, 212, 230, 0.10); border: 1px solid #5fd4e6;",
+    "#KitButton:checked, #MiniButton:checked": "background: rgba(95, 212, 230, 0.16); border: 1px solid #5fd4e6;"
+                                               " color: #5fd4e6;",
+    "#LiveChip": "border-radius: 0; border: 1px solid rgba(95, 212, 230, 0.30);",
+    "#LiveChip[tone=\"info\"]": "background: rgba(95, 212, 230, 0.12); color: #5fd4e6;",
+    "#LiveCard": "background: rgba(95, 212, 230, 0.03); border: 1px solid rgba(95, 212, 230, 0.20);"
+                 " border-radius: 0;",
+    "#LiveCard[state=\"tracked\"]": "background: rgba(95, 212, 230, 0.08); border: 1px solid rgba(95, 212, 230, 0.55);"
+                                    " border-left: 2px solid #5fd4e6;",
+    "#LiveCard[state=\"done\"]": "border: 1px solid rgba(95, 212, 230, 0.35);",
+    "#LiveCard[state=\"reward\"]": "border: 1px solid #9cc48c; border-left: 2px solid #9cc48c;",
+    "#LiveCard[state=\"failed\"]": "border: 1px solid rgba(226, 106, 85, 0.45); border-left: 2px solid #e26a55;",
+    "#LiveCard[flash=\"true\"]": "background: rgba(95, 212, 230, 0.28); border: 1px solid #5fd4e6;",
+    "#BandOpen, #KitButton[kind=\"primary\"]": "background: rgba(95, 212, 230, 0.14); border: 1px solid #5fd4e6;"
+                                             " border-radius: 0; color: #5fd4e6;",
+    "#BandOpen:hover, #KitButton[kind=\"primary\"]:hover": "background: rgba(95, 212, 230, 0.26); color: #ffffff;",
+    "#MapFrame": "background: rgba(8, 14, 20, 0.7); border: 1px solid rgba(95, 212, 230, 0.22);"
+                 " border-radius: 0;",
+    "QScrollBar::handle:vertical, QScrollBar::handle:horizontal": "background: rgba(95, 212, 230, 0.30);"
+                                                                    " border-radius: 0;",
+    "QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover":
+        "background: rgba(95, 212, 230, 0.55);",
+}
+
+
+def hud_stylesheet() -> str:
+    out = []
+    for selectors, body in HUD_RULES.items():
+        scoped = ", ".join(f"{scope} {sel.strip()}" for sel in selectors.split(", ") for scope in HUD_SCOPES)
+        out.append(f"{scoped} {{ {body} }}")
+    return "\n".join(out)
+
+
 def build_stylesheet() -> str:
     from app import config
 
     install_fonts()
     # Qt stylesheet urls want forward slashes, on Windows too.
     icons = {"chevron_down": (config.ICONS_DIR / "chevron_down.png").as_posix()}
-    return STYLESHEET.format(**PALETTE, **icons)
+    return STYLESHEET.format(**PALETTE, **icons) + "\n" + hud_stylesheet()
